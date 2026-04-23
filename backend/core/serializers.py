@@ -5,7 +5,7 @@ from .models import UserProfile
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ('bio', 'categories', 'skills')
+        fields = ('bio', 'categories', 'skills', 'subscription_plan')
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
@@ -41,10 +41,14 @@ class ReportSerializer(serializers.ModelSerializer):
 from .models import Ad
 
 class AdSerializer(serializers.ModelSerializer):
-    author_name = serializers.CharField(source='author.username', read_only=True)
+    author_name = serializers.SerializerMethodField()
     author_rating = serializers.FloatField(read_only=True, default=4.5) # Mock for now
     
     class Meta:
         model = Ad
         fields = '__all__'
         read_only_fields = ('author', 'created_at')
+
+    def get_author_name(self, obj):
+        name = obj.author.first_name
+        return name if name else obj.author.username

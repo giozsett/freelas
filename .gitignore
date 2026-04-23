@@ -27,3 +27,13 @@ dist-ssr
 venv/
 .venv/
 env/
+
+# Python / Django
+__pycache__/
+*.py[cod]
+*$py.class
+db.sqlite3
+
+# Environment variables
+.env
+.env.local

@@ -18,6 +18,8 @@ import PrivateRoute from './components/PrivateRoute';
 import Footer from './components/Footer';
 import ModeratorLogin from './pages/ModeratorLogin';
 import ModerationPanel from './pages/ModerationPanel';
+import SubscriptionSetup from './pages/SubscriptionSetup';
+import MyPayments from './pages/MyPayments';
 
 // Import other pages later when created
 
@@ -42,6 +44,8 @@ function App() {
           <Route path="/user/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
           <Route path="/moderator-login" element={<ModeratorLogin />} />
           <Route path="/moderation-panel" element={<ModerationPanel />} />
+          <Route path="/subscription-setup" element={<PrivateRoute><SubscriptionSetup /></PrivateRoute>} />
+          <Route path="/my-payments" element={<PrivateRoute><MyPayments /></PrivateRoute>} />
         </Routes>
       </div>
       <Footer />

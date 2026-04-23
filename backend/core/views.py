@@ -83,3 +83,8 @@ class AdRetrieveAPIView(generics.RetrieveAPIView):
     queryset = Ad.objects.all()
     serializer_class = AdSerializer
     permission_classes = [permissions.AllowAny]
+
+class PublicProfileAPIView(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.AllowAny]

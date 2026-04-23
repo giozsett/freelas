@@ -24,6 +24,7 @@ export default function AdDetails() {
           id: data.id,
           type: data.role,
           title: data.title,
+          author_id: data.author,
           author: data.author_name || 'Usuário Desconhecido',
           rating: data.author_rating || 4.5,
           reviews: 10,
@@ -41,35 +42,7 @@ export default function AdDetails() {
       })
       .catch(err => {
         console.error('Error fetching ad detail:', err);
-        // Fallback to dummy data for UI testing if not found
-        setAd({
-          id,
-          type: 'contractor', 
-          title: 'Adestrador de Cães Avançado',
-          author: 'João Silva',
-          rating: 4.8,
-          reviews: 24,
-          category: 'Animais',
-          skills: ['Adestramento Básico', 'Comportamento Reativo'],
-          locationType: 'presencial', 
-          address: 'Rua das Flores, n 123',
-          city: 'São Paulo',
-          price: 80,
-          price_unit: '/h',
-          description: `Ofereço serviços de adestramento para cães de todas as idades e raças.
-    
-Utilizo métodos de reforço positivo, garantindo um aprendizado saudável e sem traumas para o seu pet.
-Tenho experiência com casos de reatividade, ansiedade de separação e socialização tardia.
-
-O serviço inclui:
-- Avaliação comportamental
-- Plano de treino personalizado
-- Suporte online via chat
-- Acompanhamento semanal
-
-Entre em contato para agendarmos uma visita de avaliação!`,
-          reputationScore: 92
-        });
+        setAd(null);
         setIsLoading(false);
       });
   }, [id]);
@@ -125,7 +98,7 @@ Entre em contato para agendarmos uma visita de avaliação!`,
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', opacity: 0.8, marginBottom: '1.5rem' }}>
-              <Link to="/user/1" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'underline', color: 'var(--holo-blue)' }}>
+              <Link to={`/user/${ad.author_id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'underline', color: 'var(--holo-blue)' }}>
                 <User size={18} /> {ad.author}
               </Link>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f39c12', fontWeight: 'bold' }}>

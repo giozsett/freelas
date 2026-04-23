@@ -6,6 +6,7 @@ class UserProfile(models.Model):
     bio = models.TextField(blank=True, default="Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.")
     categories = models.JSONField(blank=True, default=list)
     skills = models.JSONField(blank=True, default=list)
+    subscription_plan = models.CharField(max_length=50, default='Gratuito')
 
     def __str__(self):
         return f"Profile: {self.user.username}"

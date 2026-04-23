@@ -8,7 +8,8 @@ export default function Profile() {
   const [profile, setProfile] = useState({
     bio: '',
     categories: [],
-    skills: []
+    skills: [],
+    subscription_plan: 'Gratuito'
   });
   const [activeTab, setActiveTab] = useState('skills');
 
@@ -24,7 +25,8 @@ export default function Profile() {
           setProfile({
             bio: data.bio || '',
             categories: data.categories || [],
-            skills: data.skills || []
+            skills: data.skills || [],
+            subscription_plan: data.subscription_plan || 'Gratuito'
           });
         })
         .catch(err => console.error(err));
@@ -33,7 +35,7 @@ export default function Profile() {
 
   const userContext = {
     name: authUser ? (authUser.first_name || authUser.username) : 'Usuário',
-    plan: 'Gratuito',
+    plan: profile.subscription_plan,
     rating: 4.8,
     reviews: 4
   };

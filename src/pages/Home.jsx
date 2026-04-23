@@ -2,22 +2,6 @@ import { useState, useEffect } from 'react';
 import { useRole } from '../context/RoleContext';
 import AdCard from '../components/AdCard';
 
-const DUMMY_ADS = [
-  // Freelancers
-  { id: 1, type: 'freelancer', title: 'Adestrador de Cães Avançado', author: 'João Silva', rating: 4.8, category: 'Animais', skills: ['Adestramento', 'Passeio'], distance: 3, locationType: 'presencial', city: 'São Paulo', price: 80 },
-  { id: 2, type: 'freelancer', title: 'Faxina Completa Residencial', author: 'Maria Souza', rating: 4.9, category: 'Serviços Domésticos', skills: ['Limpeza Pesada', 'Organização'], distance: 5, locationType: 'presencial', city: 'Rio de Janeiro', price: 150 },
-  { id: 5, type: 'freelancer', title: 'Desenvolvedor React / Node.js', author: 'Carlos Mendes', rating: 5.0, category: 'Tecnologia', skills: ['Frontend', 'Backend', 'APIs'], distance: 25, locationType: 'remoto', city: '', price: 120 },
-  { id: 6, type: 'freelancer', title: 'Aulas de Inglês - Todos os Níveis', author: 'Camila Ferreira', rating: 4.7, category: 'Educação', skills: ['Inglês', 'Conversação'], distance: 8, locationType: 'remoto', city: '', price: 60 },
-  { id: 7, type: 'freelancer', title: 'Design de Marcas / Identidade Visual', author: 'Lucas Braga', rating: 4.9, category: 'Design', skills: ['Illustrator', 'Branding'], distance: 45, locationType: 'remoto', city: '', price: 450 },
-
-  // Contractors
-  { id: 3, type: 'contractor', title: 'Preciso de Pet Sitter para Fim de Semana', author: 'Ana Clara', rating: 5.0, category: 'Animais', skills: ['Pet Sitter'], distance: 2, locationType: 'presencial', address: 'Rua C, 400', city: 'Curitiba', price: 200 },
-  { id: 4, type: 'contractor', title: 'Procuro diarista para sexta-feira', author: 'Roberto', rating: 4.5, category: 'Serviços Domésticos', skills: ['Limpeza Padrão'], distance: 10, locationType: 'presencial', address: 'Av. Paulista, 1000', city: 'São Paulo', price: 130 },
-  { id: 8, type: 'contractor', title: 'Freelancer para manutenção de app mobile', author: 'Tech Startup XP', rating: 4.2, category: 'Tecnologia', skills: ['React Native', 'Bugs'], distance: 1, locationType: 'remoto', address: '', city: 'Digital', price: 300 },
-  { id: 9, type: 'contractor', title: 'Preciso de reforço escolar em Matemática', author: 'Vitor S.', rating: 4.8, category: 'Educação', skills: ['Matemática', 'Ensino Fundamental'], distance: 12, locationType: 'presencial', address: 'Rua das Flores, 12', city: 'Belo Horizonte', price: 50 },
-  { id: 10, type: 'contractor', title: 'Procuro criador de logos urgênte', author: 'Loja da Esquina', rating: 4.0, category: 'Design', skills: ['Logo', 'Canva', 'Photoshop'], distance: 30, locationType: 'remoto', address: '', city: 'Digital', price: 100 }
-];
-
 export default function Home() {
   const { role } = useRole();
   const [ads, setAds] = useState([]);
@@ -36,6 +20,7 @@ export default function Home() {
             id: ad.id,
             type: ad.role, // 'freelancer' or 'contractor'
             title: ad.title,
+            author_id: ad.author,
             author: ad.author_name || 'Usuário Desconhecido',
             rating: ad.author_rating || 4.5,
             reviews: 10, // Mock reviews
@@ -49,12 +34,12 @@ export default function Home() {
           }));
           setAds(normalizedAds);
         } else {
-          setAds(DUMMY_ADS);
+          setAds([]);
         }
       })
       .catch(err => {
         console.error('Error fetching ads:', err);
-        setAds(DUMMY_ADS);
+        setAds([]);
       });
   }, []);
 

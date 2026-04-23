@@ -93,6 +93,7 @@ export default function Navbar() {
                   {hasNewApplications && role === 'freelancer' && <div className="notification-dot" style={{ position: 'static' }}></div>}
                 </Link>
                 <Link to="/plans" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Planos e Assinaturas</Link>
+                <Link to="/my-payments" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Pagamentos</Link>
                 <button
                   onClick={handleLogout}
                   className="dropdown-item"

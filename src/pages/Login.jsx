@@ -35,7 +35,7 @@ export default function Login() {
         setErrorMsg('E-mail ou senha incorretos.');
       }
     } catch (err) {
-      setErrorMsg('Erro interno de conexão.');
+      setErrorMsg('E-mail ou senha incorretos.');
     }
   };
 
