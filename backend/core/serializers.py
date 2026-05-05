@@ -52,3 +52,25 @@ class AdSerializer(serializers.ModelSerializer):
     def get_author_name(self, obj):
         name = obj.author.first_name
         return name if name else obj.author.username
+
+from .models import Candidatura
+
+class CandidaturaSerializer(serializers.ModelSerializer):
+    applicant_name = serializers.SerializerMethodField()
+    ad_title = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Candidatura
+        fields = '__all__'
+        read_only_fields = ('user', 'enviado_em', 'atualizado_em')
+
+    def get_applicant_name(self, obj):
+        if obj.user:
+            name = obj.user.first_name
+            return name if name else obj.user.username
+        return f"User {obj.usuario_id}"
+
+    def get_ad_title(self, obj):
+        if obj.ad:
+            return obj.ad.titulo or obj.ad.title
+        return f"Ad {obj.anuncio_id}"

@@ -88,3 +88,39 @@ class PublicProfileAPIView(generics.RetrieveAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
+
+from .serializers import CandidaturaSerializer
+from .models import Candidatura
+
+class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = CandidaturaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Candidatura.objects.all().order_by('-enviado_em')
+        user_id = self.request.query_params.get('user_id')
+        ad_id = self.request.query_params.get('ad_id')
+        
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        if ad_id:
+            queryset = queryset.filter(anuncio_id=ad_id)
+            
+        return queryset
+
+    def perform_create(self, serializer):
+        try:
+            usuario_id = self.request.user.profile.id
+        except Exception:
+            usuario_id = self.request.user.id
+        serializer.save(user=self.request.user, usuario_id=usuario_id)
+
+class CandidaturaUpdateAPIView(generics.UpdateAPIView):
+    queryset = Candidatura.objects.all()
+    serializer_class = CandidaturaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class CandidaturaRetrieveAPIView(generics.RetrieveAPIView):
+    queryset = Candidatura.objects.all()
+    serializer_class = CandidaturaSerializer
+    permission_classes = [permissions.IsAuthenticated]

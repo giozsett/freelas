@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, MapPin, Tag, MessageSquare, Star, Zap, Search, ShieldCheck, X, AlertTriangle } from 'lucide-react';
 import ReportModal from '../components/ReportModal';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdDetails() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [proposalPrice, setProposalPrice] = useState('');
@@ -49,10 +51,37 @@ export default function AdDetails() {
 
   const handleSendProposal = (e) => {
     e.preventDefault();
-    alert("Candidatura enviada com sucesso!");
-    setIsModalOpen(false);
-    setProposalPrice('');
-    setProposalText('');
+    if (!user) {
+      console.log("Você precisa estar logado para se candidatar.");
+      return;
+    }
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:8000/api/candidaturas/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${token}`
+      },
+      body: JSON.stringify({
+        ad: ad.id,
+        mensagem: proposalText,
+        valor_proposta: proposalPrice // although 'valor_proposta' is not in model, user put 'proposalPrice'
+      })
+    })
+    .then(res => {
+      if (res.ok) {
+        console.log("Candidatura enviada com sucesso!");
+        setIsModalOpen(false);
+        setProposalPrice('');
+        setProposalText('');
+      } else {
+        console.error("Erro ao enviar candidatura.");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      console.error("Erro de conexão ao enviar candidatura.");
+    });
   };
 
   if (isLoading) {
@@ -130,11 +159,13 @@ export default function AdDetails() {
         </div>
 
         {/* Painel do Anunciante (Simulação para usuário que postou o anúncio) */}
-        <div style={{ background: 'var(--surface-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem', marginTop: '1rem', borderLeft: '4px solid var(--holo-purple-real)' }}>
-          <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Área do Anunciante</h3>
-          <p style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.5rem' }}>Você publicou este anúncio. Acompanhe quem se interessou.</p>
-          <Link to={`/my-ads/manage/${ad.id}`} className="btn" style={{ marginTop: '1rem', padding: '0.5rem 1rem', fontSize: '0.9rem' }}>Visualizar Candidaturas</Link>
-        </div>
+        {user && user.id === ad.author_id && (
+          <div style={{ background: 'var(--surface-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem', marginTop: '1rem', borderLeft: '4px solid var(--holo-purple-real)' }}>
+            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Área do Anunciante</h3>
+            <p style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.5rem' }}>Você publicou este anúncio. Acompanhe quem se interessou.</p>
+            <Link to={`/my-ads/manage/${ad.id}`} className="btn" style={{ marginTop: '1rem', padding: '0.5rem 1rem', fontSize: '0.9rem' }}>Visualizar Candidaturas</Link>
+          </div>
+        )}
 
         {/* Reputação Bar */}
         <div style={{ background: 'var(--bg-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem', marginTop: '1rem' }}>
@@ -170,18 +201,20 @@ export default function AdDetails() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', borderTop: 'var(--border-width) solid var(--border-color)', paddingTop: '2rem', flexWrap: 'wrap' }}>
-           <button 
-             className="btn dark-text" 
-             style={{ flex: 2, padding: '1rem', fontSize: '1.2rem', minWidth: '200px' }}
-             onClick={() => setIsModalOpen(true)}
-           >
-             <Star size={20} fill="currentColor" /> Candidatar-se
-           </button>
-           <Link to="/chat" className="btn btn-secondary" style={{ flex: 1, padding: '1rem', minWidth: '150px' }}>
-             <MessageSquare size={20} /> Tirar Dúvidas
-           </Link>
-        </div>
+        {(!user || user.id !== ad.author_id) && (
+          <div style={{ display: 'flex', gap: '1rem', borderTop: 'var(--border-width) solid var(--border-color)', paddingTop: '2rem', flexWrap: 'wrap' }}>
+             <button 
+               className="btn dark-text" 
+               style={{ flex: 2, padding: '1rem', fontSize: '1.2rem', minWidth: '200px' }}
+               onClick={() => setIsModalOpen(true)}
+             >
+               <Star size={20} fill="currentColor" /> Candidatar-se
+             </button>
+             <Link to="/chat" className="btn btn-secondary" style={{ flex: 1, padding: '1rem', minWidth: '150px' }}>
+               <MessageSquare size={20} /> Tirar Dúvidas
+             </Link>
+          </div>
+        )}
 
       </div>
 

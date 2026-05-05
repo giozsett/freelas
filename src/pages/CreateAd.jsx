@@ -48,7 +48,7 @@ export default function CreateAd() {
     const token = localStorage.getItem('token');
     
     if (!token) {
-      alert("Você precisa estar logado para postar um anúncio.");
+      console.log("Você precisa estar logado para postar um anúncio.");
       return;
     }
 
@@ -82,11 +82,11 @@ export default function CreateAd() {
       } else {
         const errorData = await response.json();
         console.error(errorData);
-        alert('Erro ao criar o anúncio.');
+        console.error('Erro ao criar o anúncio.');
       }
     } catch (err) {
       console.error(err);
-      alert('Erro de conexão ao criar o anúncio.');
+      console.error('Erro de conexão ao criar o anúncio.');
     }
   };
 

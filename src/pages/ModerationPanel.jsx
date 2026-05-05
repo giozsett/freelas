@@ -55,7 +55,7 @@ export default function ModerationPanel() {
       if (response.ok) {
         setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
       } else {
-        alert('Erro ao resolver denúncia no backend.');
+        console.error('Erro ao resolver denúncia no backend.');
         // Fallback to local state if offline mock
         setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
       }

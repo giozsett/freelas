@@ -10,7 +10,7 @@ export default function ReportModal({ isOpen, onClose, targetId, targetName, typ
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!category || !comment.trim()) {
-      alert('Por favor, preencha todos os campos da denúncia.');
+      console.log('Por favor, preencha todos os campos da denúncia.');
       return;
     }
     
@@ -31,13 +31,13 @@ export default function ReportModal({ isOpen, onClose, targetId, targetName, typ
          throw new Error('Falha ao enviar denúncia.');
       }
 
-      alert('Denúncia enviada com sucesso! A equipe de moderação avaliará o caso em breve.');
+      console.log('Denúncia enviada com sucesso! A equipe de moderação avaliará o caso em breve.');
       setCategory('');
       setComment('');
       onClose();
     } catch (err) {
       console.error(err);
-      alert('Ocorreu um erro ao enviar a denúncia. O backend pode estar offline.');
+      console.error('Ocorreu um erro ao enviar a denúncia. O backend pode estar offline.');
     }
   };
 

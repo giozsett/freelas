@@ -12,10 +12,10 @@ export default function ModeratorLogin() {
     // Simplified mock logic since we don't have complete roles on backend token yet
     if (username === 'admin' && password === 'admin') {
       localStorage.setItem('isModerator', 'true');
-      alert('Login efetuado com sucesso.');
+      console.log('Login efetuado com sucesso.');
       navigate('/moderation-panel');
     } else {
-      alert('Credenciais inválidas. Tente admin / admin.');
+      console.error('Credenciais inválidas. Tente admin / admin.');
     }
   };
 
