@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function SubscriptionSetup() {
   const { token } = useAuth();

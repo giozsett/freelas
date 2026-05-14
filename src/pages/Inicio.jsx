@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useRole } from '../context/RoleContext';
-import AdCard from '../components/AdCard';
+import { useRole } from '../context/ContextoPapel';
+import AdCard from '../components/CardAnuncio';
 
 export default function Home() {
   const { role } = useRole();

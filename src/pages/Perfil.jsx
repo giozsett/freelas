@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Edit3, Award, Zap, MessageCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function Profile() {
   const { user: authUser, token } = useAuth();

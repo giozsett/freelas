@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Bell, MessageSquare, UserCircle } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
-import { useRole } from '../context/RoleContext';
+import { useTheme } from '../context/ContextoTema';
+import { useAuth } from '../context/ContextoAutenticacao';
+import { useRole } from '../context/ContextoPapel';
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();

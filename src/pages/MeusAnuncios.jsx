@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, CheckCircle, Clock } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function MyAds() {
   const { user } = useAuth();

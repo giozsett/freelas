@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Send, HelpCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import ReportModal from '../components/ReportModal';
+import ReportModal from '../components/ModalDenuncia';
 
 export default function Chat() {
   const [message, setMessage] = useState('');

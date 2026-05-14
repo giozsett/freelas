@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, MapPin, Tag, MessageSquare, Star, Zap, Search, ShieldCheck, X, AlertTriangle } from 'lucide-react';
-import ReportModal from '../components/ReportModal';
-import { useAuth } from '../context/AuthContext';
+import ReportModal from '../components/ModalDenuncia';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function AdDetails() {
   const { id } = useParams();
