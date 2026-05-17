@@ -28,7 +28,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name', '')
         )
-        UserProfile.objects.create(user=user)
+        # NÃO cria o UserProfile aqui — será criado após verificação do email
         return user
 
 from .models import Report
