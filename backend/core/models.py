@@ -1,5 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
+import random
+import string
+from django.utils import timezone
 
 class UserProfile(models.Model):
     # Campos da tabela 'usuarios' já existente
@@ -139,3 +142,22 @@ class Candidatura(models.Model):
 
     def __str__(self):
         return f"Candidatura - User: {self.usuario_id} Ad: {self.anuncio_id}"
+
+class VerificacaoEmail(models.Model):
+    usuario = models.OneToOneField(User, on_delete=models.CASCADE, related_name='codigo_verificacao')
+    codigo = models.CharField(max_length=6)
+    criado_em = models.DateTimeField(auto_now=True)  # ← mudou aqui
+    verificado = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'codigos_verificacao_email'
+
+    def esta_expirado(self):
+        return timezone.now() > self.criado_em + timezone.timedelta(minutes=10)
+
+    def gerar_codigo(self):
+        self.codigo = ''.join(random.choices(string.digits, k=6))
+        self.save()  # auto_now=True já atualiza o criado_em automaticamente ao salvar
+
+    def __str__(self):
+        return f"Código de {self.usuario.email}: {self.codigo}"
