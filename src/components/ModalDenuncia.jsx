@@ -53,7 +53,7 @@ export default function ReportModal({ isOpen, onClose, targetId, targetName, typ
         zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', 
         padding: '1rem' 
     }}>
-       <div className="card" style={{ width: '100%', maxWidth: '450px', position: 'relative', borderTop: '4px solid #ff4757' }}>
+       <div className="card" style={{ width: '100%', maxWidth: '450px', position: 'relative' }}>
           <button 
             onClick={onClose} 
             style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
@@ -62,8 +62,8 @@ export default function ReportModal({ isOpen, onClose, targetId, targetName, typ
           </button>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              <AlertTriangle size={28} color="#ff4757" />
-              <h2 style={{ fontSize: '1.5rem', margin: 0 }}>{title}</h2>
+              <AlertTriangle size={24} color="#EF4444" />
+              <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#EF4444' }}>{title}</h2>
           </div>
           
           <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.5' }}>
@@ -101,9 +101,9 @@ export default function ReportModal({ isOpen, onClose, targetId, targetName, typ
              </div>
 
              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
-                <button type="submit" className="btn" style={{ flex: 1, background: '#ff4757', color: 'white', borderColor: '#ff4757' }}>
-                   Enviar Denúncia
+                <button type="button" className="btn btn-secondary" style={{ flex: 1, textTransform: 'uppercase', fontSize: '0.85rem', border: '1px solid var(--border-color)', background: 'transparent' }} onClick={onClose}>CANCELAR</button>
+                <button type="submit" className="btn" style={{ flex: 1, background: '#EF4444', color: '#FFFFFF', border: 'none', textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                   ENVIAR DENÚNCIA
                 </button>
              </div>
           </form>

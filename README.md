@@ -32,6 +32,8 @@
      - Página "Meus Anúncios" agora funciona com a conexão ao banco
      - Envio de candidaturas e página "Minhas Candidaturas" agora funciona com a conexão ao banco 
 
+
+
     
         
     

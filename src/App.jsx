@@ -20,12 +20,14 @@ import PainelModeracao from './pages/PainelModeracao';
 import ConfigurarAssinatura from './pages/ConfigurarAssinatura';
 import MeusPagamentos from './pages/MeusPagamentos';
 import EsqueciSenha from './pages/EsqueciSenha';
+import MeusFreelas from './pages/MeusFreelas';
 
 function App() {
   return (
     <Router>
-      <BarraNavegacao />
-      <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <BarraNavegacao />
+        <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem', flex: 1, width: '100%' }}>
         <Routes>
           <Route path="/" element={<RotaPrivada><Inicio /></RotaPrivada>} />
           <Route path="/login" element={<Login />} />
@@ -44,10 +46,12 @@ function App() {
           <Route path="/moderation-panel" element={<PainelModeracao />} />
           <Route path="/subscription-setup" element={<RotaPrivada><ConfigurarAssinatura /></RotaPrivada>} />
           <Route path="/my-payments" element={<RotaPrivada><MeusPagamentos /></RotaPrivada>} />
+          <Route path="/my-freelas" element={<RotaPrivada><MeusFreelas /></RotaPrivada>} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         </Routes>
       </div>
       <Rodape />
+      </div>
     </Router>
   );
 }

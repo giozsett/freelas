@@ -94,6 +94,7 @@ export default function Navbar() {
                 </Link>
                 <Link to="/plans" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Planos e Assinaturas</Link>
                 <Link to="/my-payments" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Pagamentos</Link>
+                <Link to="/my-freelas" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Freelas</Link>
                 <button
                   onClick={handleLogout}
                   className="dropdown-item"

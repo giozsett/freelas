@@ -14,7 +14,7 @@ export default function MyAds() {
       return;
     }
     
-    fetch('http://localhost:8000/api/ads/')
+    fetch('http://localhost:8000/api/ads/?all=true')
       .then(res => res.json())
       .then(data => {
         // filter ads where author matches logged in user id

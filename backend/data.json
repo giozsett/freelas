@@ -1,0 +1,1475 @@
+[
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$wIkK1vjl8cBtBc4XKBiMEf$Z41LCp2GxxY1cbZ/bw4R4su8nnsBpP5umQBOOWd4P5w=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "fulano@thetown.com",
+        "first_name": "Fulano de Tal",
+        "last_name": "",
+        "email": "fulano@thetown.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-04-22T23:27:29.690Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$RsGCuRU4wdCm80QEYWaV4w$WRA0EAIOwf6XAHZVq4ZxloKkgjZddh5gTu3wy5iZD9Y=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "joao@email.com",
+        "first_name": "João da Silva",
+        "last_name": "",
+        "email": "joao@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-04-23T00:47:22.630Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$vcXwQ7JYXISo7cUROXMNcd$12c+KdoBA5g5bhIzBcZkjojHMplDkPIyY29ze18Ws84=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "jordana@email.com",
+        "first_name": "Jordana Toddy",
+        "last_name": "",
+        "email": "jordana@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-04-27T22:14:02.801Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$DR3N4gAjBsecXwJMi4xBNp$v517d7YN1QCX0diemVw5B0hdGO/CrIUPUVlRR9Mq8so=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "ana@email.com",
+        "first_name": "Ana Clara",
+        "last_name": "",
+        "email": "ana@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-04-27T22:29:25.815Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$EJb7Gq9RNerdvhH1a7gplZ$mSwManQXz2IDKefldtb1vjfc2Yu4MxZr4G8mtj3BuBg=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "fulano@email.com",
+        "first_name": "Fulano TheTown",
+        "last_name": "",
+        "email": "fulano@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-04T22:14:21.698Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$e9q1MObDlDUVV9F87Dwy9N$uDeCU8RBvNiYcfWPaz+gNm3GusBzXTtjxPZyvrLrKWQ=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "teste@email.com",
+        "first_name": "teste1",
+        "last_name": "",
+        "email": "teste@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-04T22:56:40.966Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$wYdv8SohSbgrKpFvVYlMxh$IkRTLJ876UCZkA53kQjsEfxaANDpukXIFcZD9WPmpoE=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "mel@email.com",
+        "first_name": "Melissa Gomes",
+        "last_name": "",
+        "email": "mel@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-06T01:02:37.226Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "anaia3967@gmail.com",
+        "first_name": "ana",
+        "last_name": "IA",
+        "email": "anaia3967@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-11T23:30:59.430Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$hdyFPgpQowRR2DdFhAg6f1$H7OOsGayQYfZgf6blYMfZDEPSRklLEFAh0iGYv1Mo7g=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "giovana@email.com",
+        "first_name": "Gio Teste",
+        "last_name": "",
+        "email": "giovana@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-12T00:05:16.905Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$MmXtbaqJjQP7cvBoZDEd7B$VR1D6S1F5wRqu5QF+s5tA0LPMpqlZ5DKO4x9hqS/ZUc=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "naclarasilva16@gmail.com",
+        "first_name": "ana",
+        "last_name": "",
+        "email": "naclarasilva16@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-12T00:27:04.562Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$JDEPXzSGJ8IQyYhEssqtBd$bGaZ99+HjBKpYK9W5fNADH1iLZJy6/CjoxBRs5YdI6Q=",
+        "last_login": "2026-05-31T22:45:51.592Z",
+        "is_superuser": true,
+        "username": "admin",
+        "first_name": "",
+        "last_name": "",
+        "email": "",
+        "is_staff": true,
+        "is_active": true,
+        "date_joined": "2026-05-12T01:16:45.529Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$W38ImDyR9fqXWj2a5quFd5$19DTLXrsHHdhKopoS4MddhQ8oHzDP1cu9pXR7kyAfBI=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "kompotdlc@gmail.com",
+        "first_name": "romarinho teixeira",
+        "last_name": "",
+        "email": "kompotdlc@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-12T01:51:12.220Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$yyhM6ZGc9boba5r9L05rJe$1dalcyORCqGiS9xh9KarcDNkO4RUmuT94EneuvIqv60=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "lincoln.moreiraalves10@gmail.com",
+        "first_name": "lincoln moreira",
+        "last_name": "",
+        "email": "lincoln.moreiraalves10@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-12T15:26:57.522Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$XJQAY1tYlkNG4BSahngvF1$xVQ4R61BIbCQrO7sXjMOrg+sG+ebyutzJUeFzq3TnOg=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "clarinhaeugelmi@gmail.com",
+        "first_name": "Ana Clara Matos",
+        "last_name": "",
+        "email": "clarinhaeugelmi@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-12T23:16:18.507Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "!FdW5Oj5JrRB3PP4tY2nwUgWGIujP6DFazkKiVXiG",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "gi.corsetti7@gmail.com",
+        "first_name": "Giovana",
+        "last_name": "Corsetti",
+        "email": "gi.corsetti7@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-13T23:02:42.116Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$eTo2IuqyB4NWgY9DzuyyrQ$Stn/Nl+FOuxD4dNucm/HpoG1KK5y6ypmPV6O2PHNs3A=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "nome@email.com",
+        "first_name": "Nome Sobrenome",
+        "last_name": "",
+        "email": "nome@email.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-05-31T22:39:09.017Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "0zza6el5xt2yjiarrmmtygqh3d8q82e3",
+    "fields": {
+        "session_data": ".eJxVjDsOwyAQRO9CHSF-xmzK9D4DgmUJTiKQjF1FuXtsyUXSjea9mTfzYVuL3zotfk7syqRhl98yBnxSPUh6hHpvHFtdlznyQ-En7XxqiV630_07KKGXfa1VcmCVRkEDYZZZoiHI4JCSsUqMaAVKK_cwuIiaMow2CyV11ACI7PMFCko4EQ:1wMc0h:SY4sh-Ca1QmR512YUH272kk17VZGW-IsgeBH2Vi6iE8",
+        "expire_date": "2026-05-26T01:34:11.128Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "5axx84mbgk7274sndyc2c2s5dlk3gham",
+    "fields": {
+        "session_data": ".eJxVjDsOwyAQRO9CHSF-xmzK9D4DgmUJTiKQjF1FuXtsyUXSjea9mTfzYVuL3zotfk7syqRhl98yBnxSPUh6hHpvHFtdlznyQ-En7XxqiV630_07KKGXfa1VcmCVRkEDYZZZoiHI4JCSsUqMaAVKK_cwuIiaMow2CyV11ACI7PMFCko4EQ:1wMc0f:31akOjDIvzujScMf65XhmfzHQEMICd_TuCd_DrN27A8",
+        "expire_date": "2026-05-26T01:34:09.769Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "8if04fyy74dxs0q25ir2cs5lhjutsxxu",
+    "fields": {
+        "session_data": ".eJxVjDsOwyAQRO9CHSF-xmzK9D4DgmUJTiKQjF1FuXtsyUXSjea9mTfzYVuL3zotfk7syqRhl98yBnxSPUh6hHpvHFtdlznyQ-En7XxqiV630_07KKGXfa1VcmCVRkEDYZZZoiHI4JCSsUqMaAVKK_cwuIiaMow2CyV11ACI7PMFCko4EQ:1wMp7R:peBr0gjNIQ0C7iDt6KC_YYMKGj4_FFnPzPJleKMlJZE",
+        "expire_date": "2026-05-26T15:34:01.826Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "g5fpiev3pnoecgmurj9of1vkmloaovgn",
+    "fields": {
+        "session_data": ".eJxVjDsOwyAQRO9CHSF-xmzK9D4DgmUJTiKQjF1FuXtsyUXSjea9mTfzYVuL3zotfk7syqRhl98yBnxSPUh6hHpvHFtdlznyQ-En7XxqiV630_07KKGXfa1VcmCVRkEDYZZZoiHI4JCSsUqMaAVKK_cwuIiaMow2CyV11ACI7PMFCko4EQ:1wToul:Y0MkdwB-5gnpRpEGZWmfDd0BWu0xKFmRHG8NKXfFDec",
+        "expire_date": "2026-06-14T22:45:51.814Z"
+    }
+},
+{
+    "model": "sites.site",
+    "fields": {
+        "domain": "example.com",
+        "name": "example.com"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "1ffd388b57e0634fe21f7a914af2e4f8e313ce0d",
+    "fields": {
+        "user": [
+            "teste@email.com"
+        ],
+        "created": "2026-05-04T22:56:42.705Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "65bb07c424c23b4350302f5fa62b302e7fe9581e",
+    "fields": {
+        "user": [
+            "joao@email.com"
+        ],
+        "created": "2026-04-23T00:47:24.279Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "7254c4a9370879b3e4709fde8f267bae826d3bd5",
+    "fields": {
+        "user": [
+            "jordana@email.com"
+        ],
+        "created": "2026-04-27T22:14:04.376Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "76204924b45c1fcdb923f62b5732b0af20cc3818",
+    "fields": {
+        "user": [
+            "fulano@thetown.com"
+        ],
+        "created": "2026-04-22T23:27:31.464Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "8775c742ea46368ffbe6bd26e6138662e3d906b3",
+    "fields": {
+        "user": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "created": "2026-05-13T23:02:43.438Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "975b4a08971446ba005eb5874257fbeeece9c602",
+    "fields": {
+        "user": [
+            "giovana@email.com"
+        ],
+        "created": "2026-05-12T00:05:18.033Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "9fe14fd60feaf50019e9edb1d9f8742b94b91b51",
+    "fields": {
+        "user": [
+            "nome@email.com"
+        ],
+        "created": "2026-05-31T22:39:11.258Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "b6487aec9c24d0b2cacecf33fd73c019697c55bb",
+    "fields": {
+        "user": [
+            "mel@email.com"
+        ],
+        "created": "2026-05-06T01:02:40.683Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "c0ac62af1de41e018b4d408c50259d37621a9405",
+    "fields": {
+        "user": [
+            "kompotdlc@gmail.com"
+        ],
+        "created": "2026-05-12T01:51:14.618Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "c2a85185788c79a5307da18b59be51107448c8b2",
+    "fields": {
+        "user": [
+            "naclarasilva16@gmail.com"
+        ],
+        "created": "2026-05-12T00:27:05.900Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "c447410a741926f078042fbc91527bae2ecf3ac4",
+    "fields": {
+        "user": [
+            "fulano@email.com"
+        ],
+        "created": "2026-05-04T22:23:24.878Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "dba1037e6b00bbd69c2b99e92cbaa8fa62dc0abe",
+    "fields": {
+        "user": [
+            "clarinhaeugelmi@gmail.com"
+        ],
+        "created": "2026-05-12T23:16:20.625Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "e15e0001d14a2d2ab87bdeaefd4d8e5ba483d58f",
+    "fields": {
+        "user": [
+            "ana@email.com"
+        ],
+        "created": "2026-04-27T22:29:27.381Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "edda4e65b94b8e7a928fe854b484f3ddf60829ef",
+    "fields": {
+        "user": [
+            "lincoln.moreiraalves10@gmail.com"
+        ],
+        "created": "2026-05-12T15:27:00.104Z"
+    }
+},
+{
+    "model": "authtoken.token",
+    "pk": "f5a7ab7326cd1e08766f963ef11a59ec8b66ee58",
+    "fields": {
+        "user": [
+            "anaia3967@gmail.com"
+        ],
+        "created": "2026-05-11T23:31:01.143Z"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 4,
+    "fields": {
+        "nome_completo": "Fulano de Tal",
+        "email": "fulano@thetown.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:29:57.833Z",
+        "atualizado_em": "2026-05-04T22:29:57.833Z",
+        "user": [
+            "fulano@thetown.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 5,
+    "fields": {
+        "nome_completo": "João da Silva",
+        "email": "joao@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:29:58.260Z",
+        "atualizado_em": "2026-05-04T22:29:58.260Z",
+        "user": [
+            "joao@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 6,
+    "fields": {
+        "nome_completo": "Jordana Toddy",
+        "email": "jordana@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:29:58.684Z",
+        "atualizado_em": "2026-05-04T22:29:58.684Z",
+        "user": [
+            "jordana@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 7,
+    "fields": {
+        "nome_completo": "Ana Clara",
+        "email": "ana@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:29:59.104Z",
+        "atualizado_em": "2026-05-04T22:29:59.105Z",
+        "user": [
+            "ana@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 8,
+    "fields": {
+        "nome_completo": "Fulano TheTown",
+        "email": "fulano@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:29:59.521Z",
+        "atualizado_em": "2026-05-04T22:29:59.521Z",
+        "user": [
+            "fulano@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 9,
+    "fields": {
+        "nome_completo": "teste1",
+        "email": "teste@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:56:42.269Z",
+        "atualizado_em": "2026-05-04T22:57:14.283Z",
+        "user": [
+            "teste@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gold"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 10,
+    "fields": {
+        "nome_completo": "Melissa Gomes",
+        "email": "mel@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-06T01:02:40.232Z",
+        "atualizado_em": "2026-05-06T01:02:40.232Z",
+        "user": [
+            "mel@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 12,
+    "fields": {
+        "nome_completo": "Gio Teste",
+        "email": "giovana@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-12T00:05:17.571Z",
+        "atualizado_em": "2026-05-12T00:05:37.414Z",
+        "user": [
+            "giovana@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Platinum"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 13,
+    "fields": {
+        "nome_completo": "ana",
+        "email": "naclarasilva16@gmail.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-12T00:27:05.036Z",
+        "atualizado_em": "2026-05-12T00:27:05.036Z",
+        "user": [
+            "naclarasilva16@gmail.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 20,
+    "fields": {
+        "nome_completo": "admin",
+        "email": "admin@example.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-12T01:16:46.464Z",
+        "atualizado_em": "2026-05-12T01:16:46.464Z",
+        "user": [
+            "admin"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 27,
+    "fields": {
+        "nome_completo": "romarinho teixeira",
+        "email": "kompotdlc@gmail.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-12T01:51:13.774Z",
+        "atualizado_em": "2026-05-12T01:51:13.774Z",
+        "user": [
+            "kompotdlc@gmail.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 28,
+    "fields": {
+        "nome_completo": "lincoln moreira",
+        "email": "lincoln.moreiraalves10@gmail.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-12T15:26:58.917Z",
+        "atualizado_em": "2026-05-12T15:39:12.399Z",
+        "user": [
+            "lincoln.moreiraalves10@gmail.com"
+        ],
+        "bio": "To procurando um novo emprego",
+        "categories": [
+            "3D"
+        ],
+        "skills": [
+            {
+                "name": "3DSMAX",
+                "level": "avancado"
+            }
+        ],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 29,
+    "fields": {
+        "nome_completo": "Ana Clara Matos",
+        "email": "clarinhaeugelmi@gmail.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-12T23:16:19.762Z",
+        "atualizado_em": "2026-05-12T23:16:19.762Z",
+        "user": [
+            "clarinhaeugelmi@gmail.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [],
+        "skills": [],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 30,
+    "fields": {
+        "nome_completo": "Giovana Corsetti",
+        "email": "gi.corsetti7@gmail.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-13T23:02:42.623Z",
+        "atualizado_em": "2026-06-13T21:06:07.837Z",
+        "user": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [
+            "Tecnologia",
+            "Desenvolvimento Mobile",
+            "Tecnologia"
+        ],
+        "skills": [
+            {
+                "name": "Python",
+                "level": "intermediario"
+            },
+            {
+                "name": "Docker",
+                "level": "iniciante"
+            },
+            {
+                "name": "React",
+                "level": "especialista"
+            }
+        ],
+        "subscription_plan": "Platinum"
+    }
+},
+{
+    "model": "core.userprofile",
+    "pk": 31,
+    "fields": {
+        "nome_completo": "Nome Sobrenome",
+        "email": "nome@email.com",
+        "nome_fantasia": null,
+        "reputacao": 0,
+        "banido": false,
+        "deletado": false,
+        "criado_em": "2026-05-31T22:39:10.370Z",
+        "atualizado_em": "2026-06-06T17:46:17.534Z",
+        "user": [
+            "nome@email.com"
+        ],
+        "bio": "Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.",
+        "categories": [
+            "Desenvolvimento Mobile",
+            "Gestão de Projetos"
+        ],
+        "skills": [
+            {
+                "name": "JavaScript",
+                "level": "iniciante"
+            }
+        ],
+        "subscription_plan": "Gratuito"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 4,
+    "fields": {
+        "usuario_id": 8,
+        "titulo": "Designer Gráfico",
+        "descricao": "🎨 Design que comunica, converte e encanta.\n\nSou designer gráfico com mais de 5 anos de experiência criando identidades visuais, posts para redes sociais, logotipos e materiais para marcas que querem se destacar.\n\nTrabalho com agilidade, atenção aos detalhes e revisões incluídas até você ficar 100% satisfeito.\n\n📩 Me chame para um orçamento sem compromisso!",
+        "valor": 40.0,
+        "status_anuncio": null,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:47:30.537Z",
+        "atualizado_em": "2026-05-04T22:47:30.537Z",
+        "author": [
+            "fulano@email.com"
+        ],
+        "title": "Designer Gráfico",
+        "category": "design",
+        "price": "40",
+        "price_unit": "/h",
+        "skills": [
+            "Identidade VIsual",
+            "Logotipo"
+        ],
+        "location_type": "remoto",
+        "address": "",
+        "address_number": "",
+        "description": "🎨 Design que comunica, converte e encanta.\n\nSou designer gráfico com mais de 5 anos de experiência criando identidades visuais, posts para redes sociais, logotipos e materiais para marcas que querem se destacar.\n\nTrabalho com agilidade, atenção aos detalhes e revisões incluídas até você ficar 100% satisfeito.\n\n📩 Me chame para um orçamento sem compromisso!",
+        "role": "freelancer",
+        "deadline": "",
+        "availability": "Disponível no período da manhã",
+        "created_at": "2026-05-04T22:47:30.537Z"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 5,
+    "fields": {
+        "usuario_id": 8,
+        "titulo": "Procuro Desenvolvedor Front-end",
+        "descricao": "Estamos desenvolvendo uma plataforma SaaS e precisamos de um desenvolvedor frontend para construir interfaces modernas, responsivas e de alta performance.\n\n🛠️ Habilidades necessárias:\n\n    React.js ou Next.js\n\n    TypeScript\n\n    Tailwind CSS ou Styled Components\n\n    Integração com APIs REST\n\n    Noções de UI/UX e boas práticas de acessibilidade\n\n💰 Remuneração: R$ 80 a R$ 120 por hora, conforme experiência\n📅 Regime: Projeto de 3 meses com possibilidade de renovação\n\nEnvie seu portfólio e pretensão salarial para iniciarmos a conversa!",
+        "valor": 55.0,
+        "status_anuncio": null,
+        "deletado": false,
+        "criado_em": "2026-05-04T22:54:20.708Z",
+        "atualizado_em": "2026-06-06T18:08:07.834Z",
+        "author": [
+            "fulano@email.com"
+        ],
+        "title": "Procuro Desenvolvedor Front-end",
+        "category": "tecnologia",
+        "price": "55",
+        "price_unit": "/h",
+        "skills": [
+            "Node.js",
+            "Javascript",
+            "typescript"
+        ],
+        "location_type": "remoto",
+        "address": "",
+        "address_number": "",
+        "description": "Estamos desenvolvendo uma plataforma SaaS e precisamos de um desenvolvedor frontend para construir interfaces modernas, responsivas e de alta performance.\n\n🛠️ Habilidades necessárias:\n\n    React.js ou Next.js\n\n    TypeScript\n\n    Tailwind CSS ou Styled Components\n\n    Integração com APIs REST\n\n    Noções de UI/UX e boas práticas de acessibilidade\n\n💰 Remuneração: R$ 80 a R$ 120 por hora, conforme experiência\n📅 Regime: Projeto de 3 meses com possibilidade de renovação\n\nEnvie seu portfólio e pretensão salarial para iniciarmos a conversa!",
+        "role": "contractor",
+        "deadline": "2026-06-02",
+        "availability": "",
+        "created_at": "2026-05-04T22:54:20.708Z"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 6,
+    "fields": {
+        "usuario_id": 6,
+        "titulo": "Procuro Gestor de Tráfego Pago",
+        "descricao": "📣 Procuramos Gestor de Tráfego Pago para E-commerce\n\nNossa loja online está crescendo e precisamos de alguém para gerenciar e escalar nossas campanhas no Meta Ads e Google Ads com foco em ROAS.\n\n🛠️ Habilidades necessárias:\n\nMeta Ads (Facebook e Instagram)\n\nGoogle Ads (Search e Shopping)\n\nGoogle Analytics e Meta Pixel\n\nCriação e análise de relatórios de performance\n\nExperiência com e-commerce (diferencial)\n\n💰 Remuneração: R$ 350 por dia de trabalho\n📅 Regime: 3 dias por semana, contrato mensal renovável\n\nEntre em contato com cases ou resultados anteriores!",
+        "valor": 100.0,
+        "status_anuncio": null,
+        "deletado": false,
+        "criado_em": "2026-05-05T00:28:11.598Z",
+        "atualizado_em": "2026-05-05T00:28:11.598Z",
+        "author": [
+            "jordana@email.com"
+        ],
+        "title": "Procuro Gestor de Tráfego Pago",
+        "category": "tecnologia",
+        "price": "100",
+        "price_unit": "/dia",
+        "skills": [
+            "Google Ads",
+            "meta ads"
+        ],
+        "location_type": "remoto",
+        "address": "",
+        "address_number": "",
+        "description": "📣 Procuramos Gestor de Tráfego Pago para E-commerce\n\nNossa loja online está crescendo e precisamos de alguém para gerenciar e escalar nossas campanhas no Meta Ads e Google Ads com foco em ROAS.\n\n🛠️ Habilidades necessárias:\n\nMeta Ads (Facebook e Instagram)\n\nGoogle Ads (Search e Shopping)\n\nGoogle Analytics e Meta Pixel\n\nCriação e análise de relatórios de performance\n\nExperiência com e-commerce (diferencial)\n\n💰 Remuneração: R$ 350 por dia de trabalho\n📅 Regime: 3 dias por semana, contrato mensal renovável\n\nEntre em contato com cases ou resultados anteriores!",
+        "role": "contractor",
+        "deadline": "2026-07-22",
+        "availability": "",
+        "created_at": "2026-05-05T00:28:11.598Z"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 7,
+    "fields": {
+        "usuario_id": 30,
+        "titulo": "Oportunidade: Tradutor de Conteúdo Digital (Inglês ➔ Português)",
+        "descricao": "Estou em busca de um tradutor freelancer dedicado e meticuloso para realizar a tradução de um e-book de negócios e marketing digital do Inglês para o Português Brasileiro.\n\nO material original possui aproximadamente 8.000 palavras e o objetivo principal é que o texto final não pareça uma \"tradução literal\", mas sim um conteúdo fluido, natural e adaptado culturalmente para o público brasileiro (localização de conteúdo).\n\nO que você fará:\n\n    Traduzir o texto mantendo o tom de voz profissional, porém acessível do autor.\n\n    Adaptar termos técnicos de marketing que fazem sentido em inglês para o equivalente mais usado no mercado brasileiro.\n\n    Revisar o texto final para garantir que não haja erros gramaticais ou de concordância.",
+        "valor": 400.0,
+        "status_anuncio": null,
+        "deletado": false,
+        "criado_em": "2026-05-17T15:17:48.390Z",
+        "atualizado_em": "2026-05-17T15:17:48.390Z",
+        "author": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "title": "Oportunidade: Tradutor de Conteúdo Digital (Inglês ➔ Português)",
+        "category": "Redação e Tradução",
+        "price": "400",
+        "price_unit": "total",
+        "skills": [
+            "Inglês"
+        ],
+        "location_type": "remoto",
+        "address": "",
+        "address_number": "",
+        "description": "Estou em busca de um tradutor freelancer dedicado e meticuloso para realizar a tradução de um e-book de negócios e marketing digital do Inglês para o Português Brasileiro.\n\nO material original possui aproximadamente 8.000 palavras e o objetivo principal é que o texto final não pareça uma \"tradução literal\", mas sim um conteúdo fluido, natural e adaptado culturalmente para o público brasileiro (localização de conteúdo).\n\nO que você fará:\n\n    Traduzir o texto mantendo o tom de voz profissional, porém acessível do autor.\n\n    Adaptar termos técnicos de marketing que fazem sentido em inglês para o equivalente mais usado no mercado brasileiro.\n\n    Revisar o texto final para garantir que não haja erros gramaticais ou de concordância.",
+        "role": "contractor",
+        "deadline": "2026-06-05",
+        "availability": "",
+        "created_at": "2026-05-17T15:17:48.390Z"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 8,
+    "fields": {
+        "usuario_id": 30,
+        "titulo": "Designer de Logotipos / Identidade Visual",
+        "descricao": "Meu nome é [Seu Nome] e atuo como Designer Gráfico Freelancer há mais de 4 anos, com foco especial em ajudar novas marcas e sites a nascerem com uma identidade visual forte e profissional.\n\nEstou com a agenda aberta para novos projetos e focado em atender empreendedores, criadores de conteúdo e desenvolvedores web que precisam de um logotipo marcante para seus sites. O meu objetivo é transformar a essência do seu negócio em um design moderno, minimalista e que funcione perfeitamente no ambiente digital (desktop, mobile e redes sociais).\n\nO que eu entrego no meu serviço padrão:\n\n    Estudo de cores e tipografia alinhados com o seu nicho.\n\n    2 a 3 conceitos iniciais para aprovação.\n\n    Arquivos finais em vetor (.AI ou .EPS), .PNG (fundo transparente) e .JPG em alta resolução.\n\n    Manual básico de aplicação da marca.",
+        "valor": 250.0,
+        "status_anuncio": null,
+        "deletado": false,
+        "criado_em": "2026-05-17T15:38:39.308Z",
+        "atualizado_em": "2026-05-17T15:38:39.308Z",
+        "author": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "title": "Designer de Logotipos / Identidade Visual",
+        "category": "Design Gráfico",
+        "price": "250",
+        "price_unit": "total",
+        "skills": [
+            "Photoshop",
+            "Figma"
+        ],
+        "location_type": "remoto",
+        "address": "",
+        "address_number": "",
+        "description": "Meu nome é [Seu Nome] e atuo como Designer Gráfico Freelancer há mais de 4 anos, com foco especial em ajudar novas marcas e sites a nascerem com uma identidade visual forte e profissional.\n\nEstou com a agenda aberta para novos projetos e focado em atender empreendedores, criadores de conteúdo e desenvolvedores web que precisam de um logotipo marcante para seus sites. O meu objetivo é transformar a essência do seu negócio em um design moderno, minimalista e que funcione perfeitamente no ambiente digital (desktop, mobile e redes sociais).\n\nO que eu entrego no meu serviço padrão:\n\n    Estudo de cores e tipografia alinhados com o seu nicho.\n\n    2 a 3 conceitos iniciais para aprovação.\n\n    Arquivos finais em vetor (.AI ou .EPS), .PNG (fundo transparente) e .JPG em alta resolução.\n\n    Manual básico de aplicação da marca.",
+        "role": "freelancer",
+        "deadline": "",
+        "availability": "Disponível todos os dias no período da mahã.",
+        "created_at": "2026-05-17T15:38:39.309Z"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 9,
+    "fields": {
+        "usuario_id": 30,
+        "titulo": "Procuro Desenvolvedor Python",
+        "descricao": "Procuro desenvolvedor web python, mais detalhes da vaga vão aqui, preciso que tenha conhecimento sobre docker..",
+        "valor": 500.0,
+        "status_anuncio": "Finalizado",
+        "deletado": false,
+        "criado_em": "2026-05-17T15:53:35.689Z",
+        "atualizado_em": "2026-06-06T18:13:57.299Z",
+        "author": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "title": "Procuro Desenvolvedor Python",
+        "category": "Desenvolvimento Web",
+        "price": "500",
+        "price_unit": "total",
+        "skills": [
+            "Python",
+            "Docker",
+            "HTML/CSS"
+        ],
+        "location_type": "remoto",
+        "address": "",
+        "address_number": "",
+        "description": "Procuro desenvolvedor web python, mais detalhes da vaga vão aqui, preciso que tenha conhecimento sobre docker..",
+        "role": "contractor",
+        "deadline": "2026-06-13",
+        "availability": "",
+        "created_at": "2026-05-17T15:53:35.689Z"
+    }
+},
+{
+    "model": "core.ad",
+    "pk": 10,
+    "fields": {
+        "usuario_id": 30,
+        "titulo": "Pintura Facil para Festas Infantis",
+        "descricao": "Apresento meu trabalho de  pinturas faciais  para festas infantis e eventos com produtos de primeira linha, hipoalergênicos, não oferecendo riscos para crianças ou adultos. \nPossuo três anos de experiência como recreadora em festas infantis.",
+        "valor": 160.0,
+        "status_anuncio": null,
+        "deletado": false,
+        "criado_em": "2026-05-31T16:50:30.103Z",
+        "atualizado_em": "2026-05-31T16:50:30.104Z",
+        "author": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "title": "Pintura Facil para Festas Infantis",
+        "category": "Outros",
+        "price": "160",
+        "price_unit": "/dia",
+        "skills": [
+            "Photoshop"
+        ],
+        "location_type": "presencial",
+        "address": "Rua das Flores, Bairro Centro",
+        "address_number": "12",
+        "description": "Apresento meu trabalho de  pinturas faciais  para festas infantis e eventos com produtos de primeira linha, hipoalergênicos, não oferecendo riscos para crianças ou adultos. \nPossuo três anos de experiência como recreadora em festas infantis.",
+        "role": "freelancer",
+        "deadline": "",
+        "availability": "Sábados e Domingos",
+        "created_at": "2026-05-31T16:50:30.104Z"
+    }
+},
+{
+    "model": "core.report",
+    "pk": 1,
+    "fields": {
+        "type": "ad",
+        "target_id": "4",
+        "target_name": "Designer Gráfico",
+        "category": "spam",
+        "comment": "anúncio inapropriado",
+        "status": "pending",
+        "created_at": "2026-05-04T22:48:03.784Z"
+    }
+},
+{
+    "model": "core.report",
+    "pk": 2,
+    "fields": {
+        "type": "ad",
+        "target_id": "4",
+        "target_name": "Designer Gráfico",
+        "category": "spam",
+        "comment": "anúncio inapropriado",
+        "status": "pending",
+        "created_at": "2026-05-04T22:48:05.305Z"
+    }
+},
+{
+    "model": "core.report",
+    "pk": 3,
+    "fields": {
+        "type": "user",
+        "target_id": "2",
+        "target_name": "João da Silva",
+        "category": "ofensivo",
+        "comment": "linguagem ofensiva",
+        "status": "improcedente",
+        "created_at": "2026-05-04T22:48:38.728Z"
+    }
+},
+{
+    "model": "core.report",
+    "pk": 4,
+    "fields": {
+        "type": "ad",
+        "target_id": "4",
+        "target_name": "Designer Gráfico",
+        "category": "inadequado",
+        "comment": "teste aqui",
+        "status": "pending",
+        "created_at": "2026-05-17T15:46:40.206Z"
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 1,
+    "fields": {
+        "usuario_id": 6,
+        "anuncio_id": 5,
+        "mensagem": "Olá vi o anúncio e posso ajudar com...",
+        "status": "pendente",
+        "enviado_em": "2026-05-05T00:41:16.910Z",
+        "atualizado_em": "2026-06-06T18:08:07.617Z",
+        "user": [
+            "jordana@email.com"
+        ],
+        "ad": 5
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 2,
+    "fields": {
+        "usuario_id": 6,
+        "anuncio_id": 5,
+        "mensagem": "Ola gostaria de me candidatar...",
+        "status": "pendente",
+        "enviado_em": "2026-05-05T00:50:04.543Z",
+        "atualizado_em": "2026-05-05T00:50:04.543Z",
+        "user": [
+            "jordana@email.com"
+        ],
+        "ad": 5
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 3,
+    "fields": {
+        "usuario_id": 7,
+        "anuncio_id": 5,
+        "mensagem": "oii vi seu anuncio e gostaria de te contratar",
+        "status": "pendente",
+        "enviado_em": "2026-05-06T23:03:15.829Z",
+        "atualizado_em": "2026-05-06T23:03:15.829Z",
+        "user": [
+            "ana@email.com"
+        ],
+        "ad": 5
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 4,
+    "fields": {
+        "usuario_id": 12,
+        "anuncio_id": 4,
+        "mensagem": "Olá contrata eu",
+        "status": "pendente",
+        "enviado_em": "2026-05-12T00:15:30.079Z",
+        "atualizado_em": "2026-05-12T00:15:30.079Z",
+        "user": [
+            "giovana@email.com"
+        ],
+        "ad": 4
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 5,
+    "fields": {
+        "usuario_id": 28,
+        "anuncio_id": 6,
+        "mensagem": "oi, me contrataaaaa.",
+        "status": "pendente",
+        "enviado_em": "2026-05-12T15:30:50.226Z",
+        "atualizado_em": "2026-05-12T15:30:50.226Z",
+        "user": [
+            "lincoln.moreiraalves10@gmail.com"
+        ],
+        "ad": 6
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 6,
+    "fields": {
+        "usuario_id": 7,
+        "anuncio_id": 6,
+        "mensagem": "Posso te ajudar",
+        "status": "pendente",
+        "enviado_em": "2026-05-15T01:00:34.088Z",
+        "atualizado_em": "2026-05-15T01:00:34.088Z",
+        "user": [
+            "ana@email.com"
+        ],
+        "ad": 6
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 7,
+    "fields": {
+        "usuario_id": 30,
+        "anuncio_id": 4,
+        "mensagem": "Olá vi seu anúncio e preciso de um desiger gráfico",
+        "status": "pendente",
+        "enviado_em": "2026-05-17T15:39:21.899Z",
+        "atualizado_em": "2026-05-17T15:39:21.899Z",
+        "user": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "ad": 4
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 8,
+    "fields": {
+        "usuario_id": 30,
+        "anuncio_id": 6,
+        "mensagem": "olá gostaria de me candidatar a sua vaga[inserir text aqui]",
+        "status": "pendente",
+        "enviado_em": "2026-05-17T15:47:23.296Z",
+        "atualizado_em": "2026-05-17T15:47:23.296Z",
+        "user": [
+            "gi.corsetti7@gmail.com"
+        ],
+        "ad": 6
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 9,
+    "fields": {
+        "usuario_id": 31,
+        "anuncio_id": 9,
+        "mensagem": "Olá, vi o seu anúncio e gostaria de me candidatar pois [imagine uma justificativa aqui].",
+        "status": "aprovada",
+        "enviado_em": "2026-05-31T22:47:15.148Z",
+        "atualizado_em": "2026-06-06T18:13:57.538Z",
+        "user": [
+            "nome@email.com"
+        ],
+        "ad": 9
+    }
+},
+{
+    "model": "core.candidatura",
+    "pk": 10,
+    "fields": {
+        "usuario_id": 31,
+        "anuncio_id": 8,
+        "mensagem": "Sou o Nome Sobrenome e procuro um profissional exatamente com esse perfil. Obrigado pela atenção.",
+        "status": "pendente",
+        "enviado_em": "2026-05-31T22:48:49.484Z",
+        "atualizado_em": "2026-05-31T22:48:49.484Z",
+        "user": [
+            "nome@email.com"
+        ],
+        "ad": 8
+    }
+},
+{
+    "model": "core.verificacaoemail",
+    "pk": 1,
+    "fields": {
+        "usuario": [
+            "kompotdlc@gmail.com"
+        ],
+        "codigo": "002867",
+        "criado_em": "2026-05-13T23:08:02.913Z",
+        "verificado": true
+    }
+},
+{
+    "model": "core.verificacaoemail",
+    "pk": 2,
+    "fields": {
+        "usuario": [
+            "lincoln.moreiraalves10@gmail.com"
+        ],
+        "codigo": "429732",
+        "criado_em": "2026-05-12T15:27:01.887Z",
+        "verificado": true
+    }
+},
+{
+    "model": "core.verificacaoemail",
+    "pk": 3,
+    "fields": {
+        "usuario": [
+            "naclarasilva16@gmail.com"
+        ],
+        "codigo": "206552",
+        "criado_em": "2026-05-13T22:45:09.756Z",
+        "verificado": true
+    }
+},
+{
+    "model": "core.verificacaoemail",
+    "pk": 4,
+    "fields": {
+        "usuario": [
+            "clarinhaeugelmi@gmail.com"
+        ],
+        "codigo": "215205",
+        "criado_em": "2026-05-12T23:16:21.905Z",
+        "verificado": false
+    }
+},
+{
+    "model": "core.verificacaoemail",
+    "pk": 5,
+    "fields": {
+        "usuario": [
+            "nome@email.com"
+        ],
+        "codigo": "889176",
+        "criado_em": "2026-05-31T22:39:13.224Z",
+        "verificado": false
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 1,
+    "fields": {
+        "action_time": "2026-05-12T01:22:56.824Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "12",
+        "object_repr": "kompotdlc@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 2,
+    "fields": {
+        "action_time": "2026-05-12T01:24:54.243Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "15",
+        "object_repr": "clarinhaeugelmi@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 3,
+    "fields": {
+        "action_time": "2026-05-12T01:25:23.408Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "11",
+        "object_repr": "prodbyromer@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 4,
+    "fields": {
+        "action_time": "2026-05-12T01:27:02.149Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "13",
+        "object_repr": "tecnologia.anaclara@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 5,
+    "fields": {
+        "action_time": "2026-05-12T01:36:45.832Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "16",
+        "object_repr": "kompotdlc@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 6,
+    "fields": {
+        "action_time": "2026-05-12T01:36:49.106Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "16",
+        "object_repr": "kompotdlc@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 7,
+    "fields": {
+        "action_time": "2026-05-12T01:50:01.917Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "17",
+        "object_repr": "clarinhaeugelmi@gmail.com",
+        "action_flag": 3,
+        "change_message": ""
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 8,
+    "fields": {
+        "action_time": "2026-05-12T15:33:49.843Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "3",
+        "object_repr": "jordana@email.com",
+        "action_flag": 2,
+        "change_message": "[{\"changed\": {\"fields\": [\"password\"]}}]"
+    }
+},
+{
+    "model": "admin.logentry",
+    "pk": 9,
+    "fields": {
+        "action_time": "2026-05-12T15:33:59.776Z",
+        "user": [
+            "admin"
+        ],
+        "content_type": [
+            "auth",
+            "user"
+        ],
+        "object_id": "3",
+        "object_repr": "jordana@email.com",
+        "action_flag": 2,
+        "change_message": "[{\"changed\": {\"fields\": [\"password\"]}}]"
+    }
+}
+]

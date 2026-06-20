@@ -82,9 +82,17 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
 
 
 class AdListCreateAPIView(generics.ListCreateAPIView):
-    queryset = Ad.objects.all().order_by('-created_at')
     serializer_class = AdSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Ad.objects.all().order_by('-created_at')
+        all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
+        if not all_ads:
+            from django.db.models import Q
+            # Only show ads that are open (status is NULL, empty, 'Em aberto', or 'Ativo')
+            queryset = queryset.filter(Q(status_anuncio__isnull=True) | Q(status_anuncio='') | Q(status_anuncio='Em aberto') | Q(status_anuncio='Ativo'))
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

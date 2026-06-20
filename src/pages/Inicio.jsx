@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useRole } from '../context/ContextoPapel';
 import AdCard from '../components/CardAnuncio';
+import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 
 export default function Home() {
   const { role } = useRole();
   const [ads, setAds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [skillFilter, setSkillFilter] = useState('');
   const [priceFilter, setPriceFilter] = useState(500);
   const [distanceFilter, setDistanceFilter] = useState(50);
 
@@ -30,7 +32,8 @@ export default function Home() {
             locationType: ad.location_type,
             address: ad.address,
             city: 'Digital', // Mock city
-            price: ad.price
+            price: ad.price,
+            status: ad.status_anuncio // Map status
           }));
           setAds(normalizedAds);
         } else {
@@ -47,13 +50,15 @@ export default function Home() {
     // Show opposite ads: if I am freelancer, I want to see contractor ads
     const targetAdType = role === 'freelancer' ? 'contractor' : 'freelancer';
     if (ad.type !== targetAdType) return false;
-    if (categoryFilter && ad.category.toLowerCase() !== categoryFilter) return false;
+    // Hide approved/finalized ads from the main page
+    if (ad.status && ad.status !== 'Em aberto' && ad.status !== 'Ativo' && ad.status !== '') return false;
+    if (categoryFilter && ad.category.toLowerCase() !== categoryFilter.toLowerCase()) return false;
+    if (skillFilter && !ad.skills.some(skill => skill.toLowerCase() === skillFilter.toLowerCase())) return false;
     if (ad.price > priceFilter) return false;
     if (ad.distance > distanceFilter) return false;
     if (searchQuery) {
       const matchTitle = ad.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchSkill = ad.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
-      if (!matchTitle && !matchSkill) return false;
+      if (!matchTitle) return false;
     }
     return true;
   });
@@ -68,17 +73,24 @@ export default function Home() {
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categoria</label>
             <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-              <option value="">Todas</option>
-              <option value="animais">Animais</option>
-              <option value="serviços domésticos">Serviços Domésticos</option>
-              <option value="tecnologia">Tecnologia</option>
-              <option value="educação">Educação</option>
-              <option value="design">Design</option>
+              <option value="">Todas as Categorias</option>
+              {CATEGORIAS_SERVICO.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidade</label>
+            <select className="input" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)}>
+              <option value="">Todas as Habilidades</option>
+              {HABILIDADES_PROFISSIONAIS.map(skill => (
+                <option key={skill} value={skill}>{skill}</option>
+              ))}
             </select>
           </div>
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Pesquisa</label>
-            <input type="text" className="input" placeholder="Ex: Título ou habilidade" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input type="text" className="input" placeholder="Ex: Título" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
