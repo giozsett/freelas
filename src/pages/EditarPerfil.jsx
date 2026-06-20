@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Camera, User } from 'lucide-react';
+import { useAuth } from '../context/ContextoAutenticacao';
+import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 
 export default function EditProfile() {
   const { token } = useAuth();
@@ -91,9 +93,53 @@ export default function EditProfile() {
       <div className="card">
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
+          {/* Profile Picture Placeholder */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <div style={{ 
+              position: 'relative', 
+              width: '120px', 
+              height: '120px', 
+              borderRadius: '50%', 
+              background: 'var(--bg-color)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              border: '2px dashed var(--primary)',
+              overflow: 'hidden'
+            }}>
+              <User size={60} color="var(--primary)" opacity={0.5} />
+            </div>
+            
+            <button 
+              type="button"
+              style={{ 
+                marginTop: '-20px', 
+                background: 'var(--surface-color)', 
+                border: '1px solid var(--border-color)', 
+                borderRadius: '50%', 
+                width: '40px', 
+                height: '40px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px var(--shadow-color)',
+                zIndex: 2,
+                transition: 'all 0.2s ease',
+                color: 'var(--text-color)'
+              }}
+              title="Alterar foto de perfil"
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-color)'; }}
+            >
+              <Camera size={20} />
+            </button>
+            <span style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem', fontWeight: '500' }}>Alterar Foto</span>
+          </div>
+
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Biografia</label>
-            <textarea className="input" rows="5" value={bio} onChange={(e) => setBio(e.target.value)} required></textarea>
+            <textarea className="input" rows="5" value={bio} onChange={(e) => setBio(e.target.value)} style={{ resize: 'none' }} required></textarea>
           </div>
 
           <div>
@@ -101,7 +147,10 @@ export default function EditProfile() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {categories.map((cat, index) => (
                 <div key={index} className="form-row" style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input type="text" className="input" placeholder="Ex: Design" style={{ flex: 1 }} value={cat} onChange={(e) => updateCategory(index, e.target.value)} required />
+                  <select className="input" style={{ flex: 1 }} value={cat} onChange={(e) => updateCategory(index, e.target.value)} required>
+                    <option value="">Selecione uma categoria...</option>
+                    {CATEGORIAS_SERVICO.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                   {categories.length > 1 && (
                     <button type="button" className="btn" style={{ padding: '0 1rem', background: 'transparent', color: 'var(--text-color)' }} onClick={() => removeCategory(index)}>X</button>
                   )}
@@ -120,7 +169,10 @@ export default function EditProfile() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {skills.map((skill, index) => (
                 <div key={index} className="form-row">
-                  <input type="text" className="input" placeholder="Ex: Adestramento Básico" style={{ flex: 2 }} value={skill.name} onChange={(e) => updateSkill(index, 'name', e.target.value)} required />
+                  <select className="input" style={{ flex: 2 }} value={skill.name} onChange={(e) => updateSkill(index, 'name', e.target.value)} required>
+                    <option value="">Selecione uma habilidade...</option>
+                    {HABILIDADES_PROFISSIONAIS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                   <select className="input" style={{ flex: 1 }} value={skill.level} onChange={(e) => updateSkill(index, 'level', e.target.value)}>
                     <option value="iniciante">Iniciante</option>
                     <option value="intermediario">Intermediário</option>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, CheckCircle, Clock } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function MyAds() {
   const { user } = useAuth();
@@ -14,7 +14,7 @@ export default function MyAds() {
       return;
     }
     
-    fetch('http://localhost:8000/api/ads/')
+    fetch('http://localhost:8000/api/ads/?all=true')
       .then(res => res.json())
       .then(data => {
         // filter ads where author matches logged in user id

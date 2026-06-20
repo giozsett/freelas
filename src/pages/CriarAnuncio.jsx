@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useRole } from '../context/RoleContext';
+import { useRole } from '../context/ContextoPapel';
+import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 
 export default function CreateAd() {
   const { role } = useRole();
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('servicos_domesticos');
+  const [category, setCategory] = useState(CATEGORIAS_SERVICO[0]);
   const [skills, setSkills] = useState([]);
   const [currentSkill, setCurrentSkill] = useState('');
   const [skillError, setSkillError] = useState('');
@@ -30,6 +31,11 @@ export default function CreateAd() {
     
     if (skills.length >= 5) {
       setSkillError('Só é possível adicionar 5 habilidades por anúncio.');
+      return;
+    }
+    
+    if (skills.includes(currentSkill)) {
+      setSkillError('Esta habilidade já foi adicionada.');
       return;
     }
     
@@ -117,11 +123,9 @@ export default function CreateAd() {
              <div style={{ flex: 1 }}>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categoria</label>
                 <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="tecnologia">Tecnologia</option>
-                    <option value="animais">Animais</option>
-                    <option value="servicos_domesticos">Serviços Domésticos</option>
-                    <option value="educacao">Educação</option>
-                    <option value="design">Design e Arte</option>
+                  {CATEGORIAS_SERVICO.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
                 </select>
              </div>
              <div style={{ flex: 1 }}>
@@ -153,19 +157,16 @@ export default function CreateAd() {
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5)</label>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <input 
-                type="text" 
+              <select 
                 className="input" 
-                placeholder="Adicionar habilidade..."
                 value={currentSkill}
                 onChange={(e) => setCurrentSkill(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSkill(e);
-                  }
-                }}
-              />
+              >
+                <option value="">Selecione uma habilidade...</option>
+                {HABILIDADES_PROFISSIONAIS.map(skill => (
+                  <option key={skill} value={skill}>{skill}</option>
+                ))}
+              </select>
               <button 
                 type="button" 
                 className="btn dark-text" 
@@ -194,30 +195,30 @@ export default function CreateAd() {
 
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Tipo de Trabalho</label>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input 
-                  type="radio" 
-                  name="locationType" 
-                  value="remoto" 
-                  checked={locationType === 'remoto'}
-                  onChange={(e) => setLocationType(e.target.value)} 
-                /> Remoto
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input 
-                  type="radio" 
-                  name="locationType" 
-                  value="presencial" 
-                  checked={locationType === 'presencial'}
-                  onChange={(e) => setLocationType(e.target.value)} 
-                /> Presencial
-              </label>
+            <div style={{ display: 'flex', background: 'var(--bg-color)', borderRadius: '8px', padding: '0.3rem', border: '1px solid var(--border-color)', gap: '0.3rem' }}>
+              <div 
+                onClick={() => setLocationType('remoto')}
+                style={{ flex: 1, textAlign: 'center', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', background: locationType === 'remoto' ? 'var(--surface-color)' : 'transparent', boxShadow: locationType === 'remoto' ? '0 2px 4px var(--shadow-color)' : 'none', fontWeight: locationType === 'remoto' ? '600' : '400', color: locationType === 'remoto' ? 'var(--primary)' : 'var(--text-secondary)', transition: 'all 0.3s ease' }}
+              >
+                Remoto
+              </div>
+              <div 
+                onClick={() => setLocationType('presencial')}
+                style={{ flex: 1, textAlign: 'center', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', background: locationType === 'presencial' ? 'var(--surface-color)' : 'transparent', boxShadow: locationType === 'presencial' ? '0 2px 4px var(--shadow-color)' : 'none', fontWeight: locationType === 'presencial' ? '600' : '400', color: locationType === 'presencial' ? 'var(--primary)' : 'var(--text-secondary)', transition: 'all 0.3s ease' }}
+              >
+                Presencial
+              </div>
             </div>
           </div>
 
-          {locationType === 'presencial' && (
-            <div className="form-row">
+          <div style={{ 
+            maxHeight: locationType === 'presencial' ? '200px' : '0', 
+            opacity: locationType === 'presencial' ? 1 : 0, 
+            overflow: 'hidden', 
+            transition: 'all 0.3s ease-in-out',
+            marginBottom: locationType === 'presencial' ? '0.5rem' : '0'
+          }}>
+            <div className="form-row" style={{ paddingTop: '0.5rem' }}>
               <div style={{ flex: 3 }}>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Endereço</label>
                 <input 
@@ -241,16 +242,18 @@ export default function CreateAd() {
                 />
               </div>
             </div>
-          )}
+          </div>
 
           {role === 'contractor' ? (
              <div>
                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Data/Prazo</label>
                <input 
                  type="date" 
-                 className="input" 
+                 className="input custom-date-input" 
                  value={deadline}
                  onChange={(e) => setDeadline(e.target.value)}
+                 min={new Date().toISOString().split('T')[0]}
+                 style={{ cursor: 'pointer' }}
                  required
                />
              </div>
@@ -263,6 +266,7 @@ export default function CreateAd() {
                  placeholder="Ex: Disponível todos os dias na parte da tarde..."
                  value={availability}
                  onChange={(e) => setAvailability(e.target.value)}
+                 style={{ resize: 'none' }}
                  required
                ></textarea>
              </div>
@@ -276,6 +280,7 @@ export default function CreateAd() {
               placeholder="Descreva o que você oferece ou o que você precisa..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              style={{ resize: 'none' }}
               required
             ></textarea>
           </div>

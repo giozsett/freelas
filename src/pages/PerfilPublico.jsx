@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Star, Award, HelpCircle, MessageCircle } from 'lucide-react';
-import ReportModal from '../components/ReportModal';
+import ReportModal from '../components/ModalDenuncia';
 
 export default function PublicProfile() {
   const { id } = useParams();
