@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, MapPin, Tag, MessageSquare, Star, Zap, Search, ShieldCheck, X, AlertTriangle } from 'lucide-react';
-import ReportModal from '../components/ReportModal';
-import { useAuth } from '../context/AuthContext';
+import ReportModal from '../components/ModalDenuncia';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function AdDetails() {
   const { id } = useParams();
@@ -11,9 +11,28 @@ export default function AdDetails() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [proposalPrice, setProposalPrice] = useState('');
   const [proposalText, setProposalText] = useState('');
+  const [hasApplied, setHasApplied] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const [ad, setAd] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user && id) {
+      const token = localStorage.getItem('token');
+      fetch(`http://localhost:8000/api/candidaturas/?user_id=${user.id}`, {
+        headers: { 'Authorization': `Token ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+           const applied = data.some(app => String(app.anuncio_id) === String(id));
+           setHasApplied(applied);
+        }
+      })
+      .catch(err => console.error(err));
+    }
+  }, [user, id]);
 
   useEffect(() => {
     fetch(`http://localhost:8000/api/ads/${id}/`)
@@ -71,6 +90,8 @@ export default function AdDetails() {
     .then(res => {
       if (res.ok) {
         console.log("Candidatura enviada com sucesso!");
+        setSuccessMessage("Sua candidatura foi enviada, confira em 'minhas candidaturas'");
+        setHasApplied(true);
         setIsModalOpen(false);
         setProposalPrice('');
         setProposalText('');
@@ -104,9 +125,9 @@ export default function AdDetails() {
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <div className="card">
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1.5rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '250px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
               <span className={ad.type === 'freelancer' ? 'badge salmon' : 'badge purple'}>
                 {ad.type === 'freelancer' ? 'Anúncio de Freelancer' : 'Anúncio de Contratante'}
               </span>
@@ -115,25 +136,28 @@ export default function AdDetails() {
               </span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-               <h1 style={{ fontSize: '2rem', margin: 0, lineHeight: '1.2' }}>{ad.title}</h1>
-               <button 
-                 onClick={() => setIsReportModalOpen(true)}
-                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                 title="Denunciar Anúncio"
-               >
-                 <AlertTriangle size={24} color="#ff4757" />
-               </button>
-            </div>
+            <h1 style={{ fontSize: '2rem', margin: '0 0 1.5rem 0', lineHeight: '1.2', wordBreak: 'break-word' }}>{ad.title}</h1>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', opacity: 0.8, marginBottom: '1.5rem' }}>
-              <Link to={`/user/${ad.author_id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'underline', color: 'var(--holo-blue)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', opacity: 0.9, marginBottom: '1.5rem' }}>
+              <Link 
+                to={`/user/${ad.author_id}`} 
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', 
+                  textDecoration: 'none', color: 'var(--primary)', 
+                  fontWeight: '600', padding: '0.3rem 0.8rem', 
+                  background: 'var(--secondary)', borderRadius: '6px',
+                  transition: 'all 0.2s ease',
+                  border: '1px solid transparent'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
+              >
                 <User size={18} /> {ad.author}
               </Link>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f39c12', fontWeight: 'bold' }}>
                 <Star size={18} fill="currentColor" /> {ad.rating} ({ad.reviews})
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', opacity: 0.8 }}>
                 <MapPin size={18} /> 
                 {ad.locationType === 'remoto' 
                   ? 'Remoto' 
@@ -143,18 +167,34 @@ export default function AdDetails() {
             </div>
           </div>
           
-          <div style={{ background: 'var(--bg-color)', padding: '1rem 1.5rem', borderRadius: '8px', border: 'var(--border-width) solid var(--border-color)', textAlign: 'center', minWidth: '150px' }}>
-             <div style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                {ad.type === 'freelancer' ? 'A partir de' : 'Orçamento'}
-             </div>
-             <div style={{ fontSize: '1.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '0.2rem' }}>
-               <span>R$ {ad.price}</span>
-               {ad.price_unit && ad.price_unit !== 'total' && (
-                 <span style={{ fontSize: '1.1rem', fontWeight: 'normal', opacity: 0.8 }}>
-                   {ad.price_unit}
-                 </span>
-               )}
-             </div>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexShrink: 0 }}>
+            <div style={{ background: 'var(--bg-color)', padding: '1rem 1.5rem', borderRadius: '8px', border: 'var(--border-width) solid var(--border-color)', textAlign: 'center', minWidth: '150px' }}>
+               <div style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  {ad.type === 'freelancer' ? 'A partir de' : 'Orçamento'}
+               </div>
+               <div style={{ fontSize: '1.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '0.2rem' }}>
+                 <span>R$ {ad.price}</span>
+                 {ad.price_unit && ad.price_unit !== 'total' && (
+                   <span style={{ fontSize: '1.1rem', fontWeight: 'normal', opacity: 0.8 }}>
+                     {ad.price_unit}
+                   </span>
+                 )}
+               </div>
+            </div>
+
+            <button 
+              onClick={() => setIsReportModalOpen(true)}
+              style={{ 
+                background: 'rgba(255, 71, 87, 0.1)', border: 'none', borderRadius: '8px', 
+                cursor: 'pointer', padding: '0.75rem', display: 'flex', alignItems: 'center', 
+                justifyContent: 'center', transition: 'all 0.2s ease', height: 'fit-content'
+              }}
+              title="Denunciar Anúncio"
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 71, 87, 0.2)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 71, 87, 0.1)'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <AlertTriangle size={24} color="#ff4757" />
+            </button>
           </div>
         </div>
 
@@ -201,14 +241,21 @@ export default function AdDetails() {
           </div>
         </div>
 
+        {successMessage && (
+          <div style={{ padding: '1rem', background: 'var(--accent)', color: '#fff', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center', fontWeight: 'bold' }}>
+            {successMessage}
+          </div>
+        )}
+
         {(!user || user.id !== ad.author_id) && (
           <div style={{ display: 'flex', gap: '1rem', borderTop: 'var(--border-width) solid var(--border-color)', paddingTop: '2rem', flexWrap: 'wrap' }}>
              <button 
-               className="btn dark-text" 
+               className={hasApplied ? "btn btn-secondary" : "btn"} 
                style={{ flex: 2, padding: '1rem', fontSize: '1.2rem', minWidth: '200px' }}
-               onClick={() => setIsModalOpen(true)}
+               onClick={() => !hasApplied && setIsModalOpen(true)}
+               disabled={hasApplied}
              >
-               <Star size={20} fill="currentColor" /> Candidatar-se
+               <Star size={20} fill="currentColor" /> {hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
              </button>
              <Link to="/chat" className="btn btn-secondary" style={{ flex: 1, padding: '1rem', minWidth: '150px' }}>
                <MessageSquare size={20} /> Tirar Dúvidas

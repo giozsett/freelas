@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Edit3, Award, Zap, MessageCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function Profile() {
   const { user: authUser, token } = useAuth();
@@ -78,8 +78,8 @@ export default function Profile() {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <div className="card" style={{ position: 'relative' }}>
-        <Link to="/profile/edit" className="btn dark-text" style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Edit3 size={18} /> Editar
+        <Link to="/profile/edit" className="btn btn-secondary" style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+          <Edit3 size={16} /> Editar Perfil
         </Link>
 
         <div className="profile-header">
@@ -89,12 +89,12 @@ export default function Profile() {
 
             {/* Plan Info */}
             <div style={{ fontSize: '1rem', opacity: 0.9, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <Zap size={18} color="var(--holo-blue)" /> Plano {userContext.plan} - <Link to="/plans" style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>Fazer Upgrade</Link>
+              <Zap size={18} color="var(--primary)" /> Plano {userContext.plan} - <Link to="/plans" style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>Fazer Upgrade</Link>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '1.2rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
-                <Star fill="currentColor" size={20} color="var(--holo-salmon)" /> {userContext.rating} ({userContext.reviews} avaliações)
+                <Star fill="currentColor" size={20} color="var(--accent)" /> {userContext.rating} ({userContext.reviews} avaliações)
               </div>
             </div>
           </div>
@@ -111,8 +111,8 @@ export default function Profile() {
             onClick={() => setActiveTab('skills')}
             style={{
               background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold',
-              color: activeTab === 'skills' ? 'var(--text-color)' : 'gray',
-              borderBottom: activeTab === 'skills' ? '3px solid var(--holo-salmon)' : '3px solid transparent'
+              color: activeTab === 'skills' ? 'var(--text-color)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'skills' ? '3px solid var(--primary)' : '3px solid transparent'
             }}>
             Habilidades e Especialidades
           </button>
@@ -120,8 +120,8 @@ export default function Profile() {
             onClick={() => setActiveTab('reviews')}
             style={{
               background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold',
-              color: activeTab === 'reviews' ? 'var(--text-color)' : 'gray',
-              borderBottom: activeTab === 'reviews' ? '3px solid var(--holo-salmon)' : '3px solid transparent'
+              color: activeTab === 'reviews' ? 'var(--text-color)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'reviews' ? '3px solid var(--primary)' : '3px solid transparent'
             }}>
             Avaliações e Comentários
           </button>
@@ -157,7 +157,7 @@ export default function Profile() {
         {activeTab === 'reviews' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {dummyReviews.map((review) => {
-              const starsColor = review.role_received === 'freelancer' ? 'var(--holo-salmon)' : 'var(--holo-purple-real)';
+              const starsColor = review.role_received === 'freelancer' ? 'var(--accent)' : 'var(--primary)';
               return (
                 <div key={review.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
@@ -172,11 +172,16 @@ export default function Profile() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1rem', flexWrap: 'wrap', background: 'var(--surface-color)', padding: '0.8rem', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem', background: 'var(--bg-color)', padding: '1rem', borderRadius: '8px' }}>
                     {Object.entries(review.criteria).map(([criterion, score]) => (
-                      <div key={criterion} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'gray', textTransform: 'uppercase' }}>{criterion}</span>
-                        <span style={{ fontWeight: 'bold' }}>{score}/5</span>
+                      <div key={criterion} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-color)' }}>
+                           <span>{criterion}</span>
+                           <span style={{ color: 'var(--primary)' }}>{score}/5</span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                           <div style={{ width: `${(score/5)*100}%`, height: '100%', background: 'var(--primary)', borderRadius: '3px' }}></div>
+                        </div>
                       </div>
                     ))}
                   </div>

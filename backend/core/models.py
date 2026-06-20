@@ -138,6 +138,48 @@ class Candidatura(models.Model):
                 self.usuario_id = self.user.id
         if self.ad and not self.anuncio_id:
             self.anuncio_id = self.ad.id
+        
+        # Check if status has been changed to 'aprovada'
+        if self.status and self.status.lower() == 'aprovada':
+            ad_obj = self.ad
+            if not ad_obj and self.anuncio_id:
+                try:
+                    ad_obj = Ad.objects.get(id=self.anuncio_id)
+                except Ad.DoesNotExist:
+                    pass
+            if ad_obj:
+                ad_obj.status_anuncio = 'Finalizado'
+                from django.utils import timezone
+                ad_obj.atualizado_em = timezone.now()
+                ad_obj.save()
+                
+                nome_contratante = 'Desconhecido'
+                if ad_obj.author and hasattr(ad_obj.author, 'profile'):
+                    nome_contratante = ad_obj.author.profile.nome_completo or ad_obj.author.username
+                elif ad_obj.author:
+                    nome_contratante = ad_obj.author.first_name or ad_obj.author.username
+                    
+                nome_prestador = 'Desconhecido'
+                if self.user and hasattr(self.user, 'profile'):
+                    nome_prestador = self.user.profile.nome_completo or self.user.username
+                elif self.user:
+                    nome_prestador = self.user.first_name or self.user.username
+                
+                AcordoServico.objects.get_or_create(
+                    candidatura=self,
+                    defaults={
+                        'status_acordo': 'Ativo',
+                        'valor_acordado': ad_obj.valor or 0.0,
+                        'unidade_valor': getattr(ad_obj, 'price_unit', 'Integral') or 'Integral',
+                        'titulo_anuncio': ad_obj.titulo or getattr(ad_obj, 'title', ''),
+                        'descricao_servico': ad_obj.descricao or getattr(ad_obj, 'description', ''),
+                        'proposta_aceita': self.mensagem,
+                        'nome_contratante': nome_contratante,
+                        'nome_prestador': nome_prestador,
+                        'data_confirmacao': timezone.now()
+                    }
+                )
+                
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -161,3 +203,25 @@ class VerificacaoEmail(models.Model):
 
     def __str__(self):
         return f"Código de {self.usuario.email}: {self.codigo}"
+
+class AcordoServico(models.Model):
+    # Campos que existiam/novos na tabela acordo_servico
+    status_acordo = models.CharField(max_length=50, null=True, blank=True)
+    valor_acordado = models.FloatField(blank=True, null=True)
+    conclusao_prevista = models.DateField(blank=True, null=True)
+    candidatura = models.ForeignKey('Candidatura', on_delete=models.CASCADE, related_name='acordos', blank=True, null=True)
+    
+    # Novas colunas em português
+    titulo_anuncio = models.CharField(max_length=255, null=True, blank=True)
+    descricao_servico = models.TextField(null=True, blank=True)
+    unidade_valor = models.CharField(max_length=50, null=True, blank=True)
+    proposta_aceita = models.TextField(null=True, blank=True)
+    nome_contratante = models.CharField(max_length=255, null=True, blank=True)
+    nome_prestador = models.CharField(max_length=255, null=True, blank=True)
+    data_confirmacao = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    class Meta:
+        db_table = 'acordo_servico'
+
+    def __str__(self):
+        return f"Acordo - {self.titulo_anuncio} ({self.status_acordo})"
