@@ -360,3 +360,35 @@ class RedefinirSenhaAPI(APIView):
             'token': token.key,
             'user': UserSerializer(user).data,
         })
+
+
+from .models import AcordoServico
+from .serializers import AcordoServicoSerializer
+
+class AcordoServicoListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = AcordoServicoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            queryset = AcordoServico.objects.all().order_by('-data_confirmacao')
+        else:
+            from django.db.models import Q
+            queryset = AcordoServico.objects.filter(
+                Q(candidatura__user=user) | Q(candidatura__ad__author=user)
+            ).order_by('-data_confirmacao')
+
+        tem_solicitacao = self.request.query_params.get('tem_solicitacao')
+        if tem_solicitacao is not None:
+            if tem_solicitacao.lower() == 'true':
+                queryset = queryset.filter(tem_solicitacao=True)
+            elif tem_solicitacao.lower() == 'false':
+                queryset = queryset.filter(tem_solicitacao=False)
+
+        return queryset
+
+class AcordoServicoRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
+    queryset = AcordoServico.objects.all()
+    serializer_class = AcordoServicoSerializer
+    permission_classes = [permissions.IsAuthenticated]
