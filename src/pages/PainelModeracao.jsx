@@ -5,6 +5,7 @@ import { ShieldAlert, User, FileText, CheckCircle, XCircle, X } from 'lucide-rea
 export default function ModerationPanel() {
   const navigate = useNavigate();
   const [reports, setReports] = useState([]);
+  const [alteracoes, setAlteracoes] = useState([]);
   const [activeTab, setActiveTab] = useState('denuncias');
   const [selectedReport, setSelectedReport] = useState(null);
 
@@ -15,7 +16,7 @@ export default function ModerationPanel() {
       return;
     }
 
-    // Since backend might not be fully seeded, we use mock reports if empty
+    // Fetch reports
     fetch('http://localhost:8000/api/reports/')
       .then(res => {
         if (!res.ok) throw new Error('API indisponível');
@@ -41,6 +42,58 @@ export default function ModerationPanel() {
             { id: 2, type: 'ad', target_id: '15', target_name: 'Passeador de Cães Estressado', category: 'fraude', comment: 'Pede pagamento adiantado e não aparece.', status: 'pending', created_at: '2026-04-14T11:45:00Z' },
           ]);
       });
+
+    // Fetch agreement change requests (tem_solicitacao=true)
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:8000/api/acordos/?tem_solicitacao=true', {
+      headers: token ? { 'Authorization': `Token ${token}` } : {}
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('API de acordos indisponível');
+        return res.json();
+      })
+      .then(data => {
+         if (Array.isArray(data)) {
+            setAlteracoes(data);
+         }
+      })
+      .catch((err) => {
+          console.error('Error fetching alteracoes, using mock fallback:', err);
+          setAlteracoes([
+            {
+              id: 1,
+              titulo_anuncio: "Desenvolvimento de Landing Page responsiva",
+              nome_contratante: "Clínica Pet Feliz",
+              nome_prestador: "Gabriel Silva",
+              valor_acordado: 1200.0,
+              descricao_servico: "Criação de landing page responsiva em HTML/CSS/JS.",
+              status_acordo: "Ativo",
+              tem_solicitacao: true,
+              solicitado_por: "freelancer",
+              justificativa_alteracao: "O cliente pediu a inclusão de seções adicionais no formulário de contato e galeria de imagens.",
+              proposto_valor: 1600.0,
+              proposta_descricao: "Criação de landing page responsiva + formulário completo e galeria.",
+              proposta_conclusao_prevista: "2026-07-08",
+              data_confirmacao: "2026-06-15T10:00:00Z"
+            },
+            {
+              id: 4,
+              titulo_anuncio: "Criação de Identidade Visual",
+              nome_contratante: "Julia Souza",
+              nome_prestador: "Renato Dias",
+              valor_acordado: 500.0,
+              descricao_servico: "Design de logotipo, paleta de cores e tipografia.",
+              status_acordo: "Ativo",
+              tem_solicitacao: true,
+              solicitado_por: "contratante",
+              justificativa_alteracao: "Gostaria de estender o prazo em uma semana para revisar melhor os conceitos.",
+              proposto_valor: 500.0,
+              proposta_descricao: "Design de logotipo, paleta de cores e tipografia com mais revisões.",
+              proposta_conclusao_prevista: "2026-07-20",
+              data_confirmacao: "2026-06-18T11:00:00Z"
+            }
+          ]);
+      });
   }, [navigate]);
 
   const handleResolve = async (id, newStatus) => {
@@ -56,12 +109,10 @@ export default function ModerationPanel() {
         setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
       } else {
         console.error('Erro ao resolver denúncia no backend.');
-        // Fallback to local state if offline mock
         setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
       }
     } catch (err) {
       console.error(err);
-      // Fallback update
       setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
     }
     setSelectedReport(null);
@@ -97,6 +148,21 @@ export default function ModerationPanel() {
           }}
         >
           Denúncias
+        </button>
+        <button 
+          onClick={() => setActiveTab('alteracoes')} 
+          style={{ 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'alteracoes' ? 'var(--holo-purple-real)' : 'inherit', 
+            fontWeight: activeTab === 'alteracoes' ? 'bold' : 'normal',
+            borderBottom: activeTab === 'alteracoes' ? '2px solid var(--holo-purple-real)' : 'none',
+            padding: '0.5rem 1rem',
+            cursor: 'pointer',
+            fontSize: '1.1rem'
+          }}
+        >
+          Solicitações de Alteração
         </button>
         <button 
           onClick={() => setActiveTab('admin')} 
@@ -168,6 +234,73 @@ export default function ModerationPanel() {
                                    Avaliar Denúncia
                                </button>
                            )}
+                        </div>
+                    </div>
+                 ))
+              )}
+           </div>
+        </div>
+      )}
+
+      {activeTab === 'alteracoes' && (
+        <div className="card">
+           <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Solicitações de Alteração de Acordo</h2>
+           
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {alteracoes.length === 0 ? (
+                 <p>Nenhuma solicitação de alteração pendente no momento.</p>
+              ) : (
+                 alteracoes.map(alt => (
+                    <div key={alt.id} style={{ 
+                        padding: '1.25rem', 
+                        background: 'var(--bg-color)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '8px'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
+                            <div>
+                                <span className="badge" style={{ background: 'var(--primary)', color: 'white', marginRight: '0.5rem' }}>
+                                    Acordo Ativo
+                                </span>
+                                <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.1)', color: '#ff4757' }}>
+                                    Solicitado por {alt.solicitado_por === 'freelancer' ? 'Freelancer' : 'Contratante'}
+                                </span>
+                                <h3 style={{ margin: '0.5rem 0 0 0', fontSize: '1.2rem' }}>{alt.titulo_anuncio}</h3>
+                            </div>
+                            <div style={{ textAlign: 'right', fontSize: '0.9rem', opacity: 0.8 }}>
+                                <strong>Contratante:</strong> {alt.nome_contratante}<br />
+                                <strong>Prestador:</strong> {alt.nome_prestador}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.95rem' }}>
+                            <p style={{ margin: 0 }}>
+                                <strong>Justificativa do pedido:</strong> <span style={{ fontStyle: 'italic' }}>"{alt.justificativa_alteracao}"</span>
+                            </p>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.5rem', background: 'var(--surface-color)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                <div>
+                                    <strong>Orçamento:</strong><br />
+                                    <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '0.5rem' }}>R$ {alt.valor_acordado}</span>
+                                    <span style={{ color: '#2ed573', fontWeight: 'bold' }}>→ R$ {alt.proposto_valor}</span>
+                                </div>
+                                <div>
+                                    <strong>Prazo Conclusão:</strong><br />
+                                    <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '0.5rem' }}>
+                                      {alt.conclusao_prevista ? new Date(alt.conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
+                                    </span>
+                                    <span style={{ color: '#7c3aed', fontWeight: 'bold' }}>
+                                      → {alt.proposta_conclusao_prevista ? new Date(alt.proposta_conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            {alt.proposta_descricao && alt.proposta_descricao !== alt.descricao_servico && (
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                                    <strong>Nova Descrição Proposta:</strong>
+                                    <p style={{ margin: '0.25rem 0 0 0', opacity: 0.9 }}>{alt.proposta_descricao}</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                  ))

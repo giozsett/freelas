@@ -111,3 +111,60 @@ class CandidaturaSerializer(serializers.ModelSerializer):
             name = obj.ad.author.first_name
             return name if name else obj.ad.author.username
         return "Usuário Desconhecido"
+
+
+from .models import AcordoServico
+
+class AcordoServicoSerializer(serializers.ModelSerializer):
+    freelancer_id = serializers.SerializerMethodField()
+    contratante_id = serializers.SerializerMethodField()
+    anuncio_id = serializers.SerializerMethodField()
+    aprovar_solicitacao = serializers.BooleanField(write_only=True, required=False)
+    recusar_solicitacao = serializers.BooleanField(write_only=True, required=False)
+
+    class Meta:
+        model = AcordoServico
+        fields = '__all__'
+
+    def get_freelancer_id(self, obj):
+        if obj.candidatura and obj.candidatura.user:
+            return obj.candidatura.user.id
+        return None
+
+    def get_contratante_id(self, obj):
+        if obj.candidatura and obj.candidatura.ad and obj.candidatura.ad.author:
+            return obj.candidatura.ad.author.id
+        return None
+
+    def get_anuncio_id(self, obj):
+        if obj.candidatura:
+            return obj.candidatura.anuncio_id
+        return None
+
+    def update(self, instance, validated_data):
+        aprovar = validated_data.pop('aprovar_solicitacao', None)
+        recusar = validated_data.pop('recusar_solicitacao', None)
+
+        if aprovar:
+            if instance.proposto_valor is not None:
+                instance.valor_acordado = instance.proposto_valor
+            if instance.proposta_descricao is not None:
+                instance.descricao_servico = instance.proposta_descricao
+            if instance.proposta_conclusao_prevista is not None:
+                instance.conclusao_prevista = instance.proposta_conclusao_prevista
+            
+            instance.tem_solicitacao = False
+            instance.solicitado_por = None
+            instance.justificativa_alteracao = None
+            instance.proposto_valor = None
+            instance.proposta_descricao = None
+            instance.proposta_conclusao_prevista = None
+        elif recusar:
+            instance.tem_solicitacao = False
+            instance.solicitado_por = None
+            instance.justificativa_alteracao = None
+            instance.proposto_valor = None
+            instance.proposta_descricao = None
+            instance.proposta_conclusao_prevista = None
+            
+        return super().update(instance, validated_data)

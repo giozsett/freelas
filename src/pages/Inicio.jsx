@@ -9,7 +9,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
-  const [priceFilter, setPriceFilter] = useState(500);
+  const [priceFilter, setPriceFilter] = useState(1000);
   const [distanceFilter, setDistanceFilter] = useState(50);
 
   useEffect(() => {
@@ -21,18 +21,18 @@ export default function Home() {
           const normalizedAds = data.map(ad => ({
             id: ad.id,
             type: ad.role, // 'freelancer' or 'contractor'
-            title: ad.title,
+            title: ad.title || ad.titulo || '',
             author_id: ad.author,
             author: ad.author_name || 'Usuário Desconhecido',
             rating: ad.author_rating || 4.5,
             reviews: 10, // Mock reviews
-            category: ad.category,
+            category: ad.category || '',
             skills: ad.skills || [],
             distance: 5, // Mock distance
             locationType: ad.location_type,
             address: ad.address,
             city: 'Digital', // Mock city
-            price: ad.price,
+            price: ad.price || (ad.valor ? String(ad.valor) : '0'),
             status: ad.status_anuncio // Map status
           }));
           setAds(normalizedAds);
@@ -50,13 +50,23 @@ export default function Home() {
     // Show opposite ads: if I am freelancer, I want to see contractor ads
     const targetAdType = role === 'freelancer' ? 'contractor' : 'freelancer';
     if (ad.type !== targetAdType) return false;
+    
     // Hide approved/finalized ads from the main page
     if (ad.status && ad.status !== 'Em aberto' && ad.status !== 'Ativo' && ad.status !== '') return false;
+    
     if (categoryFilter && ad.category.toLowerCase() !== categoryFilter.toLowerCase()) return false;
-    if (skillFilter && !ad.skills.some(skill => skill.toLowerCase() === skillFilter.toLowerCase())) return false;
-    if (ad.price > priceFilter) return false;
-    if (ad.distance > distanceFilter) return false;
-    if (searchQuery) {
+    if (skillFilter && (!Array.isArray(ad.skills) || !ad.skills.some(skill => skill.toLowerCase() === skillFilter.toLowerCase()))) return false;
+    
+    // Price filter (numerical, with 1000 representing 'No limit')
+    const adPrice = parseFloat(ad.price) || 0;
+    const maxPrice = parseFloat(priceFilter) || 1000;
+    if (maxPrice < 1000 && adPrice > maxPrice) return false;
+
+    // Distance filter (with 50 representing 'No limit')
+    const maxDistance = parseFloat(distanceFilter) || 50;
+    if (maxDistance < 50 && ad.distance > maxDistance) return false;
+
+    if (searchQuery && ad.title) {
       const matchTitle = ad.title.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchTitle) return false;
     }
@@ -95,14 +105,14 @@ export default function Home() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <label style={{ fontWeight: '500' }}>Valor Máx.</label>
-              <span>R$ {priceFilter}</span>
+              <span>{parseInt(priceFilter) === 1000 ? 'Sem limite' : `R$ ${priceFilter}`}</span>
             </div>
             <input type="range" min="0" max="1000" step="10" className="slider" value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} />
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <label style={{ fontWeight: '500' }}>Distância Máx.</label>
-              <span>{distanceFilter} km</span>
+              <span>{parseInt(distanceFilter) === 50 ? 'Sem limite' : `${distanceFilter} km`}</span>
             </div>
             <input type="range" min="1" max="50" step="1" className="slider" value={distanceFilter} onChange={(e) => setDistanceFilter(e.target.value)} />
           </div>

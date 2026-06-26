@@ -220,6 +220,14 @@ class AcordoServico(models.Model):
     nome_prestador = models.CharField(max_length=255, null=True, blank=True)
     data_confirmacao = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
+    # Campos de solicitação de alteração (adicionados na mesma tabela acordo_servico)
+    tem_solicitacao = models.BooleanField(default=False)
+    solicitado_por = models.CharField(max_length=50, null=True, blank=True) # 'freelancer' ou 'contratante'
+    justificativa_alteracao = models.TextField(null=True, blank=True)
+    proposto_valor = models.FloatField(null=True, blank=True)
+    proposta_descricao = models.TextField(null=True, blank=True)
+    proposta_conclusao_prevista = models.DateField(null=True, blank=True)
+
     class Meta:
         db_table = 'acordo_servico'
 

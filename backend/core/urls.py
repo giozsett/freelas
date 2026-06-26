@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView, ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView, PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView, CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialLoginAPI, GoogleSocialRegisterAPI, VerificarCodigoAPI
 from .views import RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView, ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView, PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView, CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI, EnviarCodigoVerificacaoAPI, VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI
+from .views import AcordoServicoListCreateAPIView, AcordoServicoRetrieveUpdateAPIView
 
 urlpatterns = [
     path('api/auth/register/', RegisterAPI.as_view(), name='register'),
@@ -20,4 +21,6 @@ urlpatterns = [
     path('api/auth/verificar-codigo/', VerificarCodigoAPI.as_view(), name='verificar-codigo'),
     path('api/auth/solicitar-redefinicao/', RedefinicaoSenhaAPI.as_view(), name='solicitar-redefinicao'),
     path('api/auth/redefinir-senha/', RedefinirSenhaAPI.as_view(), name='redefinir-senha'),
+    path('api/acordos/', AcordoServicoListCreateAPIView.as_view(), name='acordo-list'),
+    path('api/acordos/<int:pk>/', AcordoServicoRetrieveUpdateAPIView.as_view(), name='acordo-detail'),
 ]
