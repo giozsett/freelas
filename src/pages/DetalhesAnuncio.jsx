@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { User, MapPin, Tag, MessageSquare, Star, Zap, Search, ShieldCheck, X, AlertTriangle } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import { useAuth } from '../context/ContextoAutenticacao';
@@ -7,8 +7,11 @@ import { useAuth } from '../context/ContextoAutenticacao';
 export default function AdDetails() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [proposalPrice, setProposalPrice] = useState('');
   const [proposalText, setProposalText] = useState('');
   const [hasApplied, setHasApplied] = useState(false);
@@ -45,6 +48,7 @@ export default function AdDetails() {
           id: data.id,
           type: data.role,
           title: data.title,
+          status_anuncio: data.status_anuncio || 'Em aberto',
           author_id: data.author,
           author: data.author_name || 'Usuário Desconhecido',
           rating: data.author_rating || 4.5,
@@ -103,6 +107,31 @@ export default function AdDetails() {
       console.error(err);
       console.error("Erro de conexão ao enviar candidatura.");
     });
+  };
+
+  const handleDeleteAd = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/ads/${id}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setIsDeleteModalOpen(false);
+        navigate('/my-ads');
+      } else {
+        const errorData = await response.json();
+        setDeleteError(errorData.detail || errorData[0] || 'Erro ao excluir o anúncio.');
+      }
+    } catch (err) {
+      console.error(err);
+      setDeleteError('Erro de conexão ao tentar excluir.');
+    }
   };
 
   if (isLoading) {
@@ -202,8 +231,35 @@ export default function AdDetails() {
         {user && user.id === ad.author_id && (
           <div style={{ background: 'var(--surface-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem', marginTop: '1rem', borderLeft: '4px solid var(--holo-purple-real)' }}>
             <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Área do Anunciante</h3>
-            <p style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.5rem' }}>Você publicou este anúncio. Acompanhe quem se interessou.</p>
-            <Link to={`/my-ads/manage/${ad.id}`} className="btn" style={{ marginTop: '1rem', padding: '0.5rem 1rem', fontSize: '0.9rem' }}>Visualizar Candidaturas</Link>
+            <p style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.5rem' }}>Você publicou este anúncio. Acompanhe quem se interessou e gerencie sua publicação.</p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <Link to={`/my-ads/manage/${ad.id}`} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>Visualizar Candidaturas</Link>
+              <Link to={`/edit-ad/${ad.id}`} className="btn btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', border: '1px solid var(--border-color)' }}>Editar Anúncio</Link>
+              <button 
+                onClick={() => {
+                  setDeleteError('');
+                  setIsDeleteModalOpen(true);
+                }} 
+                className="btn btn-secondary" 
+                style={{ 
+                  padding: '0.5rem 1rem', 
+                  fontSize: '0.9rem', 
+                  borderColor: ad.status_anuncio === 'Finalizado' ? 'var(--border-color)' : '#ff4757', 
+                  color: ad.status_anuncio === 'Finalizado' ? '#888' : '#ff4757',
+                  background: 'transparent',
+                  cursor: ad.status_anuncio === 'Finalizado' ? 'not-allowed' : 'pointer'
+                }}
+                disabled={ad.status_anuncio === 'Finalizado'}
+                title={ad.status_anuncio === 'Finalizado' ? "Anúncios finalizados não podem ser excluídos" : ""}
+              >
+                Excluir Anúncio
+              </button>
+            </div>
+            {ad.status_anuncio === 'Finalizado' && (
+              <p style={{ fontSize: '0.8rem', color: '#ff4757', marginTop: '0.75rem', margin: '0.75rem 0 0 0' }}>
+                * Este anúncio já foi finalizado e não pode ser excluído.
+              </p>
+            )}
           </div>
         )}
 
@@ -328,6 +384,50 @@ export default function AdDetails() {
         targetName={ad.title} 
         type="ad" 
       />
+
+      {isDeleteModalOpen && (
+        <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', 
+            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+            padding: '1rem' 
+        }}>
+           <div className="card" style={{ width: '100%', maxWidth: '450px', position: 'relative' }}>
+              <button 
+                onClick={() => setIsDeleteModalOpen(false)} 
+                style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
+              >
+                <X size={24} />
+              </button>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  <AlertTriangle size={24} color="#ff4757" />
+                  <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#ff4757' }}>Excluir Anúncio</h2>
+              </div>
+              
+              <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.5' }}>
+                Tem certeza que deseja excluir o anúncio <strong>"{ad.title}"</strong>?
+                <br /><br />
+                Atenção: Este anúncio continuará contando no limite mensal de anúncios do seu plano de assinatura (<strong>{user?.profile?.subscription_plan || 'Gratuito'}</strong>).
+              </p>
+
+              {deleteError && (
+                <p style={{ color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                  {deleteError}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                 <button type="button" className="btn btn-secondary" style={{ flex: 1, textTransform: 'uppercase', fontSize: '0.85rem', border: '1px solid var(--border-color)', background: 'transparent' }} onClick={() => setIsDeleteModalOpen(false)}>
+                   CANCELAR
+                 </button>
+                 <button type="button" className="btn" style={{ flex: 1, background: '#ff4757', color: '#FFFFFF', border: 'none', textTransform: 'uppercase', fontSize: '0.85rem' }} onClick={handleDeleteAd}>
+                    EXCLUIR ANÚNCIO
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

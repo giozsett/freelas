@@ -86,7 +86,7 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        queryset = Ad.objects.all().order_by('-created_at')
+        queryset = Ad.objects.exclude(deletado=True).order_by('-created_at')
         all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
         if not all_ads:
             from django.db.models import Q
@@ -97,10 +97,36 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
 
-class AdRetrieveAPIView(generics.RetrieveAPIView):
-    queryset = Ad.objects.all()
+class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Ad.objects.exclude(deletado=True)
     serializer_class = AdSerializer
-    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        ad = self.get_object()
+        if ad.author != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Apenas o autor do anúncio pode editá-lo.")
+        from django.utils import timezone
+        serializer.save(atualizado_em=timezone.now())
+
+    def destroy(self, request, *args, **kwargs):
+        ad = self.get_object()
+        if ad.author != request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Apenas o autor do anúncio pode deletá-lo.")
+        if ad.status_anuncio == 'Finalizado':
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Anúncios com status finalizado não podem ser excluídos.")
+        ad.deletado = True
+        ad.save()
+        from rest_framework.response import Response
+        from rest_framework import status
+        return Response({"message": "Anúncio deletado com sucesso (soft delete)."}, status=status.HTTP_200_OK)
 
 class PublicProfileAPIView(generics.RetrieveAPIView):
     queryset = User.objects.all()

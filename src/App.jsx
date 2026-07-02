@@ -3,6 +3,7 @@ import BarraNavegacao from './components/BarraNavegacao';
 import Inicio from './pages/Inicio';
 import Perfil from './pages/Perfil';
 import CriarAnuncio from './pages/CriarAnuncio';
+import EditarAnuncio from './pages/EditarAnuncio';
 import DetalhesAnuncio from './pages/DetalhesAnuncio';
 import Login from './pages/Login';
 import Cadastro from './pages/Cadastro';
@@ -35,6 +36,7 @@ function App() {
           <Route path="/profile" element={<RotaPrivada><Perfil /></RotaPrivada>} />
           <Route path="/profile/edit" element={<RotaPrivada><EditarPerfil /></RotaPrivada>} />
           <Route path="/create-ad" element={<RotaPrivada><CriarAnuncio /></RotaPrivada>} />
+          <Route path="/edit-ad/:id" element={<RotaPrivada><EditarAnuncio /></RotaPrivada>} />
           <Route path="/ad/:id" element={<RotaPrivada><DetalhesAnuncio /></RotaPrivada>} />
           <Route path="/chat" element={<RotaPrivada><Conversa /></RotaPrivada>} />
           <Route path="/plans" element={<RotaPrivada><Planos /></RotaPrivada>} />

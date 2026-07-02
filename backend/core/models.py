@@ -67,16 +67,16 @@ class Ad(models.Model):
         db_table = 'anuncios'
 
     def save(self, *args, **kwargs):
-        if not self.titulo and self.title:
+        if self.title:
             self.titulo = self.title
-        if not self.descricao and self.description:
+        if self.description:
             self.descricao = self.description
-        if not self.valor and self.price:
+        if self.price:
             try:
                 self.valor = float(self.price)
             except (ValueError, TypeError):
                 self.valor = 0.0
-        if not self.usuario_id and self.author_id:
+        if self.author_id:
             try:
                 self.usuario_id = self.author.profile.id
             except Exception:
