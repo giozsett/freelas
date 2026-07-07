@@ -78,12 +78,15 @@ export default function Navbar() {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 title="Opções de Perfil"
               >
-                <UserCircle size={28} />
+                {user?.profile?.foto_perfil ? (
+                  <img src={user.profile.foto_perfil} alt="Foto" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <UserCircle size={28} />
+                )}
                 {hasNewApplications && <div className="notification-dot"></div>}
               </div>
               <div className="dropdown-content" style={{ display: dropdownOpen ? 'block' : 'none' }}>
                 <Link to="/profile" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meu Perfil</Link>
-                <Link to="/profile/edit" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Editar Perfil</Link>
                 <Link to="/my-ads" className="dropdown-item" onClick={() => setDropdownOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   Meus Anúncios
                   {hasNewApplications && role === 'contractor' && <div className="notification-dot" style={{ position: 'static' }}></div>}

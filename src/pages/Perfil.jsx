@@ -1,40 +1,87 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Edit3, Award, Zap, MessageCircle } from 'lucide-react';
+import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Upload, User, Briefcase, MapPin, Calendar, Mail, Phone, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import IconeRedeSocial from '../components/IconeRedeSocial';
+import { calcularTempo } from '../utils/calcularTempo';
+
+const API = 'http://localhost:8000';
 
 export default function Profile() {
   const { user: authUser, token } = useAuth();
+  const [viewingPhoto, setViewingPhoto] = useState(false);
   const [profile, setProfile] = useState({
     bio: '',
     categories: [],
     skills: [],
-    subscription_plan: 'Gratuito'
+    subscription_plan: 'Gratuito',
+    foto_perfil: null,
+    banner: null,
+    disponivel: true,
+    cidade: '',
+    estado: '',
+    telefone: '',
+    email_visivel: true,
+    telefone_visivel: true,
+    redes_sociais: [],
+    curriculo: null
   });
+  const [certificados, setCertificados] = useState([]);
+  const [experiencias, setExperiencias] = useState([]);
   const [activeTab, setActiveTab] = useState('skills');
 
   useEffect(() => {
-    if (token) {
-      fetch('http://localhost:8000/api/auth/profile/', {
-        headers: {
-          'Authorization': `Token ${token}`
+    if (!token) return;
+
+    fetch(`${API}/api/auth/profile/`, {
+      headers: { 'Authorization': `Token ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setProfile({
+          bio: data.bio || '',
+          categories: data.categories || [],
+          skills: data.skills || [],
+          subscription_plan: data.subscription_plan || 'Gratuito',
+          foto_perfil: data.foto_perfil || null,
+          banner: data.banner || null,
+          disponivel: data.disponivel !== undefined ? data.disponivel : true,
+          cidade: data.cidade || '',
+          estado: data.estado || '',
+          telefone: data.telefone || '',
+          redes_sociais: data.redes_sociais || [],
+          email_visivel: data.email_visivel !== undefined ? data.email_visivel : true,
+          telefone_visivel: data.telefone_visivel !== undefined ? data.telefone_visivel : true,
+          curriculo: data.curriculo || null
+        });
+      })
+      .catch(err => console.error(err));
+
+    fetch(`${API}/api/certificados/`, {
+      headers: { 'Authorization': `Token ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setCertificados(data.filter(c => c.exibir_perfil));
         }
       })
-        .then(res => res.json())
-        .then(data => {
-          setProfile({
-            bio: data.bio || '',
-            categories: data.categories || [],
-            skills: data.skills || [],
-            subscription_plan: data.subscription_plan || 'Gratuito'
-          });
-        })
-        .catch(err => console.error(err));
-    }
+      .catch(err => console.error(err));
+
+    fetch(`${API}/api/experiencias/`, {
+      headers: { 'Authorization': `Token ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setExperiencias(data);
+        }
+      })
+      .catch(err => console.error(err));
   }, [token]);
 
   const userContext = {
-    name: authUser ? (authUser.first_name || authUser.username) : 'Usuário',
+    name: authUser ? (`${authUser.first_name} ${authUser.last_name}`.trim() || authUser.username) : 'Usuário',
     plan: profile.subscription_plan,
     rating: 4.8,
     reviews: 4
@@ -77,60 +124,128 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="card" style={{ position: 'relative' }}>
-        <Link to="/profile/edit" className="btn btn-secondary" style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-          <Edit3 size={16} /> Editar Perfil
-        </Link>
+      <div className="card" style={{ padding: '2rem' }}>
+        {/* Banner */}
+          <div style={{
+            width: 'calc(100% + 4rem)',
+            margin: '-2rem -2rem 0 -2rem',
+            aspectRatio: '4 / 1',
+            background: profile.banner ? `url(${profile.banner}) center/cover no-repeat` : '#e0e0e0',
+            borderRadius: '12px 12px 0 0',
+          }} />
 
-        <div className="profile-header">
-          <div style={{ width: '120px', height: '120px', borderRadius: '50%', background: 'var(--holo-gradient)', border: 'var(--border-width) solid var(--border-color)', boxShadow: '2px 2px 8px var(--shadow-color)', flexShrink: 0 }}></div>
-          <div>
-            <h1 style={{ fontSize: '2.5rem', marginBottom: '0.2rem', textTransform: 'capitalize' }}>{userContext.name}</h1>
-
-            {/* Plan Info */}
-            <div style={{ fontSize: '1rem', opacity: 0.9, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <Zap size={18} color="var(--primary)" /> Plano {userContext.plan} - <Link to="/plans" style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>Fazer Upgrade</Link>
+        <div className="profile-header" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start', marginBottom: '2rem' }}>
+          <div style={{ marginTop: profile.banner ? '-40px' : '0', width: '150px', height: '150px', borderRadius: '50%', background: 'var(--holo-gradient)', border: '4px solid var(--surface-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {profile.foto_perfil ? (
+              <img src={profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+            ) : (
+              <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
+                {userContext.name.charAt(0)}
+              </span>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{userContext.name}</h1>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                padding: '0.3rem 0.8rem',
+                borderRadius: '20px',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                background: profile.disponivel ? '#2ecc7120' : '#e74c3c20',
+                color: profile.disponivel ? '#2ecc71' : '#e74c3c',
+                border: `1px solid ${profile.disponivel ? '#2ecc7130' : '#e74c3c30'}`
+              }}>
+                {profile.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                {profile.disponivel ? 'Disponível' : 'Indisponível'}
+              </span>
+              <Link to="/profile/edit" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', cursor: 'pointer' }}>
+                <Edit3 size={18} />
+              </Link>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '1.2rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
-                <Star fill="currentColor" size={20} color="var(--accent)" /> {userContext.rating} ({userContext.reviews} avaliações)
-              </div>
+            <div style={{ fontSize: '1.15rem', opacity: 0.9, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <Zap size={20} color="var(--primary)" /> Plano {userContext.plan} - <Link to="/plans" style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>Fazer Upgrade</Link>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '1rem', opacity: 0.85 }}>
+              {profile.cidade && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <MapPin size={18} /> {profile.cidade}{profile.estado ? ` - ${profile.estado}` : ''}
+                </span>
+              )}
+              {authUser?.email && profile.email_visivel && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Mail size={18} /> <a href={`mailto:${authUser.email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{authUser.email}</a>
+                </span>
+              )}
+              {profile.telefone && profile.telefone_visivel && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Phone size={18} /> {profile.telefone}
+                </span>
+              )}
+              {profile.redes_sociais?.length > 0 && profile.redes_sociais.map((rede, idx) => (
+                <span key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <IconeRedeSocial plataforma={rede.plataforma} size={18} />
+                  <a href={rede.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-color)', textDecoration: 'underline', wordBreak: 'break-all' }}>
+                    {rede.plataforma === 'outro' ? rede.nome : rede.plataforma.charAt(0).toUpperCase() + rede.plataforma.slice(1)}
+                  </a>
+                </span>
+              ))}
+              {profile.curriculo && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Upload size={18} />
+                  <a href={profile.curriculo} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-color)', textDecoration: 'underline' }}>
+                    Currículo
+                  </a>
+                </span>
+              )}
             </div>
           </div>
         </div>
 
+        {/* Photo Modal */}
+        {viewingPhoto && profile.foto_perfil && (
+          <div onClick={() => setViewingPhoto(false)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <img src={profile.foto_perfil} alt="Foto" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '12px', objectFit: 'contain' }} onClick={e => e.stopPropagation()} />
+            <button onClick={() => setViewingPhoto(false)} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
+          </div>
+        )}
+
         <div style={{ marginBottom: '2.5rem' }}>
-          <h2 style={{ marginBottom: '1rem' }}>Sobre Mim</h2>
-          <p style={{ fontSize: '1.1rem', lineHeight: 1.8 }}>{profile.bio || "Adicione uma biografia no botão 'Editar'."}</p>
+          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
+          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{profile.bio || "Adicione uma biografia no botão 'Editar'."}</p>
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-          <button
-            onClick={() => setActiveTab('skills')}
-            style={{
-              background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold',
-              color: activeTab === 'skills' ? 'var(--text-color)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'skills' ? '3px solid var(--primary)' : '3px solid transparent'
-            }}>
-            Habilidades e Especialidades
-          </button>
-          <button
-            onClick={() => setActiveTab('reviews')}
-            style={{
-              background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold',
-              color: activeTab === 'reviews' ? 'var(--text-color)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'reviews' ? '3px solid var(--primary)' : '3px solid transparent'
-            }}>
-            Avaliações e Comentários
-          </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', gap: '0.5rem' }}>
+          {[
+            { key: 'skills', label: 'Habilidades e Especialidades' },
+            { key: 'experiencia', label: `Experiência${experiencias.length > 0 ? ` (${experiencias.length})` : ''}` },
+            { key: 'certificados', label: `Formação Acadêmica${certificados.length > 0 ? ` (${certificados.length})` : ''}` },
+            { key: 'reviews', label: 'Avaliações e Comentários' }
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 'bold',
+                color: activeTab === tab.key ? 'var(--text-color)' : 'var(--text-secondary)',
+                borderBottom: activeTab === tab.key ? '3px solid var(--primary)' : '3px solid transparent',
+                whiteSpace: 'nowrap'
+              }}>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {activeTab === 'skills' && (
           <div>
             <div style={{ marginBottom: '2.5rem' }}>
-              <h2 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Categorias de Atuação</h2>
+              <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>Categorias de Atuação</h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 {profile.categories.length > 0 ? profile.categories.map((cat, i) => (
                   <span key={i} className="badge purple">{cat}</span>
@@ -139,47 +254,144 @@ export default function Profile() {
             </div>
 
             <div>
-              <h2 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Habilidades e Expertise</h2>
+              <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>Habilidades e Expertise</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
                 {profile.skills.length > 0 ? profile.skills.map((skill, idx) => (
                   <div key={idx} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: '500' }}>{skill.name}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', color: 'var(--text-color)', opacity: 0.8 }}>
                       <Award size={16} /> {skill.level}
-                    </span>
-                  </div>
+              </span>
+              <Link to="/profile/edit" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', cursor: 'pointer' }}>
+                <Edit3 size={18} />
+              </Link>
+            </div>
                 )) : <span style={{ opacity: 0.7 }}>Nenhuma habilidade informada.</span>}
               </div>
             </div>
           </div>
         )}
 
+        {activeTab === 'experiencia' && (
+          <div>
+            {experiencias.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {experiencias.map(exp => (
+                  <div key={exp.id} style={{
+                    display: 'flex',
+                    gap: '1rem',
+                    padding: '1rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    background: 'var(--bg-color)'
+                  }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: '10px',
+                      background: 'var(--primary-opacity)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Briefcase size={24} color="var(--primary)" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: '600', fontSize: '1.05rem' }}>{exp.cargo}</div>
+                      <div style={{ fontSize: '0.9rem', opacity: 0.85, marginTop: '0.1rem' }}>{exp.empresa}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', opacity: 0.6, marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                        {exp.local && <><MapPin size={12} /> {exp.local} <span style={{ opacity: 0.3 }}>|</span></>}
+                        <Calendar size={12} /> {calcularTempo(exp.data_inicio, exp.data_fim, exp.atual)}
+                      </div>
+                      {exp.descricao && (
+                        <div style={{ fontSize: '0.9rem', opacity: 0.75, marginTop: '0.5rem', lineHeight: 1.5 }}>{exp.descricao}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ opacity: 0.7 }}>Nenhuma experiência adicionada ainda.</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'certificados' && (
+          <div>
+            {certificados.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {certificados.map(cert => (
+                  <div key={cert.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '1rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    background: 'var(--bg-color)'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: '500', fontSize: '1rem', marginBottom: '0.15rem' }}>{cert.nome_certificado}</div>
+                      <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{cert.instituicao}</div>
+                    </div>
+                    {cert.arquivo_url && (
+                      <a
+                        href={cert.arquivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.4rem 0.75rem',
+                          borderRadius: '6px',
+                          background: 'var(--surface-color)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-color)',
+                          textDecoration: 'none',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        <Upload size={14} /> Ver Arquivo
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ opacity: 0.7 }}>Nenhum certificado adicionado ainda.</p>
+            )}
+          </div>
+        )}
+
         {activeTab === 'reviews' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '1.4rem', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
+                <Star fill="currentColor" size={28} color="var(--accent)" /> {userContext.rating} ({userContext.reviews} avaliações)
+              </div>
+            </div>
             {dummyReviews.map((review) => {
               const starsColor = review.role_received === 'freelancer' ? 'var(--accent)' : 'var(--primary)';
               return (
-                <div key={review.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div key={review.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                     <div>
-                      <h3 style={{ margin: 0 }}>{review.reviewer}</h3>
-                      <div style={{ fontSize: '0.85rem', color: 'gray', marginTop: '0.2rem' }}>Av. recebida como {review.role_received === 'freelancer' ? 'Freelancer' : 'Contratante'}</div>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{review.reviewer}</h3>
+                      <div style={{ fontSize: '0.9rem', color: 'gray', marginTop: '0.2rem' }}>Avaliação como {review.role_received === 'freelancer' ? 'Freelancer' : 'Contratante'}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.2rem' }}>
+                    <div style={{ display: 'flex', gap: '0.15rem', flexShrink: 0 }}>
                       {[...Array(5)].map((_, i) => (
-                        <Star key={i} size={18} fill={i < review.stars ? starsColor : 'transparent'} color={starsColor} />
+                        <Star key={i} size={20} fill={i < review.stars ? starsColor : 'transparent'} color={starsColor} />
                       ))}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem', background: 'var(--bg-color)', padding: '1rem', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem', background: 'var(--surface-color)', padding: '0.75rem', borderRadius: '8px' }}>
                     {Object.entries(review.criteria).map(([criterion, score]) => (
-                      <div key={criterion} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-color)' }}>
+                      <div key={criterion} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-color)' }}>
                            <span>{criterion}</span>
                            <span style={{ color: 'var(--primary)' }}>{score}/5</span>
                         </div>
-                        <div style={{ width: '100%', height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: '100%', height: '5px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
                            <div style={{ width: `${(score/5)*100}%`, height: '100%', background: 'var(--primary)', borderRadius: '3px' }}></div>
                         </div>
                       </div>
@@ -187,8 +399,8 @@ export default function Profile() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                    <MessageCircle size={18} style={{ marginTop: '0.1rem', opacity: 0.5 }} />
-                    <p style={{ margin: 0, fontStyle: 'italic', opacity: 0.9 }}>"{review.comment}"</p>
+                    <MessageCircle size={20} style={{ marginTop: '0.1rem', opacity: 0.5, flexShrink: 0 }} />
+                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>"{review.comment}"</p>
                   </div>
                 </div>
               )
