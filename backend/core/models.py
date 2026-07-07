@@ -22,6 +22,20 @@ class UserProfile(models.Model):
     skills = models.JSONField(blank=True, default=list)
     subscription_plan = models.CharField(max_length=50, default='Gratuito')
 
+    # Novos campos
+    foto_perfil = models.ImageField(upload_to='fotos_perfil/', null=True, blank=True)
+    banner = models.ImageField(upload_to='banners/', null=True, blank=True)
+    disponivel = models.BooleanField(default=True)
+
+    # Informações de contato e localização
+    cidade = models.CharField(max_length=255, null=True, blank=True)
+    estado = models.CharField(max_length=2, null=True, blank=True)
+    telefone = models.CharField(max_length=20, null=True, blank=True)
+    email_visivel = models.BooleanField(default=True)
+    telefone_visivel = models.BooleanField(default=True)
+    redes_sociais = models.JSONField(blank=True, default=list)
+    curriculo = models.FileField(upload_to='curriculos/', null=True, blank=True)
+
     class Meta:
         db_table = 'usuarios'
 
@@ -233,3 +247,50 @@ class AcordoServico(models.Model):
 
     def __str__(self):
         return f"Acordo - {self.titulo_anuncio} ({self.status_acordo})"
+
+
+class InstituicaoEnsino(models.Model):
+    nome = models.CharField(max_length=255, unique=True)
+    verificado = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'instituicoes_ensino'
+        ordering = ['nome']
+
+    def __str__(self):
+        return self.nome
+
+
+class Certificado(models.Model):
+    usuario = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='certificados')
+    instituicao = models.CharField(max_length=255)
+    nome_certificado = models.CharField(max_length=255)
+    arquivo = models.FileField(upload_to='certificados/', null=True, blank=True)
+    exibir_perfil = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'certificados'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f"{self.nome_certificado} - {self.instituicao}"
+
+
+class Experiencia(models.Model):
+    usuario = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='experiencias')
+    empresa = models.CharField(max_length=255)
+    cargo = models.CharField(max_length=255)
+    local = models.CharField(max_length=255, blank=True, null=True)
+    data_inicio = models.DateField()
+    data_fim = models.DateField(blank=True, null=True)
+    atual = models.BooleanField(default=False)
+    descricao = models.TextField(blank=True, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'experiencias'
+        ordering = ['-data_inicio']
+
+    def __str__(self):
+        return f"{self.cargo} na {self.empresa}"

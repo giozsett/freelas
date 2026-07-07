@@ -1,17 +1,86 @@
+import json
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from .models import UserProfile
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    certificados = serializers.SerializerMethodField()
+    experiencias = serializers.SerializerMethodField()
+
     class Meta:
         model = UserProfile
-        fields = ('bio', 'categories', 'skills', 'subscription_plan')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias')
+        read_only_fields = ('foto_perfil',)
+
+    def get_certificados(self, obj):
+        certificados = obj.certificados.filter(exibir_perfil=True)
+        return CertificadoSerializer(certificados, many=True, context=self.context).data
+
+    def get_experiencias(self, obj):
+        experiencias = obj.experiencias.all()
+        return ExperienciaSerializer(experiencias, many=True, context=self.context).data
+
+    def update(self, instance, validated_data):
+        for field in ['disponivel', 'email_visivel', 'telefone_visivel']:
+            if field in self.initial_data:
+                value = self.initial_data[field]
+                if isinstance(value, str):
+                    validated_data[field] = value.lower() in ('true', '1', 'yes')
+        for field in ['categories', 'skills']:
+            if field in self.initial_data:
+                value = self.initial_data[field]
+                if isinstance(value, str):
+                    try:
+                        validated_data[field] = json.loads(value)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        if instance.user and 'nome_completo' not in validated_data:
+            validated_data['nome_completo'] = f"{instance.user.first_name} {instance.user.last_name}".strip() or instance.user.username
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        request = self.context.get('request')
+        if instance.foto_perfil:
+            if request:
+                ret['foto_perfil'] = request.build_absolute_uri(instance.foto_perfil.url)
+            else:
+                ret['foto_perfil'] = instance.foto_perfil.url
+        else:
+            ret['foto_perfil'] = None
+        if instance.banner:
+            if request:
+                ret['banner'] = request.build_absolute_uri(instance.banner.url)
+            else:
+                ret['banner'] = instance.banner.url
+        else:
+            ret['banner'] = None
+        if instance.curriculo:
+            if request:
+                ret['curriculo'] = request.build_absolute_uri(instance.curriculo.url)
+            else:
+                ret['curriculo'] = instance.curriculo.url
+        else:
+            ret['curriculo'] = None
+        return ret
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    first_name = serializers.CharField(max_length=150, required=False)
+    last_name = serializers.CharField(max_length=150, required=False)
+
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'profile')
+
+    def update(self, instance, validated_data):
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.last_name = validated_data.get('last_name', instance.last_name)
+        instance.save()
+        if hasattr(instance, 'profile'):
+            instance.profile.nome_completo = f"{instance.first_name} {instance.last_name}".strip() or instance.username
+            instance.profile.save(update_fields=['nome_completo'])
+        return instance
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -152,7 +221,7 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                 instance.descricao_servico = instance.proposta_descricao
             if instance.proposta_conclusao_prevista is not None:
                 instance.conclusao_prevista = instance.proposta_conclusao_prevista
-            
+
             instance.tem_solicitacao = False
             instance.solicitado_por = None
             instance.justificativa_alteracao = None
@@ -166,5 +235,59 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
             instance.proposto_valor = None
             instance.proposta_descricao = None
             instance.proposta_conclusao_prevista = None
-            
+
         return super().update(instance, validated_data)
+
+class FotoPerfilSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ('foto_perfil',)
+
+    def update(self, instance, validated_data):
+        instance.foto_perfil = validated_data.get('foto_perfil', instance.foto_perfil)
+        instance.save()
+        return instance
+
+
+from .models import InstituicaoEnsino
+
+class InstituicaoEnsinoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InstituicaoEnsino
+        fields = ('id', 'nome', 'verificado')
+
+
+from .models import Certificado
+
+class CertificadoSerializer(serializers.ModelSerializer):
+    arquivo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Certificado
+        fields = ('id', 'instituicao', 'nome_certificado', 'arquivo', 'arquivo_url', 'exibir_perfil', 'criado_em')
+        read_only_fields = ('usuario', 'criado_em')
+
+    def get_arquivo_url(self, obj):
+        if obj.arquivo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.arquivo.url)
+            return obj.arquivo.url
+        return None
+
+    def create(self, validated_data):
+        validated_data['usuario'] = self.context['request'].user.profile
+        return super().create(validated_data)
+
+
+from .models import Experiencia
+
+class ExperienciaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Experiencia
+        fields = ('id', 'empresa', 'cargo', 'local', 'data_inicio', 'data_fim', 'atual', 'descricao', 'criado_em')
+        read_only_fields = ('usuario', 'criado_em')
+
+    def create(self, validated_data):
+        validated_data['usuario'] = self.context['request'].user.profile
+        return super().create(validated_data)
