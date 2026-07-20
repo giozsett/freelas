@@ -1,5 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
+import random
+import string
+from django.utils import timezone
 
 class UserProfile(models.Model):
     # Campos da tabela 'usuarios' já existente
@@ -18,6 +21,20 @@ class UserProfile(models.Model):
     categories = models.JSONField(blank=True, default=list)
     skills = models.JSONField(blank=True, default=list)
     subscription_plan = models.CharField(max_length=50, default='Gratuito')
+
+    # Novos campos
+    foto_perfil = models.ImageField(upload_to='fotos_perfil/', null=True, blank=True)
+    banner = models.ImageField(upload_to='banners/', null=True, blank=True)
+    disponivel = models.BooleanField(default=True)
+
+    # Informações de contato e localização
+    cidade = models.CharField(max_length=255, null=True, blank=True)
+    estado = models.CharField(max_length=2, null=True, blank=True)
+    telefone = models.CharField(max_length=20, null=True, blank=True)
+    email_visivel = models.BooleanField(default=True)
+    telefone_visivel = models.BooleanField(default=True)
+    redes_sociais = models.JSONField(blank=True, default=list)
+    curriculo = models.FileField(upload_to='curriculos/', null=True, blank=True)
 
     class Meta:
         db_table = 'usuarios'
@@ -64,16 +81,16 @@ class Ad(models.Model):
         db_table = 'anuncios'
 
     def save(self, *args, **kwargs):
-        if not self.titulo and self.title:
+        if self.title:
             self.titulo = self.title
-        if not self.descricao and self.description:
+        if self.description:
             self.descricao = self.description
-        if not self.valor and self.price:
+        if self.price:
             try:
                 self.valor = float(self.price)
             except (ValueError, TypeError):
                 self.valor = 0.0
-        if not self.usuario_id and self.author_id:
+        if self.author_id:
             try:
                 self.usuario_id = self.author.profile.id
             except Exception:
@@ -135,7 +152,145 @@ class Candidatura(models.Model):
                 self.usuario_id = self.user.id
         if self.ad and not self.anuncio_id:
             self.anuncio_id = self.ad.id
+        
+        # Check if status has been changed to 'aprovada'
+        if self.status and self.status.lower() == 'aprovada':
+            ad_obj = self.ad
+            if not ad_obj and self.anuncio_id:
+                try:
+                    ad_obj = Ad.objects.get(id=self.anuncio_id)
+                except Ad.DoesNotExist:
+                    pass
+            if ad_obj:
+                ad_obj.status_anuncio = 'Finalizado'
+                from django.utils import timezone
+                ad_obj.atualizado_em = timezone.now()
+                ad_obj.save()
+                
+                nome_contratante = 'Desconhecido'
+                if ad_obj.author and hasattr(ad_obj.author, 'profile'):
+                    nome_contratante = ad_obj.author.profile.nome_completo or ad_obj.author.username
+                elif ad_obj.author:
+                    nome_contratante = ad_obj.author.first_name or ad_obj.author.username
+                    
+                nome_prestador = 'Desconhecido'
+                if self.user and hasattr(self.user, 'profile'):
+                    nome_prestador = self.user.profile.nome_completo or self.user.username
+                elif self.user:
+                    nome_prestador = self.user.first_name or self.user.username
+                
+                AcordoServico.objects.get_or_create(
+                    candidatura=self,
+                    defaults={
+                        'status_acordo': 'Ativo',
+                        'valor_acordado': ad_obj.valor or 0.0,
+                        'unidade_valor': getattr(ad_obj, 'price_unit', 'Integral') or 'Integral',
+                        'titulo_anuncio': ad_obj.titulo or getattr(ad_obj, 'title', ''),
+                        'descricao_servico': ad_obj.descricao or getattr(ad_obj, 'description', ''),
+                        'proposta_aceita': self.mensagem,
+                        'nome_contratante': nome_contratante,
+                        'nome_prestador': nome_prestador,
+                        'data_confirmacao': timezone.now()
+                    }
+                )
+                
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Candidatura - User: {self.usuario_id} Ad: {self.anuncio_id}"
+
+class VerificacaoEmail(models.Model):
+    usuario = models.OneToOneField(User, on_delete=models.CASCADE, related_name='codigo_verificacao')
+    codigo = models.CharField(max_length=6)
+    criado_em = models.DateTimeField(auto_now=True)  # ← mudou aqui
+    verificado = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'codigos_verificacao_email'
+
+    def esta_expirado(self):
+        return timezone.now() > self.criado_em + timezone.timedelta(minutes=10)
+
+    def gerar_codigo(self):
+        self.codigo = ''.join(random.choices(string.digits, k=6))
+        self.save()  # auto_now=True já atualiza o criado_em automaticamente ao salvar
+
+    def __str__(self):
+        return f"Código de {self.usuario.email}: {self.codigo}"
+
+class AcordoServico(models.Model):
+    # Campos que existiam/novos na tabela acordo_servico
+    status_acordo = models.CharField(max_length=50, null=True, blank=True)
+    valor_acordado = models.FloatField(blank=True, null=True)
+    conclusao_prevista = models.DateField(blank=True, null=True)
+    candidatura = models.ForeignKey('Candidatura', on_delete=models.CASCADE, related_name='acordos', blank=True, null=True)
+    
+    # Novas colunas em português
+    titulo_anuncio = models.CharField(max_length=255, null=True, blank=True)
+    descricao_servico = models.TextField(null=True, blank=True)
+    unidade_valor = models.CharField(max_length=50, null=True, blank=True)
+    proposta_aceita = models.TextField(null=True, blank=True)
+    nome_contratante = models.CharField(max_length=255, null=True, blank=True)
+    nome_prestador = models.CharField(max_length=255, null=True, blank=True)
+    data_confirmacao = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    # Campos de solicitação de alteração (adicionados na mesma tabela acordo_servico)
+    tem_solicitacao = models.BooleanField(default=False)
+    solicitado_por = models.CharField(max_length=50, null=True, blank=True) # 'freelancer' ou 'contratante'
+    justificativa_alteracao = models.TextField(null=True, blank=True)
+    proposto_valor = models.FloatField(null=True, blank=True)
+    proposta_descricao = models.TextField(null=True, blank=True)
+    proposta_conclusao_prevista = models.DateField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'acordo_servico'
+
+    def __str__(self):
+        return f"Acordo - {self.titulo_anuncio} ({self.status_acordo})"
+
+
+class InstituicaoEnsino(models.Model):
+    nome = models.CharField(max_length=255, unique=True)
+    verificado = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'instituicoes_ensino'
+        ordering = ['nome']
+
+    def __str__(self):
+        return self.nome
+
+
+class Certificado(models.Model):
+    usuario = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='certificados')
+    instituicao = models.CharField(max_length=255)
+    nome_certificado = models.CharField(max_length=255)
+    arquivo = models.FileField(upload_to='certificados/', null=True, blank=True)
+    exibir_perfil = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'certificados'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f"{self.nome_certificado} - {self.instituicao}"
+
+
+class Experiencia(models.Model):
+    usuario = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='experiencias')
+    empresa = models.CharField(max_length=255)
+    cargo = models.CharField(max_length=255)
+    local = models.CharField(max_length=255, blank=True, null=True)
+    data_inicio = models.DateField()
+    data_fim = models.DateField(blank=True, null=True)
+    atual = models.BooleanField(default=False)
+    descricao = models.TextField(blank=True, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'experiencias'
+        ordering = ['-data_inicio']
+
+    def __str__(self):
+        return f"{self.cargo} na {self.empresa}"

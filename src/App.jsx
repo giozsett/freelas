@@ -1,54 +1,59 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
-// Import other pages later when created
-import Profile from './pages/Profile';
-import CreateAd from './pages/CreateAd';
-import AdDetails from './pages/AdDetails';
+import BarraNavegacao from './components/BarraNavegacao';
+import Inicio from './pages/Inicio';
+import Perfil from './pages/Perfil';
+import CriarAnuncio from './pages/CriarAnuncio';
+import EditarAnuncio from './pages/EditarAnuncio';
+import DetalhesAnuncio from './pages/DetalhesAnuncio';
 import Login from './pages/Login';
-import Register from './pages/Register';
-import Chat from './pages/Chat';
-import EditProfile from './pages/EditProfile';
-import Plans from './pages/Plans';
-import MyAds from './pages/MyAds';
-import MyApplications from './pages/MyApplications';
-import PublicProfile from './pages/PublicProfile';
-import ManageAdApplications from './pages/ManageAdApplications';
-import PrivateRoute from './components/PrivateRoute';
-import Footer from './components/Footer';
-import ModeratorLogin from './pages/ModeratorLogin';
-import ModerationPanel from './pages/ModerationPanel';
-import SubscriptionSetup from './pages/SubscriptionSetup';
-import MyPayments from './pages/MyPayments';
-
-// Import other pages later when created
+import Cadastro from './pages/Cadastro';
+import Conversa from './pages/Conversa';
+import EditarPerfil from './pages/EditarPerfil';
+import Planos from './pages/Planos';
+import MeusAnuncios from './pages/MeusAnuncios';
+import MinhasCandidaturas from './pages/MinhasCandidaturas';
+import PerfilPublico from './pages/PerfilPublico';
+import GerenciarCandidaturas from './pages/GerenciarCandidaturas';
+import RotaPrivada from './components/RotaPrivada';
+import Rodape from './components/Rodape';
+import LoginModerador from './pages/LoginModerador';
+import PainelModeracao from './pages/PainelModeracao';
+import ConfigurarAssinatura from './pages/ConfigurarAssinatura';
+import MeusPagamentos from './pages/MeusPagamentos';
+import EsqueciSenha from './pages/EsqueciSenha';
+import MeusFreelas from './pages/MeusFreelas';
 
 function App() {
   return (
     <Router>
-      <Navbar />
-      <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <BarraNavegacao />
+        <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem', flex: 1, width: '100%' }}>
         <Routes>
-          <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
+          <Route path="/" element={<RotaPrivada><Inicio /></RotaPrivada>} />
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-          <Route path="/profile/edit" element={<PrivateRoute><EditProfile /></PrivateRoute>} />
-          <Route path="/create-ad" element={<PrivateRoute><CreateAd /></PrivateRoute>} />
-          <Route path="/ad/:id" element={<PrivateRoute><AdDetails /></PrivateRoute>} />
-          <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
-          <Route path="/plans" element={<PrivateRoute><Plans /></PrivateRoute>} />
-          <Route path="/my-ads" element={<PrivateRoute><MyAds /></PrivateRoute>} />
-          <Route path="/my-ads/manage/:id" element={<PrivateRoute><ManageAdApplications /></PrivateRoute>} />
-          <Route path="/my-applications" element={<PrivateRoute><MyApplications /></PrivateRoute>} />
-          <Route path="/user/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
-          <Route path="/moderator-login" element={<ModeratorLogin />} />
-          <Route path="/moderation-panel" element={<ModerationPanel />} />
-          <Route path="/subscription-setup" element={<PrivateRoute><SubscriptionSetup /></PrivateRoute>} />
-          <Route path="/my-payments" element={<PrivateRoute><MyPayments /></PrivateRoute>} />
+          <Route path="/register" element={<Cadastro />} />
+          <Route path="/profile" element={<RotaPrivada><Perfil /></RotaPrivada>} />
+          <Route path="/profile/edit" element={<RotaPrivada><EditarPerfil /></RotaPrivada>} />
+          <Route path="/create-ad" element={<RotaPrivada><CriarAnuncio /></RotaPrivada>} />
+          <Route path="/edit-ad/:id" element={<RotaPrivada><EditarAnuncio /></RotaPrivada>} />
+          <Route path="/ad/:id" element={<RotaPrivada><DetalhesAnuncio /></RotaPrivada>} />
+          <Route path="/chat" element={<RotaPrivada><Conversa /></RotaPrivada>} />
+          <Route path="/plans" element={<RotaPrivada><Planos /></RotaPrivada>} />
+          <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
+          <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
+          <Route path="/my-applications" element={<RotaPrivada><MinhasCandidaturas /></RotaPrivada>} />
+          <Route path="/user/:id" element={<RotaPrivada><PerfilPublico /></RotaPrivada>} />
+          <Route path="/moderator-login" element={<LoginModerador />} />
+          <Route path="/moderation-panel" element={<PainelModeracao />} />
+          <Route path="/subscription-setup" element={<RotaPrivada><ConfigurarAssinatura /></RotaPrivada>} />
+          <Route path="/my-payments" element={<RotaPrivada><MeusPagamentos /></RotaPrivada>} />
+          <Route path="/my-freelas" element={<RotaPrivada><MeusFreelas /></RotaPrivada>} />
+          <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         </Routes>
       </div>
-      <Footer />
+      <Rodape />
+      </div>
     </Router>
   );
 }
