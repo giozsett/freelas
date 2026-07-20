@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/ContextoAutenticacao';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 48 48" style={{ marginRight: '8px' }}>
@@ -39,53 +40,88 @@ export default function Login() {
     }
   };
 
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setErrorMsg('');
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/google/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: credentialResponse.credential }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        login(data.user, data.token);
+        navigate('/');
+      } else if (response.status === 404 && data.error === 'not_registered') {
+        setErrorMsg('Você ainda não possui cadastro, realize primeiro o cadastro e tente novamente!');
+      } else {
+        setErrorMsg('Erro ao entrar com o Google. Tente novamente.');
+      }
+    } catch (err) {
+      setErrorMsg('Erro ao entrar com o Google. Tente novamente.');
+    }
+  };
+
   return (
-    <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-      <div className="card">
-        <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail</label>
-            <input
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="exemplo@email.com"
-            />
-          </div>
-          <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha</label>
-            <input
-              type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="Sua senha"
-            />
-          </div>
-          {errorMsg && <div style={{ color: 'red', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
-          <button type="submit" className="btn dark-text" style={{ marginTop: '1rem', width: '100%' }}>
-            Entrar
-          </button>
-        </form>
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+      <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
+        <div className="card">
+          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail</label>
+              <input
+                type="email"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="exemplo@email.com"
+              />
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontWeight: '500' }}>Senha</label>
+              </div>
+              <input
+                type="password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="Sua senha"
+              />
+              <Link to="/esqueci-senha" style={{ fontSize: '0.8rem', textDecoration: 'underline', color: 'var(--text-secondary, #888)' }}>
+                Esqueci minha senha
+              </Link>
+            </div>
+            {errorMsg && <div style={{ color: 'red', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
+            <button type="submit" className="btn dark-text" style={{ marginTop: '1rem', width: '100%' }}>
+              Entrar
+            </button>
+          </form>
 
-        {/* Google Authentication disabled temporarily */}
-        <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
-          <span style={{ position: 'relative', zIndex: 2, background: 'var(--surface-color)', padding: '0 1rem', fontWeight: 'bold', fontSize: '0.8rem' }}>OU</span>
+          <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
+            <span style={{ position: 'relative', zIndex: 2, background: 'var(--surface-color)', padding: '0 1rem', fontWeight: 'bold', fontSize: '0.8rem' }}>OU</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setErrorMsg('Erro ao entrar com o Google. Tente novamente.')}
+              text="signin_with"
+              shape="rectangular"
+              logo_alignment="left"
+              width="368"
+            />
+          </div>
+
+          <p style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+            Não tem uma conta? <Link to="/register" style={{ fontWeight: 'bold', textDecoration: 'underline' }}>Cadastre-se</Link>
+          </p>
         </div>
-
-        <button onClick={() => { }} className="btn btn-secondary" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-          <GoogleIcon /> Entrar com o Google
-        </button>
-
-        <p style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          Não tem uma conta? <Link to="/register" style={{ fontWeight: 'bold', textDecoration: 'underline' }}>Cadastre-se</Link>
-        </p>
       </div>
-    </div>
+    </GoogleOAuthProvider>
   );
 }
