@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Bell, MessageSquare, UserCircle } from 'lucide-react';
+import { Moon, Sun, MessageSquare, UserCircle } from 'lucide-react';
 import { useTheme } from '../context/ContextoTema';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
@@ -78,12 +78,15 @@ export default function Navbar() {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 title="Opções de Perfil"
               >
-                <UserCircle size={28} />
+                {user?.profile?.foto_perfil ? (
+                  <img src={user.profile.foto_perfil} alt="Foto" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <UserCircle size={28} />
+                )}
                 {hasNewApplications && <div className="notification-dot"></div>}
               </div>
               <div className="dropdown-content" style={{ display: dropdownOpen ? 'block' : 'none' }}>
                 <Link to="/profile" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meu Perfil</Link>
-                <Link to="/profile/edit" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Editar Perfil</Link>
                 <Link to="/my-ads" className="dropdown-item" onClick={() => setDropdownOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   Meus Anúncios
                   {hasNewApplications && role === 'contractor' && <div className="notification-dot" style={{ position: 'static' }}></div>}
@@ -94,6 +97,8 @@ export default function Navbar() {
                 </Link>
                 <Link to="/plans" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Planos e Assinaturas</Link>
                 <Link to="/my-payments" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Pagamentos</Link>
+                <Link to="/my-freelas" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Freelas</Link>
+                <Link to="/my-reviews" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Minhas Avaliações</Link>
                 <button
                   onClick={handleLogout}
                   className="dropdown-item"

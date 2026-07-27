@@ -33,6 +33,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 db.sqlite3
+backend/media/
 
 # Environment variables
 .env

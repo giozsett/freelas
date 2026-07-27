@@ -1,12 +1,36 @@
 from django.urls import path
 from .views import EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView, ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView, PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView, CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialLoginAPI, GoogleSocialRegisterAPI, VerificarCodigoAPI
 from .views import RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView, ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView, PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView, CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI, EnviarCodigoVerificacaoAPI, VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI
+from .views import AcordoServicoListCreateAPIView, AcordoServicoRetrieveUpdateAPIView
+from .views import FotoPerfilUploadAPIView, CertificadoListCreateAPIView, CertificadoRetrieveUpdateDestroyAPIView, InstituicaoEnsinoListAPIView, ExperienciaListCreateAPIView, ExperienciaRetrieveUpdateDestroyAPIView
+from .views import (
+    CriarPreferenciaAssinaturaAPI,
+    CriarPreferenciaAcordoAPI,
+    DecidirCancelamentoAcordoAPI,
+    MercadoPagoWebhookAPI,
+    MercadoPagoReturnAPI,
+    PagamentoHistoricoAPIView,
+    CartaoUsuarioListAPIView,
+    ConcluirAcordoAPI,
+    SolicitarCancelamentoAcordoAPI,
+    SolicitacaoAlteracaoAdminListAPIView,
+    SolicitacaoCancelamentoAdminListAPIView,
+    SimularPagamentoAcordoAPI,
+    AvaliacaoListCreateAPIView,
+    AvaliacoesPendentesAPIView,
+)
 
 urlpatterns = [
     path('api/auth/register/', RegisterAPI.as_view(), name='register'),
     path('api/auth/login/', LoginAPI.as_view(), name='login'),
     path('api/auth/user/', UserAPI.as_view(), name='user'),
     path('api/auth/profile/', UserProfileAPIView.as_view(), name='profile'),
+    path('api/auth/profile/foto/', FotoPerfilUploadAPIView.as_view(), name='profile-foto'),
+    path('api/certificados/', CertificadoListCreateAPIView.as_view(), name='certificado-list'),
+    path('api/certificados/<int:pk>/', CertificadoRetrieveUpdateDestroyAPIView.as_view(), name='certificado-detail'),
+    path('api/instituicoes/', InstituicaoEnsinoListAPIView.as_view(), name='instituicoes-list'),
+    path('api/experiencias/', ExperienciaListCreateAPIView.as_view(), name='experiencia-list'),
+    path('api/experiencias/<int:pk>/', ExperienciaRetrieveUpdateDestroyAPIView.as_view(), name='experiencia-detail'),
     path('api/reports/', ReportListCreateAPIView.as_view(), name='report-list'),
     path('api/reports/<int:pk>/', ReportUpdateAPIView.as_view(), name='report-detail'),
     path('api/ads/', AdListCreateAPIView.as_view(), name='ad-list'),
@@ -20,4 +44,20 @@ urlpatterns = [
     path('api/auth/verificar-codigo/', VerificarCodigoAPI.as_view(), name='verificar-codigo'),
     path('api/auth/solicitar-redefinicao/', RedefinicaoSenhaAPI.as_view(), name='solicitar-redefinicao'),
     path('api/auth/redefinir-senha/', RedefinirSenhaAPI.as_view(), name='redefinir-senha'),
+    path('api/acordos/', AcordoServicoListCreateAPIView.as_view(), name='acordo-list'),
+    path('api/acordos/<int:pk>/', AcordoServicoRetrieveUpdateAPIView.as_view(), name='acordo-detail'),
+    path('api/acordos/<int:pk>/concluir/', ConcluirAcordoAPI.as_view(), name='acordo-concluir'),
+    path('api/acordos/<int:pk>/solicitar-cancelamento/', SolicitarCancelamentoAcordoAPI.as_view(), name='acordo-solicitar-cancelamento'),
+    path('api/admin/cancelamentos-acordo/', SolicitacaoCancelamentoAdminListAPIView.as_view(), name='admin-cancelamento-list'),
+    path('api/admin/cancelamentos-acordo/<int:pk>/', DecidirCancelamentoAcordoAPI.as_view(), name='admin-cancelamento-detail'),
+    path('api/admin/alteracoes-acordo/', SolicitacaoAlteracaoAdminListAPIView.as_view(), name='admin-alteracao-list'),
+    path('api/avaliacoes/', AvaliacaoListCreateAPIView.as_view(), name='avaliacao-list'),
+    path('api/avaliacoes/pendentes/', AvaliacoesPendentesAPIView.as_view(), name='avaliacao-pendentes'),
+    path('api/pagamentos/assinatura/', CriarPreferenciaAssinaturaAPI.as_view(), name='pagamento-assinatura'),
+    path('api/pagamentos/acordo/', CriarPreferenciaAcordoAPI.as_view(), name='pagamento-acordo'),
+    path('api/pagamentos/acordo/<int:pk>/simular/', SimularPagamentoAcordoAPI.as_view(), name='pagamento-acordo-simular'),
+    path('api/pagamentos/webhook/', MercadoPagoWebhookAPI.as_view(), name='pagamento-webhook'),
+    path('api/pagamentos/retorno/<str:flow>/<str:result>/', MercadoPagoReturnAPI.as_view(), name='pagamento-retorno'),
+    path('api/pagamentos/historico/', PagamentoHistoricoAPIView.as_view(), name='pagamento-historico'),
+    path('api/pagamentos/cartoes/', CartaoUsuarioListAPIView.as_view(), name='pagamento-cartoes'),
 ]
