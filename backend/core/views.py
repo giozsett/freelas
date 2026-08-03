@@ -459,7 +459,6 @@ class AcordoServicoListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
         if user.is_staff or user.is_superuser:
             queryset = AcordoServico.objects.all().order_by('-data_confirmacao')
         else:
