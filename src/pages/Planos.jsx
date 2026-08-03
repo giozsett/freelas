@@ -1,7 +1,13 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function Plans() {
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  const [loadingPlan, setLoadingPlan] = useState(null);
+
   const plans = [
     {
       id: 'free',
@@ -32,6 +38,48 @@ export default function Plans() {
     }
   ];
 
+  const handleSubscribe = async (planId) => {
+    const checkoutWindow = planId === 'free' ? null : window.open('', '_blank');
+    if (planId !== 'free' && !checkoutWindow) {
+      alert('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.');
+      return;
+    }
+
+    setLoadingPlan(planId);
+    try {
+      const res = await fetch('http://localhost:8000/api/pagamentos/assinatura/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify({ plano: planId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Não foi possível alterar o plano.');
+      }
+      if (data.checkout_required && data.init_point) {
+        checkoutWindow.opener = null;
+        checkoutWindow.location.href = data.init_point;
+        if (data.test_approved) {
+          navigate('/my-payments?checkout=academic-approved');
+        } else {
+          setLoadingPlan(null);
+        }
+      } else if (!data.checkout_required) {
+        navigate('/my-payments');
+      } else {
+        throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+      }
+    } catch (err) {
+      if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
+      console.error(err);
+      alert(err.message || 'Erro na comunicação com o servidor.');
+      setLoadingPlan(null);
+    }
+  };
+
   return (
     <div style={{ maxWidth: '1000px', margin: '2rem auto' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -41,8 +89,8 @@ export default function Plans() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         {plans.map((plan) => (
-          <div key={plan.id} className="card card-hover" style={{ 
-            background: plan.color, 
+          <div key={plan.id} className="card card-hover" style={{
+            background: plan.color,
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             position: 'relative', textAlign: 'center'
           }}>
@@ -51,9 +99,8 @@ export default function Plans() {
                 {plan.badge}
               </div>
             )}
-            
+
             <div className="dark-text" style={{ marginBottom: '1rem', color: plan.id === 'free' ? 'var(--text-color) !important' : '#1a1a1a' }}>
-              {/* If it's the free plan, we don't force dark text natively, we let it be var(--text-color) */}
               <div style={{ color: plan.id === 'free' ? 'var(--text-color)' : 'inherit' }}>
                 {plan.icon}
               </div>
@@ -81,14 +128,20 @@ export default function Plans() {
               </li>
             </ul>
 
-            <Link to="/" className="btn" style={{ 
-              width: '100%', 
-              background: plan.id === 'free' ? 'transparent' : 'var(--surface-color)',
-              color: 'var(--text-color)',
-              border: plan.id === 'free' ? '1px solid var(--border-color)' : 'none'
-            }}>
-              Assinar {plan.name}
-            </Link>
+            <button
+              onClick={() => handleSubscribe(plan.id)}
+              className="btn"
+              disabled={loadingPlan !== null}
+              style={{
+                width: '100%',
+                background: plan.id === 'free' ? 'transparent' : 'var(--surface-color)',
+                color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a',
+                border: plan.id === 'free' ? '1px solid var(--border-color)' : 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {loadingPlan === plan.id ? 'Carregando...' : `Assinar ${plan.name}`}
+            </button>
           </div>
         ))}
       </div>

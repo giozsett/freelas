@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Bell, MessageSquare, UserCircle } from 'lucide-react';
+import { Moon, Sun, MessageSquare, UserCircle } from 'lucide-react';
 import { useTheme } from '../context/ContextoTema';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
@@ -98,6 +98,7 @@ export default function Navbar() {
                 <Link to="/plans" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Planos e Assinaturas</Link>
                 <Link to="/my-payments" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Pagamentos</Link>
                 <Link to="/my-freelas" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Freelas</Link>
+                <Link to="/my-reviews" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Minhas Avaliações</Link>
                 <button
                   onClick={handleLogout}
                   className="dropdown-item"

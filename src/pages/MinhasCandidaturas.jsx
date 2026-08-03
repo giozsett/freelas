@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Send, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Send, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function MyApplications() {
@@ -46,8 +46,23 @@ export default function MyApplications() {
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando candidaturas...</div>
         ) : applications.length > 0 ? (
-          applications.map(app => (
-            <div key={app.id} className="card card-hover" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'space-between', alignItems: 'stretch' }}>
+          applications.map(app => {
+            const isUnavailable = app.indisponivel || app.status === 'encerrada';
+            return (
+            <div
+              key={app.id}
+              className={`card ${isUnavailable ? '' : 'card-hover'}`}
+              aria-disabled={isUnavailable}
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
+                justifyContent: 'space-between',
+                alignItems: 'stretch',
+                opacity: isUnavailable ? 0.58 : 1,
+                filter: isUnavailable ? 'grayscale(0.45)' : 'none',
+              }}
+            >
               
               <div style={{ flex: '1 1 300px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
@@ -57,21 +72,34 @@ export default function MyApplications() {
                   {app.status === 'aprovada' && <span className="badge" style={{ background: '#1dd1a1', border: '1px solid #1dd1a1', color: 'white' }}><CheckCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Aprovada</span>}
                   {app.status === 'pendente' && <span className="badge purple" style={{ color: 'white' }}><Clock size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Em análise</span>}
                   {app.status === 'recusada' && <span className="badge" style={{ background: '#ff6b6b', border: '1px solid #ff6b6b', color: 'white' }}><XCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Recusada</span>}
+                  {isUnavailable && <span className="badge" style={{ background: '#777', border: '1px solid #777', color: 'white' }}><XCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Encerrada</span>}
                 </div>
 
                 <div style={{ fontSize: '0.9rem', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                    Enviada em {new Date(app.enviado_em).toLocaleDateString()}
                 </div>
+                {isUnavailable && (
+                  <p style={{ margin: '0.75rem 0 0', fontSize: '0.9rem', fontWeight: 600 }}>
+                    {app.motivo_indisponibilidade || 'O autor já selecionou outro profissional ou contratante para este anúncio.'}
+                  </p>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: '0.5rem', minWidth: '150px', borderLeft: '1px solid var(--border-color)', paddingLeft: '1.5rem' }}>
-                <Link to="/chat" className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', width: '100%', marginTop: '0.5rem' }}>
-                  Ver no Chat
-                </Link>
+                {isUnavailable ? (
+                  <button className="btn btn-secondary" disabled style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', width: '100%', marginTop: '0.5rem', cursor: 'not-allowed' }}>
+                    Candidatura indisponível
+                  </button>
+                ) : (
+                  <Link to="/chat" className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', width: '100%', marginTop: '0.5rem' }}>
+                    Ver no Chat
+                  </Link>
+                )}
               </div>
 
             </div>
-          ))
+            );
+          })
         ) : (
            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
              <h3 style={{ marginBottom: '1rem' }}>Você ainda não se candidatou a nenhum anúncio.</h3>

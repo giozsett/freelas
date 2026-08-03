@@ -41,26 +41,50 @@ export default function SubscriptionSetup() {
 
   const handleCompleteSetup = async (e) => {
     e.preventDefault();
+    const checkoutWindow = selectedPlanId === 'free' ? null : window.open('', '_blank');
+    if (selectedPlanId !== 'free' && !checkoutWindow) {
+      alert('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.');
+      return;
+    }
+
     setIsSubmitting(true);
-    
-    const selectedPlan = plans.find(p => p.id === selectedPlanId);
-    
+
     try {
       if (token) {
-        await fetch('http://localhost:8000/api/auth/profile/', {
-          method: 'PATCH',
-          headers: { 
+        const res = await fetch('http://localhost:8000/api/pagamentos/assinatura/', {
+          method: 'POST',
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Token ${token}`
           },
-          body: JSON.stringify({ subscription_plan: selectedPlan.name })
+          body: JSON.stringify({ plano: selectedPlanId })
         });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || 'Não foi possível configurar a assinatura.');
+        }
+        if (data.checkout_required && data.init_point) {
+          checkoutWindow.opener = null;
+          checkoutWindow.location.href = data.init_point;
+          if (data.test_approved) {
+            navigate('/my-payments?checkout=academic-approved');
+          } else {
+            setIsSubmitting(false);
+          }
+        } else if (!data.checkout_required) {
+          navigate('/');
+        } else {
+          throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+        }
+      } else {
+        if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
+        navigate('/');
       }
-      navigate('/');
     } catch (err) {
+      if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
       console.error('Error saving subscription plan', err);
-      // Even if it fails, let's let the user into the app
-      navigate('/');
+      alert(err.message || 'Erro ao configurar a assinatura.');
+      setIsSubmitting(false);
     }
   };
 
@@ -75,12 +99,12 @@ export default function SubscriptionSetup() {
         {plans.map((plan) => {
           const isSelected = selectedPlanId === plan.id;
           return (
-            <div 
-              key={plan.id} 
-              className="card card-hover" 
+            <div
+              key={plan.id}
+              className="card card-hover"
               onClick={() => setSelectedPlanId(plan.id)}
-              style={{ 
-                background: plan.color, 
+              style={{
+                background: plan.color,
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 position: 'relative', textAlign: 'center',
                 cursor: 'pointer',
@@ -93,7 +117,7 @@ export default function SubscriptionSetup() {
                   {plan.badge}
                 </div>
               )}
-              
+
               <div className="dark-text" style={{ marginBottom: '1rem', color: plan.id === 'free' ? 'var(--text-color) !important' : '#1a1a1a' }}>
                 <div style={{ color: plan.id === 'free' ? 'var(--text-color)' : 'inherit' }}>
                   {plan.icon}
@@ -117,11 +141,11 @@ export default function SubscriptionSetup() {
                   <span>Acesso a todos os freelancers e contratantes</span>
                 </li>
               </ul>
-              
-              <div style={{ 
-                marginTop: 'auto', 
-                width: '100%', 
-                padding: '0.8rem', 
+
+              <div style={{
+                marginTop: 'auto',
+                width: '100%',
+                padding: '0.8rem',
                 borderRadius: '8px',
                 background: isSelected ? 'var(--text-color)' : 'rgba(0,0,0,0.1)',
                 color: isSelected ? 'var(--bg-color)' : 'inherit',
@@ -134,36 +158,17 @@ export default function SubscriptionSetup() {
         })}
       </div>
 
-      <div className="card" style={{ maxWidth: '600px', margin: '0 auto', background: 'var(--surface-color)' }}>
-        <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Finalizar Cadastro</h2>
+      <div className="card" style={{ maxWidth: '600px', margin: '0 auto', background: 'var(--surface-color)', textAlign: 'center' }}>
+        <h2 style={{ marginBottom: '1.5rem' }}>Finalizar Cadastro</h2>
+        <p style={{ marginBottom: '2rem', opacity: 0.8 }}>
+          {selectedPlanId === 'free'
+            ? 'Você selecionou o Plano Gratuito. Clique abaixo para concluir.'
+            : `Você selecionou o plano ${plans.find(p => p.id === selectedPlanId)?.name}. Você será redirecionado ao Mercado Pago para realizar o pagamento.`
+          }
+        </p>
         <form onSubmit={handleCompleteSetup}>
-          {selectedPlanId !== 'free' && (
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', opacity: 0.8 }}>Método de Pagamento (Fictício)</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Nome no Cartão</label>
-                  <input type="text" className="input" placeholder="João da Silva" required />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Número do Cartão</label>
-                  <input type="text" className="input" placeholder="**** **** **** 1234" required />
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Validade</label>
-                    <input type="text" className="input" placeholder="MM/AA" required />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>CVV</label>
-                    <input type="text" className="input" placeholder="123" required />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
           <button type="submit" className="btn dark-text" style={{ width: '100%', fontSize: '1.1rem', padding: '1rem' }} disabled={isSubmitting}>
-            {isSubmitting ? 'Processando...' : 'Concluir Cadastro'}
+            {isSubmitting ? 'Processando...' : selectedPlanId === 'free' ? 'Concluir Cadastro' : 'Ir para o Pagamento'}
           </button>
         </form>
       </div>

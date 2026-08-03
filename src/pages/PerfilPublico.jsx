@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, User, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
+import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import { calcularTempo } from '../utils/calcularTempo';
@@ -34,10 +34,8 @@ export default function PublicProfile() {
       experiencias: [],
       curriculo: null
     },
-    roles: [
-      { type: 'Freelancer', rating: 4.9, reviews: 31 },
-      { type: 'Contratante', rating: 5.0, reviews: 12 }
-    ]
+    roles: [],
+    reviews: [],
   });
 
   useEffect(() => {
@@ -69,7 +67,20 @@ export default function PublicProfile() {
             certificados: data.profile?.certificados || [],
             experiencias: data.profile?.experiencias || [],
             curriculo: data.profile?.curriculo || null
-          }
+          },
+          roles: [
+            {
+              type: 'Freelancer',
+              rating: data.resumo_avaliacoes?.freelancer?.nota,
+              reviews: data.resumo_avaliacoes?.freelancer?.total || 0,
+            },
+            {
+              type: 'Contratante',
+              rating: data.resumo_avaliacoes?.contratante?.nota,
+              reviews: data.resumo_avaliacoes?.contratante?.total || 0,
+            },
+          ],
+          reviews: Array.isArray(data.avaliacoes_recebidas) ? data.avaliacoes_recebidas : [],
         }));
         setIsLoading(false);
       })
@@ -79,25 +90,6 @@ export default function PublicProfile() {
         setIsLoading(false);
       });
   }, [id]);
-
-  const dummyReviews = [
-    {
-      id: 1,
-      role_received: 'freelancer',
-      reviewer: 'Ana Costa',
-      comment: 'Trabalho super rápido e a comunicação foi excelente!',
-      criteria: { 'Comunicação': 5, 'Qualidade': 5, 'Prazo': 4 },
-      stars: 5
-    },
-    {
-      id: 2,
-      role_received: 'contractor',
-      reviewer: 'Carlos Dev',
-      comment: 'Ótimo cliente. Pagou no prazo e foi muito claro nas instruções do projeto.',
-      criteria: { 'Clareza': 5, 'Pagamento': 5, 'Suporte': 4 },
-      stars: 4
-    }
-  ];
 
   if (isLoading) {
     return <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando perfil...</div>;
@@ -165,7 +157,7 @@ export default function PublicProfile() {
                 <div key={role.type} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={role.type === 'Freelancer' ? "badge salmon" : "badge purple"} style={{ color: 'white' }}>{role.type}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                      <Star fill="currentColor" size={22} color="#f1c40f" /> {role.rating} ({role.reviews})
+                      <Star fill={role.rating ? 'currentColor' : 'transparent'} size={22} color="#f1c40f" /> {role.rating ?? '—'} ({role.reviews})
                   </span>
                 </div>
               ))}
@@ -369,7 +361,7 @@ export default function PublicProfile() {
 
         {activeTab === 'reviews' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {dummyReviews.map((review) => {
+            {user.reviews.map((review) => {
               const starsColor = review.role_received === 'freelancer' ? 'var(--holo-salmon)' : 'var(--holo-purple-real)';
               return (
                 <div key={review.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem' }}>
@@ -386,7 +378,7 @@ export default function PublicProfile() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem', background: 'var(--surface-color)', padding: '0.75rem', borderRadius: '8px' }}>
-                    {Object.entries(review.criteria).map(([criterion, score]) => (
+                    {Object.entries(review.criterios_exibicao || {}).map(([criterion, score]) => (
                       <div key={criterion} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-color)' }}>
                           <span>{criterion}</span>
@@ -401,11 +393,16 @@ export default function PublicProfile() {
 
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                     <MessageCircle size={20} style={{ marginTop: '0.1rem', opacity: 0.5, flexShrink: 0 }} />
-                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>"{review.comment}"</p>
+                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>“{review.comment}”</p>
                   </div>
                 </div>
               )
             })}
+            {user.reviews.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>
+                Este usuário ainda não recebeu avaliações de serviços concluídos.
+              </div>
+            )}
           </div>
         )}
 
