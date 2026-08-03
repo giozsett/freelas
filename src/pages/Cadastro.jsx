@@ -67,15 +67,9 @@ export default function Cadastro() {
       });
       const data = await response.json();
       if (response.ok) {
-        // 2. Envia o código de verificação
-        await fetch('http://localhost:8000/api/auth/enviar-codigo/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-        // 3. Muda para a etapa de verificação
-        setEmailCadastrado(email);
-        setEtapa('verificacao');
+        // 2. Realiza o login direto sem exigir código de verificação no cadastro comum
+        login(data.user, data.token);
+        navigate('/subscription-setup');
       } else {
         if (data.username || data.email) {
           setErrorMsg('Já há um usuário cadastrado com esse email.');

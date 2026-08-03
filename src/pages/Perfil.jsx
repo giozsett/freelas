@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Upload, User, Briefcase, MapPin, Calendar, Mail, Phone, Link as LinkIcon } from 'lucide-react';
+import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import { calcularTempo } from '../utils/calcularTempo';
@@ -29,6 +29,11 @@ export default function Profile() {
   const [certificados, setCertificados] = useState([]);
   const [experiencias, setExperiencias] = useState([]);
   const [activeTab, setActiveTab] = useState('skills');
+  const [reviewSummary, setReviewSummary] = useState({
+    freelancer: { nota: null, total: 0 },
+    contratante: { nota: null, total: 0 },
+  });
+  const [receivedReviews, setReceivedReviews] = useState([]);
 
   useEffect(() => {
     if (!token) return;
@@ -57,6 +62,16 @@ export default function Profile() {
       })
       .catch(err => console.error(err));
 
+    fetch(`${API}/api/auth/user/`, {
+      headers: { 'Authorization': `Token ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.resumo_avaliacoes) setReviewSummary(data.resumo_avaliacoes);
+        if (Array.isArray(data.avaliacoes_recebidas)) setReceivedReviews(data.avaliacoes_recebidas);
+      })
+      .catch(err => console.error(err));
+
     fetch(`${API}/api/certificados/`, {
       headers: { 'Authorization': `Token ${token}` }
     })
@@ -82,45 +97,8 @@ export default function Profile() {
 
   const userContext = {
     name: authUser ? (`${authUser.first_name} ${authUser.last_name}`.trim() || authUser.username) : 'Usuário',
-    plan: profile.subscription_plan,
-    rating: 4.8,
-    reviews: 4
+    plan: profile.subscription_plan
   };
-
-  const dummyReviews = [
-    {
-      id: 1,
-      role_received: 'freelancer',
-      reviewer: 'Ana Costa',
-      comment: 'Trabalho super rápido e a comunicação foi excelente!',
-      criteria: { 'Comunicação': 5, 'Qualidade': 5, 'Prazo': 4 },
-      stars: 5
-    },
-    {
-      id: 2,
-      role_received: 'freelancer',
-      reviewer: 'Empresa XPTO',
-      comment: 'Muito satisfeito com a entrega do projeto.',
-      criteria: { 'Comunicação': 4, 'Qualidade': 5, 'Prazo': 5 },
-      stars: 5
-    },
-    {
-      id: 3,
-      role_received: 'contractor',
-      reviewer: 'Carlos Dev',
-      comment: 'Ótimo cliente. Pagou no prazo e foi muito claro nas instruções do projeto.',
-      criteria: { 'Clareza': 5, 'Pagamento': 5, 'Suporte': 4 },
-      stars: 4
-    },
-    {
-      id: 4,
-      role_received: 'contractor',
-      reviewer: 'Mariana UI',
-      comment: 'O projeto teve alguns atrasos de documentação da parte deles, mas foi um bom trabalho.',
-      criteria: { 'Clareza': 3, 'Pagamento': 5, 'Suporte': 4 },
-      stars: 4
-    }
-  ];
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -169,6 +147,24 @@ export default function Profile() {
 
             <div style={{ fontSize: '1.15rem', opacity: 0.9, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <Zap size={20} color="var(--primary)" /> Plano {userContext.plan} - <Link to="/plans" style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>Fazer Upgrade</Link>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+              {[
+                { key: 'freelancer', label: 'Freelancer', className: 'salmon' },
+                { key: 'contratante', label: 'Contratante', className: 'purple' },
+              ].map(item => {
+                const summary = reviewSummary[item.key];
+                return (
+                  <div key={item.key} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <span className={`badge ${item.className}`} style={{ color: 'white' }}>{item.label}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 'bold' }}>
+                      <Star fill={summary.nota ? 'currentColor' : 'transparent'} size={19} color="#f1c40f" />
+                      {summary.nota ?? '—'} ({summary.total})
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '1rem', opacity: 0.85 }}>
@@ -365,10 +361,10 @@ export default function Profile() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '1.4rem', marginBottom: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
-                <Star fill="currentColor" size={28} color="var(--accent)" /> {userContext.rating} ({userContext.reviews} avaliações)
+                <Star fill="currentColor" size={28} color="var(--accent)" /> {receivedReviews.length} avaliações recebidas
               </div>
             </div>
-            {dummyReviews.map((review) => {
+            {receivedReviews.map((review) => {
               const starsColor = review.role_received === 'freelancer' ? 'var(--accent)' : 'var(--primary)';
               return (
                 <div key={review.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem' }}>
@@ -385,7 +381,7 @@ export default function Profile() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem', background: 'var(--surface-color)', padding: '0.75rem', borderRadius: '8px' }}>
-                    {Object.entries(review.criteria).map(([criterion, score]) => (
+                    {Object.entries(review.criterios_exibicao || {}).map(([criterion, score]) => (
                       <div key={criterion} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-color)' }}>
                            <span>{criterion}</span>
@@ -400,11 +396,16 @@ export default function Profile() {
 
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                     <MessageCircle size={20} style={{ marginTop: '0.1rem', opacity: 0.5, flexShrink: 0 }} />
-                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>"{review.comment}"</p>
+                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>“{review.comment}”</p>
                   </div>
                 </div>
               )
             })}
+            {receivedReviews.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>
+                Este usuário ainda não recebeu avaliações de serviços concluídos.
+              </div>
+            )}
           </div>
         )}
 

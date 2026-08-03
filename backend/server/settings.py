@@ -28,9 +28,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-d@56s8iwr*4=un_2+o_e6=o9i)=&478#zpml8vpoq4a-zl*n3$'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').strip().lower() in {'1', 'true', 'yes', 'on'}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get(
+        'ALLOWED_HOSTS',
+        'localhost,127.0.0.1,.ngrok-free.app,.ngrok-free.dev,.ngrok.io',
+    ).split(',')
+    if host.strip()
+]
 
 
 # Application definition
