@@ -6,6 +6,7 @@ from django.db.models import Avg, Count
 from django.utils import timezone
 from rest_framework import serializers
 from .models import UserProfile
+from .notificacoes import criar_notificacao
 
 class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
@@ -232,6 +233,12 @@ class CandidaturaSerializer(serializers.ModelSerializer):
             return obj.ad.author.id
         return None
 
+    def get_ad_author_name(self, obj):
+        if obj.ad and obj.ad.author:
+            name = obj.ad.author.first_name
+            return name if name else obj.ad.author.username
+        return None
+
     def get_indisponivel(self, obj):
         if obj.status == 'encerrada':
             return True
@@ -403,6 +410,15 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                     conclusao_proposta=validated_data.get('proposta_conclusao_prevista'),
                 )
 
+                outra_parte = freelancer if user == contratante else contratante
+                criar_notificacao(
+                    usuario=outra_parte,
+                    tipo='acordo',
+                    titulo='Alteração de acordo solicitada',
+                    mensagem=f'{user.username} solicitou uma alteração no acordo "{instance.titulo_anuncio}".',
+                    link='/my-freelas',
+                )
+
             if aprovar or recusar:
                 if not instance.tem_solicitacao:
                     raise serializers.ValidationError(
@@ -414,6 +430,7 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                         'A solicitação precisa ser decidida pela outra parte.',
                     )
 
+                solicitacao = instance.solicitacoes_alteracao.filter(status='pendente').first()
                 if aprovar:
                     if instance.proposto_valor is not None:
                         instance.valor_acordado = instance.proposto_valor
@@ -441,6 +458,14 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                     decidido_por=user,
                     decidido_em=timezone.now(),
                 )
+                if solicitacao and solicitacao.solicitante:
+                    criar_notificacao(
+                        usuario=solicitacao.solicitante,
+                        tipo='acordo',
+                        titulo='Alteração de acordo decidida',
+                        mensagem=f'Sua solicitação de alteração no acordo "{instance.titulo_anuncio}" foi {"aprovada" if aprovar else "recusada"}.',
+                        link='/my-freelas',
+                    )
 
             return super().update(instance, validated_data)
 
@@ -501,6 +526,14 @@ class ExperienciaSerializer(serializers.ModelSerializer):
 
 
 from .models import CartaoUsuario, Pagamento
+from .models import Notificacao
+
+class NotificacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notificacao
+        fields = ('id', 'tipo', 'titulo', 'mensagem', 'link', 'lida', 'criado_em')
+        read_only_fields = fields
+
 
 class PagamentoSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,13 +1,19 @@
 import { useParams, Link } from 'react-router-dom';
 import { Check, X, Tag } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function ManageAdApplications() {
   const { id } = useParams();
+  const { marcarLidas } = useNotificacoes();
   const [ad, setAd] = useState(null);
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    marcarLidas(['candidatura']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');

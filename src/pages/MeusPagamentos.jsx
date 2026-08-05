@@ -10,11 +10,13 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 const API = 'http://localhost:8000';
 
 export default function MyPayments() {
   const { token } = useAuth();
+  const { marcarLidas } = useNotificacoes();
   const [subscriptionPlan, setSubscriptionPlan] = useState('Gratuito');
   const [history, setHistory] = useState([]);
   const [cards, setCards] = useState([]);
@@ -22,6 +24,10 @@ export default function MyPayments() {
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    marcarLidas(['pagamento']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     if (!token) {

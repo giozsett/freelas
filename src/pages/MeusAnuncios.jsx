@@ -2,12 +2,18 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, CheckCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function MyAds() {
   const { user } = useAuth();
+  const { marcarLidas } = useNotificacoes();
   const [myAds, setMyAds] = useState([]);
   const [statusFilter, setStatusFilter] = useState('ativos');
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    marcarLidas(['candidatura']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     if (!user) {

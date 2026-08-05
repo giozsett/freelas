@@ -15,7 +15,7 @@ export default function SubscriptionSetup() {
       name: 'Gratuito',
       price: 'R$ 0/mês',
       ads: 2,
-      color: 'var(--surface-color)',
+      color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
     },
@@ -24,7 +24,7 @@ export default function SubscriptionSetup() {
       name: 'Gold',
       price: 'R$ 29,90/mês',
       ads: 10,
-      color: 'var(--holo-gradient-salmon)',
+      color: 'var(--holo-gradient-gold)',
       badge: 'Mais Popular',
       icon: <Star size={32} />
     },
@@ -33,7 +33,7 @@ export default function SubscriptionSetup() {
       name: 'Platinum',
       price: 'R$ 79,90/mês',
       ads: 'Ilimitados',
-      color: 'var(--holo-gradient-purple)',
+      color: 'var(--holo-gradient-platinum)',
       badge: 'Profissional',
       icon: <Gem size={32} />
     }
@@ -118,25 +118,25 @@ export default function SubscriptionSetup() {
                 </div>
               )}
 
-              <div className="dark-text" style={{ marginBottom: '1rem', color: plan.id === 'free' ? 'var(--text-color) !important' : '#1a1a1a' }}>
-                <div style={{ color: plan.id === 'free' ? 'var(--text-color)' : 'inherit' }}>
+              <div className="dark-text" style={{ marginBottom: '1rem', color: '#1a1a1a' }}>
+                <div style={{ color: 'inherit' }}>
                   {plan.icon}
                 </div>
               </div>
 
-              <h2 style={{ fontSize: '2rem', marginBottom: '1rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+              <h2 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#1a1a1a' }}>
                 {plan.name}
               </h2>
-              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '2rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '2rem', color: '#1a1a1a' }}>
                 {plan.price}
               </div>
 
               <ul style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, textAlign: 'left', width: '100%' }}>
-                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                   <CheckCircle size={20} />
                   <span style={{ fontWeight: '500' }}>{plan.ads} anúncios por mês</span>
                 </li>
-                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                   <CheckCircle size={20} />
                   <span>Acesso a todos os freelancers e contratantes</span>
                 </li>

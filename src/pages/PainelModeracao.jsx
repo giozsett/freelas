@@ -12,6 +12,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import DashboardModeracao from './DashboardModeracao';
 
 const API = 'http://localhost:8000';
 const PAGE_SIZE = 10;
@@ -344,7 +345,7 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
 export default function ModerationPanel() {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('denuncias');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [reports, setReports] = useState({ count: 0, results: [] });
   const [cancelamentos, setCancelamentos] = useState({ count: 0, results: [] });
   const [alteracoes, setAlteracoes] = useState({ count: 0, results: [] });
@@ -516,6 +517,7 @@ export default function ModerationPanel() {
   };
 
   const tabs = [
+    ['dashboard', 'Dashboard'],
     ['denuncias', 'Denúncias'],
     ['alteracoes', 'Alterações'],
     ['cancelamentos', 'Cancelamentos'],
@@ -560,6 +562,10 @@ export default function ModerationPanel() {
         <div style={{ color: '#ff4757', background: 'rgba(255,71,87,.1)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
           {error}
         </div>
+      )}
+
+      {activeTab === 'dashboard' && (
+        <DashboardModeracao />
       )}
 
       {activeTab === 'denuncias' && (

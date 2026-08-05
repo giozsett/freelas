@@ -18,6 +18,11 @@ from .views import (
     SimularPagamentoAcordoAPI,
     AvaliacaoListCreateAPIView,
     AvaliacoesPendentesAPIView,
+    DashboardAdminAPIView,
+    NotificacaoListAPIView,
+    NotificacaoNaoLidasAPIView,
+    NotificacaoMarcarLidaAPIView,
+    NotificacaoMarcarLidasAPIView,
 )
 
 urlpatterns = [
@@ -60,4 +65,9 @@ urlpatterns = [
     path('api/pagamentos/retorno/<str:flow>/<str:result>/', MercadoPagoReturnAPI.as_view(), name='pagamento-retorno'),
     path('api/pagamentos/historico/', PagamentoHistoricoAPIView.as_view(), name='pagamento-historico'),
     path('api/pagamentos/cartoes/', CartaoUsuarioListAPIView.as_view(), name='pagamento-cartoes'),
+    path('api/admin/dashboard/', DashboardAdminAPIView.as_view(), name='admin-dashboard'),
+    path('api/notificacoes/', NotificacaoListAPIView.as_view(), name='notificacao-list'),
+    path('api/notificacoes/nao-lidas/', NotificacaoNaoLidasAPIView.as_view(), name='notificacao-nao-lidas'),
+    path('api/notificacoes/ler-todas/', NotificacaoMarcarLidasAPIView.as_view(), name='notificacao-marcar-lidas'),
+    path('api/notificacoes/<int:pk>/ler/', NotificacaoMarcarLidaAPIView.as_view(), name='notificacao-marcar-lida'),
 ]
