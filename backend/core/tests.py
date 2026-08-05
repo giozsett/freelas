@@ -15,6 +15,7 @@ from .models import (
     Report,
     SolicitacaoAlteracaoAcordo,
     SolicitacaoCancelamentoAcordo,
+    UserProfile,
 )
 
 
@@ -653,3 +654,78 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Report.objects.get(pk=response.data['id']).status, 'pending')
+
+
+class DashboardAdminAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin@example.com',
+            email='admin@example.com',
+            password='secret123',
+            is_staff=True,
+        )
+        self.common = User.objects.create_user(
+            username='comum@example.com',
+            email='comum@example.com',
+            password='secret123',
+        )
+
+    def test_requer_admin(self):
+        self.client.force_authenticate(self.common)
+        response = self.client.get('/api/admin/dashboard/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_agrega_estatisticas_do_site(self):
+        self.client.force_authenticate(self.admin)
+
+        Ad.objects.create(author=self.common, title='Serviço', role='freelancer')
+        Ad.objects.create(author=self.common, title='Vaga', role='contractor')
+        Report.objects.create(
+            type='user',
+            target_id=str(self.common.id),
+            target_name='Comum',
+            category='Comportamento',
+        )
+        UserProfile.objects.filter(user=self.common).update(subscription_plan='Gold')
+
+        response = self.client.get('/api/admin/dashboard/')
+        self.assertEqual(response.status_code, 200)
+
+        data = response.data
+        self.assertEqual(data['geral']['usuarios']['total'], 2)
+        self.assertEqual(data['geral']['freelancers']['total'], 1)
+        self.assertEqual(data['geral']['contratantes']['total'], 1)
+        self.assertEqual(data['geral']['freelas']['total'], 1)
+        self.assertEqual(data['geral']['freelas']['fecharam_acordo_mes'], 0)
+        self.assertEqual(data['denuncias']['pendentes'], 1)
+        self.assertEqual(data['assinaturas_ativas'], 1)
+
+        planos = {p['nome']: p['total'] for p in data['planos']}
+        self.assertEqual(planos['Gold'], 1)
+        self.assertEqual(planos['Gratuito'], 1)
+        self.assertEqual(planos['Platinum'], 0)
+
+    def test_freelas_conta_quem_fechou_acordo_no_mes(self):
+        self.client.force_authenticate(self.admin)
+
+        freelancer = User.objects.create_user(
+            username='freela@example.com',
+            email='freela@example.com',
+            password='secret123',
+        )
+        contratante = User.objects.create_user(
+            username='contra@example.com',
+            email='contra@example.com',
+            password='secret123',
+        )
+        ad = Ad.objects.create(author=contratante, title='Vaga', role='contractor')
+        candidatura = Candidatura.objects.create(user=freelancer, ad=ad, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+
+        response = self.client.get('/api/admin/dashboard/')
+        self.assertEqual(response.status_code, 200)
+
+        freelas = response.data['geral']['freelas']
+        self.assertEqual(freelas['fecharam_acordo_mes'], 2)

@@ -21,13 +21,19 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function MeusFreelas() {
   const { user } = useAuth();
   const { role } = useRole();
+  const { marcarLidas } = useNotificacoes();
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
   const backendRole = isFreelancer ? 'freelancer' : 'contratante';
+
+  useEffect(() => {
+    marcarLidas(['acordo']);
+  }, [marcarLidas]);
   const [agreements, setAgreements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCards, setExpandedCards] = useState({});

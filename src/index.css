@@ -22,6 +22,15 @@
   --primary-gradient: linear-gradient(135deg, var(--primary) 0%, #FFAC9E 35%, #D8B4E2 65%, var(--accent) 100%);
   --primary-gradient-hover: linear-gradient(135deg, var(--primary-hover) 0%, #FF907B 35%, #C785C7 65%, #6BC4FF 100%);
 
+  --holo-gradient-salmon: linear-gradient(135deg, #FF6B54 0%, #FFAC9E 55%, #FFD9CF 100%);
+  --holo-gradient-purple: linear-gradient(135deg, #7C3AED 0%, #A78BFA 55%, #E9D5FF 100%);
+  --holo-gradient-free: linear-gradient(135deg, #FF9E8F 0%, #FFB7A8 40%, #FFD0C7 75%, #FFE4DE 100%);
+  --holo-gradient-gold: linear-gradient(135deg, #F59E0B 0%, #FCD34D 30%, #FFC37D 65%, #FF826E 100%);
+  --holo-gradient-platinum: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 35%, #C4B5FD 70%, #8CD6FF 100%);
+
+  --holo-salmon: #FF826E;
+  --holo-purple-real: #7C3AED;
+
   --shadow-color: rgba(15, 23, 42, 0.05);
   --shadow-offset: 2px;
   --border-width: 1px;

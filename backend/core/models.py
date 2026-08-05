@@ -531,3 +531,31 @@ class Experiencia(models.Model):
 
     def __str__(self):
         return f"{self.cargo} na {self.empresa}"
+
+
+class Notificacao(models.Model):
+    TIPOS = (
+        ('candidatura', 'Candidatura'),
+        ('acordo', 'Acordo'),
+        ('avaliacao', 'Avaliação'),
+        ('pagamento', 'Pagamento'),
+        ('sistema', 'Sistema'),
+    )
+
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notificacoes')
+    tipo = models.CharField(max_length=20, choices=TIPOS)
+    titulo = models.CharField(max_length=255)
+    mensagem = models.TextField(blank=True, default='')
+    link = models.CharField(max_length=255, blank=True, default='')
+    lida = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notificacoes'
+        ordering = ['-criado_em']
+        indexes = [
+            models.Index(fields=['usuario', 'lida'], name='notif_user_lida_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.titulo} -> {self.usuario.username}"
