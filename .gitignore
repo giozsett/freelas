@@ -38,3 +38,7 @@ backend/media/
 # Environment variables
 .env
 .env.local
+
+# Testes e artefatos de build
+Next_Steps.md
+Testes.md

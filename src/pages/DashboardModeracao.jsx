@@ -178,7 +178,7 @@ function DonutPlanos({ planos }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: '160px', height: '160px' }}>
+      <div style={{ position: 'relative', width: '160px', height: '160px', minWidth: '160px', flex: '0 0 160px', aspectRatio: '1 / 1' }}>
         <div
           style={{
             width: '160px',
@@ -430,7 +430,7 @@ export default function DashboardModeracao() {
         <KpiCard
           icon={Users}
           color={CORES.azul}
-          bg="linear-gradient(135deg, #38BDF8 0%, #1D4ED8 100%)"
+          bg="linear-gradient(135deg, #39758F 0%, #294E68 100%)"
           dark
           title="Usuários"
           value={data.geral.usuarios.total}
@@ -439,7 +439,7 @@ export default function DashboardModeracao() {
         <KpiCard
           icon={UserPlus}
           color={CORES.roxo}
-          bg="linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)"
+          bg="linear-gradient(135deg, #665A86 0%, #4C4268 100%)"
           dark
           title="Freelas"
           value={data.geral.freelas.total}
@@ -454,7 +454,7 @@ export default function DashboardModeracao() {
         <KpiCard
           icon={Flag}
           color="#ff4757"
-          bg="linear-gradient(135deg, #FF5A5A 0%, #C20000 100%)"
+          bg="linear-gradient(135deg, #9B5D63 0%, #6F3F49 100%)"
           dark
           title="Denúncias"
           value={data.denuncias.total}

@@ -52,16 +52,8 @@ export const NotificacaoProvider = ({ children }) => {
 
   const marcarLidas = useCallback(async (tipos = []) => {
     if (!token) return;
-    const alvos = tipos.length ? tipos : Object.keys(porTipo);
-    const subtotal = alvos.reduce((soma, t) => soma + (porTipo[t] || 0), 0);
-    setNaoLidas((atual) => Math.max(0, atual - subtotal));
-    setPorTipo((atual) => {
-      const novo = { ...atual };
-      alvos.forEach((t) => { delete novo[t]; });
-      return novo;
-    });
     try {
-      await fetch(`${API}/api/notificacoes/ler-todas/`, {
+      const res = await fetch(`${API}/api/notificacoes/ler-todas/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,10 +61,24 @@ export const NotificacaoProvider = ({ children }) => {
         },
         body: JSON.stringify({ tipos: tipos.length ? tipos : undefined }),
       });
+      if (!res.ok) throw new Error('Não foi possível marcar as notificações como lidas.');
+
+      const data = await res.json();
+      if (tipos.length) {
+        setNaoLidas((atual) => Math.max(0, atual - (data.count || 0)));
+        setPorTipo((atual) => {
+          const novo = { ...atual };
+          tipos.forEach((tipo) => { delete novo[tipo]; });
+          return novo;
+        });
+      } else {
+        setNaoLidas(0);
+        setPorTipo({});
+      }
     } catch {
       carregar();
     }
-  }, [token, porTipo, carregar]);
+  }, [token, carregar]);
 
   return (
     <NotificacaoContext.Provider

@@ -1,0 +1,144 @@
+{
+  "categories": [
+    {
+      "name": "Desenvolvimento Web",
+      "skills": ["HTML/CSS", "JavaScript", "TypeScript", "React", "Vue.js", "Angular", "Next.js", "Node.js", "PHP", "Laravel", "Django", "WordPress", "APIs REST", "GraphQL"]
+    },
+    {
+      "name": "Desenvolvimento Mobile",
+      "skills": ["React Native", "Flutter", "Kotlin", "Swift", "Android", "iOS", "Ionic", "Publicação de Aplicativos"]
+    },
+    {
+      "name": "Dados e Inteligência Artificial",
+      "skills": ["Python", "SQL", "Power BI", "Excel Avançado", "Análise de Dados", "Machine Learning", "Inteligência Artificial", "Pandas", "Engenharia de Dados", "Web Scraping"]
+    },
+    {
+      "name": "Infraestrutura e DevOps",
+      "skills": ["AWS", "Azure", "Google Cloud", "Docker", "Kubernetes", "Linux", "CI/CD", "Terraform", "Git", "Cibersegurança", "Administração de Redes"]
+    },
+    {
+      "name": "Design Gráfico",
+      "skills": ["Photoshop", "Illustrator", "InDesign", "Canva", "Identidade Visual", "Criação de Logotipo", "Diagramação", "Design para Redes Sociais", "Apresentações"]
+    },
+    {
+      "name": "UI/UX e Produto",
+      "skills": ["UI/UX Design", "Figma", "Adobe XD", "Prototipagem", "Design System", "Pesquisa com Usuários", "Wireframes", "Product Design", "Testes de Usabilidade"]
+    },
+    {
+      "name": "Marketing Digital",
+      "skills": ["SEO", "Google Ads", "Meta Ads", "Gestão de Tráfego", "Marketing de Conteúdo", "E-mail Marketing", "Inbound Marketing", "Automação de Marketing", "Google Analytics", "Planejamento de Campanhas"]
+    },
+    {
+      "name": "Redes Sociais",
+      "skills": ["Social Media", "Planejamento de Conteúdo", "Community Management", "Instagram", "TikTok", "LinkedIn", "YouTube", "Criação de Reels", "Métricas de Redes Sociais"]
+    },
+    {
+      "name": "Redação e Tradução",
+      "skills": ["Copywriting", "Redação SEO", "Revisão de Texto", "Produção de Conteúdo", "Roteiro", "Português", "Inglês", "Espanhol", "Francês", "Tradução", "Transcrição"]
+    },
+    {
+      "name": "Vídeo, Áudio e Fotografia",
+      "skills": ["Edição de Vídeo", "Edição Premiere", "After Effects", "DaVinci Resolve", "Motion Design", "Animação 2D", "Fotografia", "Tratamento de Imagem", "Edição de Áudio", "Locução", "Produção de Podcast"]
+    },
+    {
+      "name": "Edição de Vídeo",
+      "skills": ["Edição de Vídeo", "Edição Premiere", "After Effects", "DaVinci Resolve", "Motion Design", "Animação 2D", "Criação de Reels", "Tratamento de Imagem", "Edição de Áudio"]
+    },
+    {
+      "name": "Vendas e Atendimento",
+      "skills": ["Atendimento ao Cliente", "Atendimento B2B", "Atendimento B2C", "Vendas", "Inside Sales", "Prospecção de Clientes", "Negociação", "CRM", "Customer Success", "Suporte Técnico"]
+    },
+    {
+      "name": "Administração e Finanças",
+      "skills": ["Suporte Administrativo", "Assistente Virtual", "Digitação", "Organização de Agenda", "Emissão de Notas Fiscais", "Contas a Pagar e Receber", "Fluxo de Caixa", "Contabilidade", "Planejamento Financeiro", "Excel"]
+    },
+    {
+      "name": "Suporte Administrativo",
+      "skills": ["Suporte Administrativo", "Assistente Virtual", "Digitação", "Organização de Agenda", "Emissão de Notas Fiscais", "Contas a Pagar e Receber", "Excel", "Atendimento ao Cliente"]
+    },
+    {
+      "name": "Atendimento ao Cliente",
+      "skills": ["Atendimento ao Cliente", "Atendimento B2B", "Atendimento B2C", "Customer Success", "Suporte Técnico", "CRM", "Comunicação", "Resolução de Problemas"]
+    },
+    {
+      "name": "Gestão de Projetos",
+      "skills": ["Gestão de Projetos", "Scrum", "Kanban", "Metodologias Ágeis", "Jira", "Trello", "Notion", "Gestão de Equipes", "Mapeamento de Processos", "Product Management"]
+    },
+    {
+      "name": "Consultoria",
+      "skills": ["Consultoria Empresarial", "Planejamento Estratégico", "Análise de Mercado", "Plano de Negócios", "Gestão de Processos", "Mentoria", "Pesquisa de Mercado", "Compliance"]
+    },
+    {
+      "name": "Engenharia e Arquitetura",
+      "skills": ["AutoCAD", "SketchUp", "Revit", "Modelagem 3D", "Renderização", "Projeto Arquitetônico", "Design de Interiores", "Orçamento de Obras", "Desenho Técnico"]
+    },
+    {
+      "name": "Educação",
+      "skills": ["Aulas Particulares", "Reforço Escolar", "Ensino de Inglês", "Ensino de Espanhol", "Preparação para Vestibular", "Criação de Material Didático", "Educação Infantil", "Treinamento Corporativo"]
+    },
+    {
+      "name": "Saúde e Bem-estar",
+      "skills": ["Personal Trainer", "Yoga", "Pilates", "Nutrição", "Massoterapia", "Acompanhamento de Idosos", "Cuidados Pessoais", "Meditação"]
+    },
+    {
+      "name": "Eventos e Gastronomia",
+      "skills": ["Organização de Eventos", "Produção de Eventos", "Cerimonial", "Recepção de Eventos", "Garçom", "Copeiro", "Bartender", "Churrasqueiro", "Cozinheiro", "Auxiliar de Cozinha", "Buffet", "Confeitaria", "Doces para Festa", "Decoração de Festas", "Montagem e Desmontagem de Evento", "Fotografia de Eventos", "Filmagem de Eventos", "Operador de Som", "Iluminação de Eventos", "DJ", "Segurança de Evento"]
+    },
+    {
+      "name": "Festas e Recreação",
+      "skills": ["Recreador Infantil", "Monitor de Brinquedos", "Animador de Festa", "Contação de Histórias", "Pintura Facial", "Escultura de Balões", "Personagem Vivo", "Mágico", "Palhaço", "Oficina Infantil", "Caça ao Tesouro", "Apoio em Festa Infantil", "Recepção de Convidados"]
+    },
+    {
+      "name": "Cozinha e Alimentação",
+      "skills": ["Cozinheiro", "Cozinha Doméstica", "Chef em Domicílio", "Auxiliar de Cozinha", "Churrasqueiro", "Marmitas", "Confeitaria", "Panificação", "Salgados para Festa", "Doces para Festa", "Preparo de Alimentos", "Serviço de Buffet", "Garçom", "Copeiro", "Bartender"]
+    },
+    {
+      "name": "Cuidados com Crianças e Idosos",
+      "skills": ["Babá", "Babá Eventual", "Babá Noturna", "Cuidador Infantil", "Acompanhante Infantil", "Recreação Infantil", "Auxílio com Tarefas Escolares", "Cuidador de Idosos", "Acompanhante de Idosos", "Companhia para Consultas", "Cuidados Pessoais", "Preparo de Refeições", "Administração de Rotina"]
+    },
+    {
+      "name": "Serviços Domésticos",
+      "skills": ["Diarista", "Faxineiro", "Limpeza Residencial", "Limpeza Comercial", "Limpeza Pós-obra", "Limpeza de Mudança", "Organização de Ambientes", "Cozinha Doméstica", "Lavanderia", "Passadoria", "Jardinagem", "Cuidador de Casa", "Pequenos Reparos", "Montagem de Móveis"]
+    },
+    {
+      "name": "Serviços Gerais",
+      "skills": ["Auxiliar de Serviços Gerais", "Ajudante por Diária", "Limpeza de Espaços", "Organização de Estoque", "Carga e Descarga", "Montagem e Desmontagem", "Apoio Operacional", "Reposição de Mercadorias", "Separação de Pedidos", "Embalagem", "Distribuição de Materiais", "Apoio em Mudança", "Zeladoria"]
+    },
+    {
+      "name": "Manutenção e Reparos",
+      "skills": ["Eletricista", "Encanador", "Pintor", "Pedreiro", "Marceneiro", "Serralheiro", "Montador de Móveis", "Instalação de Prateleiras", "Instalação de TV", "Manutenção Residencial", "Pequenos Reparos", "Jardinagem", "Limpeza de Piscina", "Manutenção de Ar-condicionado"]
+    },
+    {
+      "name": "Beleza e Cuidados Pessoais",
+      "skills": ["Cabeleireiro", "Barbeiro", "Manicure", "Pedicure", "Maquiador", "Designer de Sobrancelhas", "Depilação", "Trancista", "Penteado para Eventos", "Massagem", "Atendimento em Domicílio"]
+    },
+    {
+      "name": "Transporte e Logística",
+      "skills": ["Motorista Particular", "Motorista para Evento", "Entregador", "Motoboy", "Frete", "Carreto", "Ajudante de Mudança", "Carga e Descarga", "Montagem de Rotas", "Separação de Pedidos", "Conferência de Mercadorias", "Organização de Estoque"]
+    },
+    {
+      "name": "Trabalhos Temporários e Promocionais",
+      "skills": ["Promotor de Eventos", "Promotor de Vendas", "Recepcionista", "Credenciamento", "Panfletagem", "Abordagem ao Público", "Degustação", "Repositor", "Fiscal de Loja", "Contagem de Estoque", "Pesquisa de Campo", "Cliente Oculto", "Apoio em Feiras", "Figurante"]
+    },
+    {
+      "name": "Animais",
+      "skills": ["Adestramento Básico", "Cuidados com Pet", "Passeador de Cães", "Pet Sitter", "Hospedagem de Pet", "Visita Domiciliar para Pet", "Alimentação de Animais", "Administração de Medicamentos", "Banho e Tosa", "Transporte de Animais", "Acompanhamento em Consulta Veterinária"]
+    },
+    {
+      "name": "Jurídico",
+      "skills": ["Consultoria Jurídica", "Elaboração de Contratos", "Direito Trabalhista", "Direito do Consumidor", "Direito Empresarial", "Pesquisa Jurídica", "LGPD"]
+    },
+    {
+      "name": "Recursos Humanos",
+      "skills": ["Recrutamento e Seleção", "Triagem de Currículos", "Entrevistas", "Departamento Pessoal", "Treinamento e Desenvolvimento", "Cargos e Salários", "People Analytics"]
+    },
+    {
+      "name": "Tecnologia",
+      "skills": ["Suporte de TI", "Manutenção de Computadores", "Instalação de Software", "Configuração de Redes", "Automação", "Integração de Sistemas", "Testes de Software"]
+    },
+    {
+      "name": "Outros",
+      "skills": ["Pesquisa", "Organização", "Comunicação", "Criatividade", "Resolução de Problemas", "Trabalho em Equipe"]
+    }
+  ]
+}

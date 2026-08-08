@@ -130,12 +130,12 @@ export default function Plans() {
 
             <button
               onClick={() => handleSubscribe(plan.id)}
-              className="btn"
+              className="btn plan-subscribe-btn"
               disabled={loadingPlan !== null}
               style={{
                 width: '100%',
                 background: 'var(--surface-color)',
-                color: '#1a1a1a',
+                color: 'var(--text-color)',
                 border: 'none',
                 cursor: 'pointer'
               }}

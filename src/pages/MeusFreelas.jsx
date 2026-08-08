@@ -513,11 +513,11 @@ export default function MeusFreelas() {
       {/* Status Message */}
       {statusMsg.text && (
         <div role="status" aria-live="polite" style={{
-          background: statusMsg.type === 'success' ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 71, 87, 0.15)',
-          borderLeft: `4px solid ${statusMsg.type === 'success' ? '#2ed573' : '#ff4757'}`,
+          background: statusMsg.type === 'success' ? 'var(--success-soft)' : 'var(--danger-soft)',
+          borderLeft: `4px solid ${statusMsg.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)'}`,
           padding: '1rem',
           borderRadius: '8px',
-          color: statusMsg.type === 'success' ? '#2ed573' : '#ff4757',
+          color: statusMsg.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)',
           fontWeight: '500',
           display: 'flex',
           alignItems: 'center',
@@ -552,13 +552,13 @@ export default function MeusFreelas() {
                 className="card notification-card"
                 style={{
                   border: '1.5px solid var(--primary)',
-                  background: 'rgba(255, 130, 110, 0.05)',
-                  boxShadow: '0 6px 15px rgba(255, 130, 110, 0.08)'
+                  background: 'var(--secondary)',
+                  boxShadow: '0 6px 15px var(--shadow-color)'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
-                    <span className="badge" style={{ background: 'var(--primary)', color: 'white', marginBottom: '0.5rem' }}>
+                    <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', marginBottom: '0.5rem' }}>
                       Pendente de Aprovação
                     </span>
                     <h3 style={{ fontSize: '1.25rem', margin: '0.25rem 0' }}>{app.titulo_anuncio}</h3>
@@ -572,14 +572,14 @@ export default function MeusFreelas() {
                     <button
                       onClick={() => handleDecidirSolicitacao(app.id, false)}
                       className="btn btn-secondary"
-                      style={{ padding: '0.5rem 1rem', background: '#ff4757', color: 'white', borderColor: '#ff4757' }}
+                      style={{ padding: '0.5rem 1rem', background: 'var(--danger-color)', color: 'var(--danger-contrast)', borderColor: 'var(--danger-color)' }}
                     >
                       <X size={16} /> Recusar
                     </button>
                     <button
                       onClick={() => handleDecidirSolicitacao(app.id, true)}
                       className="btn"
-                      style={{ padding: '0.5rem 1rem', background: '#2ed573' }}
+                      style={{ padding: '0.5rem 1rem', background: 'var(--success-color)', color: 'var(--success-contrast)' }}
                     >
                       <Check size={16} /> Aprovar
                     </button>
@@ -599,7 +599,7 @@ export default function MeusFreelas() {
                       <strong>Orçamento Proposto:</strong>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
                         <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>R$ {app.valor_acordado}</span>
-                        <span style={{ color: '#2ed573', fontWeight: 'bold' }}><TrendingUp size={14} style={{ display: 'inline', marginRight: '2px' }} /> R$ {app.proposto_valor}</span>
+                        <span style={{ color: 'var(--success-color)', fontWeight: 'bold' }}><TrendingUp size={14} style={{ display: 'inline', marginRight: '2px' }} /> R$ {app.proposto_valor}</span>
                       </div>
                     </div>
 
@@ -609,7 +609,7 @@ export default function MeusFreelas() {
                         <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>
                           {app.conclusao_prevista ? new Date(app.conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
                         </span>
-                        <span style={{ color: '#7C3AED', fontWeight: 'bold' }}>
+                        <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
                           {app.proposta_conclusao_prevista ? new Date(app.proposta_conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
                         </span>
                       </div>
@@ -633,7 +633,7 @@ export default function MeusFreelas() {
 
       {/* Informativo de Responsabilidade */}
       <div style={{
-        background: 'rgba(124, 58, 237, 0.05)',
+        background: 'var(--secondary)',
         borderLeft: '4px solid var(--primary)',
         padding: '1rem 1.5rem',
         borderRadius: '8px',
@@ -682,7 +682,7 @@ export default function MeusFreelas() {
       {/* Aguardando Pagamento Section */}
       {pendingPaymentAgreements.length > 0 && (
         <div style={{ marginBottom: '3rem' }}>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#ffc107' }}>
+          <h2 style={{ fontSize: '1.6rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--warning-color)' }}>
             <span>Aguardando Pagamento do Serviço ({pendingPaymentAgreements.length})</span>
             <span style={{ fontSize: '0.9rem', opacity: 0.6, fontWeight: 'normal' }}>Checkout pendente</span>
           </h2>
@@ -691,18 +691,18 @@ export default function MeusFreelas() {
             {pendingPaymentAgreements.map(app => {
               const userIsContractor = isContractorOfAgreement(app);
               return (
-                <div key={app.id} className="card" style={{ borderLeft: '5px solid #ffc107', background: 'rgba(255, 193, 7, 0.02)' }}>
+                <div key={app.id} className="card" style={{ borderLeft: '5px solid var(--warning-color)', background: 'var(--warning-soft)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className="badge" style={{ background: '#ffc107', color: '#1a1a1a' }}>
+                        <span className="badge" style={{ background: 'var(--warning-color)', color: 'var(--warning-contrast)' }}>
                           Pendente de Pagamento
                         </span>
-                        <span className="badge" style={{ background: userIsContractor ? 'var(--holo-salmon)' : 'var(--primary)', color: '#1a1a1a', fontWeight: 'bold' }}>
+                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', fontWeight: 'bold' }}>
                           Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                         </span>
                         {app.cancelamento_pendente && (
-                          <span className="badge" style={{ background: '#ff4757', color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Ban size={12} /> Cancelamento Pendente
                           </span>
                         )}
@@ -714,7 +714,7 @@ export default function MeusFreelas() {
                           <strong>Contratante:</strong> {app.nome_contratante || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <User size={15} color="var(--secondary)" />
+                          <User size={15} color="var(--accent)" />
                           <strong>Freelancer:</strong> {app.nome_prestador || 'Não informado'}
                         </span>
                       </div>
@@ -727,7 +727,7 @@ export default function MeusFreelas() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ffc107' }}>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--warning-color)' }}>
                           Valor do serviço: {Number(app.valor_acordado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>
                       </div>
@@ -738,7 +738,7 @@ export default function MeusFreelas() {
                             onClick={() => handlePayService(app.id)}
                             className="btn"
                             disabled={payingAgreementId !== null || Boolean(app.cancelamento_pendente)}
-                            style={{ background: '#ffc107', color: '#1a1a1a', border: 'none', padding: '0.6rem 1.2rem', fontSize: '0.95rem', cursor: 'pointer' }}
+                            style={{ background: 'var(--warning-color)', color: 'var(--warning-contrast)', border: 'none', padding: '0.6rem 1.2rem', fontSize: '0.95rem', cursor: 'pointer' }}
                           >
                             {payingAgreementId === app.id ? 'Abrindo checkout...' : 'Pagar serviço'}
                           </button>
@@ -757,12 +757,12 @@ export default function MeusFreelas() {
                           )}
                         </>
                       ) : (
-                        <div style={{ fontSize: '0.85rem', color: '#ffc107', fontStyle: 'italic', textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--warning-color)', fontStyle: 'italic', textAlign: 'right' }}>
                           Aguardando pagamento pelo contratante
                         </div>
                       )}
                       {app.cancelamento_pendente ? (
-                        <div style={{ fontSize: '0.82rem', color: '#ff4757', textAlign: 'right', maxWidth: '260px' }}>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--danger-color)', textAlign: 'right', maxWidth: '260px' }}>
                           Você enviou sua solicitação de cancelamento. Aguarde a aprovação da moderação.
                         </div>
                       ) : (
@@ -770,7 +770,7 @@ export default function MeusFreelas() {
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => openCancellationModal(app)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#ff4757', borderColor: '#ff4757' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
                         >
                           <Ban size={15} /> Solicitar cancelamento
                         </button>
@@ -801,7 +801,7 @@ export default function MeusFreelas() {
               const isExpanded = expandedCards[app.id];
               const userIsContractor = isContractorOfAgreement(app);
               return (
-                <div key={app.id} className="card hover-lift" style={{ borderLeft: '5px solid #2ed573' }}>
+                <div key={app.id} className="card hover-lift" style={{ borderLeft: '5px solid var(--success-color)' }}>
 
                   {/* Summary / Header view - Always Visible */}
                   <div
@@ -810,16 +810,16 @@ export default function MeusFreelas() {
                   >
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                        <span className="badge" style={{ background: userIsContractor ? 'var(--holo-salmon)' : 'var(--primary)', color: '#1a1a1a', fontWeight: 'bold' }}>
+                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', fontWeight: 'bold' }}>
                           Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                         </span>
                         {app.tem_solicitacao && (
-                          <span className="badge" style={{ background: '#ff4757', color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Bell size={12} /> Alteração Pendente
                           </span>
                         )}
                         {app.cancelamento_pendente && (
-                          <span className="badge" style={{ background: '#ff4757', color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Ban size={12} /> Cancelamento Pendente
                           </span>
                         )}
@@ -832,7 +832,7 @@ export default function MeusFreelas() {
                           <strong>Contratante:</strong> {app.nome_contratante || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <User size={15} color="var(--secondary)" />
+                          <User size={15} color="var(--accent)" />
                           <strong>Freelancer:</strong> {app.nome_prestador || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -889,8 +889,8 @@ export default function MeusFreelas() {
                       {/* Current Request Notice inside card */}
                       {app.tem_solicitacao && (
                         <div style={{
-                          background: app.solicitado_por === backendRole ? 'rgba(124, 58, 237, 0.05)' : 'rgba(255, 130, 110, 0.05)',
-                          border: `1px solid ${app.solicitado_por === backendRole ? 'var(--primary)' : 'var(--primary)'}`,
+                          background: 'var(--secondary)',
+                          border: '1px solid var(--primary)',
                           borderRadius: '8px',
                           padding: '1rem'
                         }}>
@@ -915,14 +915,14 @@ export default function MeusFreelas() {
                               <button
                                 onClick={() => handleDecidirSolicitacao(app.id, false)}
                                 className="btn btn-secondary"
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#ff4757', color: 'white', borderColor: '#ff4757' }}
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: 'var(--danger-color)', color: 'var(--danger-contrast)', borderColor: 'var(--danger-color)' }}
                               >
                                 Recusar
                               </button>
                               <button
                                 onClick={() => handleDecidirSolicitacao(app.id, true)}
                                 className="btn"
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#2ed573' }}
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: 'var(--success-color)', color: 'var(--success-contrast)' }}
                               >
                                 Aprovar e Atualizar Acordo
                               </button>
@@ -933,8 +933,8 @@ export default function MeusFreelas() {
 
                       {app.cancelamento_pendente && (
                         <div style={{
-                          background: 'rgba(255, 71, 87, 0.05)',
-                          border: '1px solid #ff4757',
+                          background: 'var(--danger-soft)',
+                          border: '1px solid var(--danger-color)',
                           borderRadius: '8px',
                           padding: '1rem',
                         }}>
@@ -961,7 +961,7 @@ export default function MeusFreelas() {
                           onClick={() => handleConcludeAgreement(app)}
                           className="btn"
                           disabled={concludingAgreementId !== null || Boolean(app.cancelamento_pendente)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#2ed573', color: '#17351f' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--success-color)', color: 'var(--success-contrast)' }}
                         >
                           <CheckCircle size={16} />
                           {concludingAgreementId === app.id ? 'Concluindo...' : 'Concluir acordo'}
@@ -981,13 +981,13 @@ export default function MeusFreelas() {
                             type="button"
                             onClick={() => openCancellationModal(app)}
                             className="btn btn-secondary"
-                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4757', borderColor: '#ff4757' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
                           >
                             <Ban size={16} /> Solicitar Cancelamento
                           </button>
                         )}
                         {app.cancelamento_pendente && (
-                          <span style={{ color: '#ff4757', fontSize: '0.9rem', alignSelf: 'center' }}>
+                          <span style={{ color: 'var(--danger-color)', fontSize: '0.9rem', alignSelf: 'center' }}>
                             Cancelamento pendente — aguardando aprovação da moderação
                           </span>
                         )}
@@ -1032,7 +1032,7 @@ export default function MeusFreelas() {
                   key={app.id}
                   className="card hover-lift"
                   style={{
-                    borderLeft: `5px solid ${isConcluido ? '#2ed573' : '#ff4757'}`,
+                    borderLeft: `5px solid ${isConcluido ? 'var(--success-color)' : 'var(--danger-color)'}`,
                     opacity: 0.85
                   }}
                 >
@@ -1044,12 +1044,12 @@ export default function MeusFreelas() {
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                         <span className={`badge ${isConcluido ? 'success' : 'danger'}`} style={{
-                          background: isConcluido ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 71, 87, 0.15)',
-                          color: isConcluido ? '#2ed573' : '#ff4757'
+                          background: isConcluido ? 'var(--success-soft)' : 'var(--danger-soft)',
+                          color: isConcluido ? 'var(--success-color)' : 'var(--danger-color)'
                         }}>
                           {app.status_acordo}
                         </span>
-                        <span className="badge" style={{ background: isContractorOfAgreement(app) ? 'var(--holo-salmon)' : 'var(--primary)', color: '#1a1a1a', fontWeight: 'bold' }}>
+                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', fontWeight: 'bold' }}>
                           Seu Papel: {isContractorOfAgreement(app) ? 'Contratante' : 'Freelancer'}
                         </span>
                         <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>
@@ -1067,7 +1067,7 @@ export default function MeusFreelas() {
                           <strong>Contratante:</strong> {app.nome_contratante || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <User size={14} color="var(--secondary)" />
+                          <User size={14} color="var(--accent)" />
                           <strong>Freelancer:</strong> {app.nome_prestador || 'Não informado'}
                         </span>
                       </div>
@@ -1163,7 +1163,7 @@ export default function MeusFreelas() {
 
               <div>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.95rem' }}>
-                  Justificativa da Alteração <span style={{ color: '#ff4757' }}>*</span>
+                  Justificativa da Alteração <span style={{ color: 'var(--danger-color)' }}>*</span>
                 </label>
                 <textarea
                   className="input"
@@ -1248,7 +1248,7 @@ export default function MeusFreelas() {
           zIndex: 1000,
           padding: '1rem',
         }}>
-          <div className="card" style={{ maxWidth: '540px', width: '100%', borderTop: '5px solid #ff4757', position: 'relative' }}>
+          <div className="card" style={{ maxWidth: '540px', width: '100%', borderTop: '5px solid var(--danger-color)', position: 'relative' }}>
             <button
               type="button"
               onClick={closeCancellationModal}
@@ -1259,13 +1259,13 @@ export default function MeusFreelas() {
               <X size={22} />
             </button>
             <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Ban size={23} color="#ff4757" /> Solicitar cancelamento
+              <Ban size={23} color="var(--danger-color)" /> Solicitar cancelamento
             </h2>
             <p style={{ opacity: 0.8, lineHeight: 1.5 }}>
               O acordo <strong>{cancellationAgreement.titulo_anuncio}</strong> continuará com o status atual até que um administrador analise a solicitação.
             </p>
             {cancellationAgreement.status_acordo === 'Ativo' && (
-              <div style={{ background: 'rgba(255,193,7,.12)', borderLeft: '4px solid #ffc107', padding: '0.8rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.88rem' }}>
+              <div style={{ background: 'var(--warning-soft)', borderLeft: '4px solid var(--warning-color)', padding: '0.8rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.88rem' }}>
                 A aprovação cancela o acordo na plataforma, mas não realiza automaticamente um estorno de pagamento já aprovado.
               </div>
             )}
@@ -1287,7 +1287,7 @@ export default function MeusFreelas() {
                 <button type="button" className="btn btn-secondary" onClick={closeCancellationModal} disabled={requestingCancellation}>
                   Voltar
                 </button>
-                <button type="submit" className="btn" disabled={requestingCancellation} style={{ background: '#ff4757', color: 'white' }}>
+                <button type="submit" className="btn" disabled={requestingCancellation} style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)' }}>
                   {requestingCancellation ? 'Enviando...' : 'Enviar para o administrador'}
                 </button>
               </div>

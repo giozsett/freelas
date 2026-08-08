@@ -54,6 +54,7 @@ export default function MyApplications() {
         ) : applications.length > 0 ? (
           applications.map(app => {
             const isUnavailable = app.indisponivel || app.status === 'encerrada';
+            const isExpired = app.motivo_indisponibilidade === 'Anúncio expirado.';
             return (
             <div
               key={app.id}
@@ -76,9 +77,9 @@ export default function MyApplications() {
                     <h2 style={{ fontSize: '1.5rem', margin: 0, textDecoration: 'underline' }}>{app.ad_title}</h2>
                   </Link>
                   {app.status === 'aprovada' && <span className="badge" style={{ background: '#1dd1a1', border: '1px solid #1dd1a1', color: 'white' }}><CheckCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Aprovada</span>}
-                  {app.status === 'pendente' && <span className="badge purple" style={{ color: 'white' }}><Clock size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Em análise</span>}
+                  {app.status === 'pendente' && !isExpired && <span className="badge purple" style={{ color: 'white' }}><Clock size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Em análise</span>}
                   {app.status === 'recusada' && <span className="badge" style={{ background: '#ff6b6b', border: '1px solid #ff6b6b', color: 'white' }}><XCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Recusada</span>}
-                  {isUnavailable && <span className="badge" style={{ background: '#777', border: '1px solid #777', color: 'white' }}><XCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> Encerrada</span>}
+                  {isUnavailable && <span className="badge" style={{ background: '#777', border: '1px solid #777', color: 'white' }}><XCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> {isExpired ? 'Anúncio expirado' : 'Encerrada'}</span>}
                 </div>
 
                 <div style={{ fontSize: '0.9rem', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
