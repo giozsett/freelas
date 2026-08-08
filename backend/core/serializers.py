@@ -164,6 +164,30 @@ class AdSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('author', 'created_at')
 
+    def validate(self, attrs):
+        role = attrs.get('role', getattr(self.instance, 'role', None))
+        location_type = attrs.get('location_type', getattr(self.instance, 'location_type', None))
+        description = attrs.get('description', getattr(self.instance, 'description', '') or '')
+        if len(description) > 1000:
+            raise serializers.ValidationError({'description': 'A descrição deve ter no máximo 1000 caracteres.'})
+
+        if location_type == 'presencial':
+            cidade = attrs.get('cidade', getattr(self.instance, 'cidade', None))
+            if not cidade:
+                raise serializers.ValidationError({'cidade': 'A cidade é obrigatória para serviços presenciais.'})
+
+        if role == 'freelancer':
+            availability = attrs.get('availability', getattr(self.instance, 'availability', None))
+            if not isinstance(availability, dict):
+                raise serializers.ValidationError({'availability': 'Informe a disponibilidade por dia e período.'})
+            periodos_validos = {'manha', 'tarde', 'noite'}
+            if not any(
+                isinstance(periodos, list) and periodos_validos.intersection(periodos)
+                for periodos in availability.values()
+            ):
+                raise serializers.ValidationError({'availability': 'Selecione ao menos um período disponível.'})
+        return attrs
+
     def get_author_name(self, obj):
         name = obj.author.first_name
         return name if name else obj.author.username
@@ -173,8 +197,9 @@ class AdSerializer(serializers.ModelSerializer):
             return None
         if not hasattr(obj.author, 'profile'):
             return None
+        papel_avaliado = 'contratante' if obj.role in {'contractor', 'contratante'} else 'freelancer'
         result = obj.author.profile.avaliacoes_recebidas.filter(
-            papel_avaliado='contratante',
+            papel_avaliado=papel_avaliado,
         ).aggregate(nota=Avg('nota_geral'))
         return round(float(result['nota']), 1) if result['nota'] is not None else None
 
@@ -240,6 +265,8 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         return None
 
     def get_indisponivel(self, obj):
+        if obj.ad and obj.ad.status_anuncio == 'Vencido':
+            return True
         if obj.status == 'encerrada':
             return True
         if not obj.ad_id or obj.status == 'aprovada':
@@ -247,6 +274,8 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         return obj.ad.candidaturas.filter(status='aprovada').exclude(pk=obj.pk).exists()
 
     def get_motivo_indisponibilidade(self, obj):
+        if obj.ad and obj.ad.status_anuncio == 'Vencido':
+            return 'Anúncio expirado.'
         if self.get_indisponivel(obj):
             return 'O autor já aprovou outra candidatura para este anúncio.'
         return None

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:checkout": "powershell -ExecutionPolicy Bypass -File scripts/dev-checkout.ps1",
+    "dev:checkout": "bash scripts/dev-checkout.sh",
+    "dev:checkout:windows": "powershell -ExecutionPolicy Bypass -File scripts/dev-checkout.ps1",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

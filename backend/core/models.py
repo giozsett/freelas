@@ -71,14 +71,35 @@ class Ad(models.Model):
     location_type = models.CharField(max_length=50, null=True, blank=True)
     address = models.CharField(max_length=200, blank=True, null=True)
     address_number = models.CharField(max_length=50, blank=True, null=True)
-    description = models.TextField(null=True, blank=True)
+    estado = models.CharField(max_length=2, blank=True, null=True)
+    cidade = models.CharField(max_length=120, blank=True, null=True)
+    bairro = models.CharField(max_length=120, blank=True, null=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    description = models.TextField(max_length=1000, null=True, blank=True)
     role = models.CharField(max_length=50, null=True, blank=True)
     deadline = models.CharField(max_length=100, blank=True, null=True)
-    availability = models.TextField(blank=True, null=True)
+    availability = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
         db_table = 'anuncios'
+
+    @classmethod
+    def atualizar_vencidos(cls):
+        from datetime import timedelta
+        from django.db.models import Q
+        from django.utils import timezone
+
+        limite = timezone.now() - timedelta(days=30)
+        return cls.objects.filter(
+            created_at__lt=limite,
+        ).filter(
+            Q(status_anuncio__isnull=True)
+            | Q(status_anuncio='')
+            | Q(status_anuncio='Em aberto')
+            | Q(status_anuncio='Ativo')
+        ).update(status_anuncio='Vencido')
 
     def save(self, *args, **kwargs):
         if self.title:

@@ -206,7 +206,17 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
-        queryset = Report.objects.all().order_by('-created_at')
+        from django.db.models import Case, IntegerField, Value, When
+
+        queryset = Report.objects.annotate(
+            status_order=Case(
+                When(status='pending', then=Value(0)),
+                When(status='procedente', then=Value(1)),
+                When(status='improcedente', then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            ),
+        ).order_by('status_order', '-created_at')
         status_filter = self.request.query_params.get('status')
         valid_statuses = {choice[0] for choice in Report.STATUS_CHOICES}
         if status_filter in valid_statuses:
@@ -241,6 +251,7 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
+        Ad.atualizar_vencidos()
         queryset = Ad.objects.exclude(deletado=True).order_by('-created_at')
         all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
         if not all_ads:
@@ -253,8 +264,11 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         serializer.save(author=self.request.user)
 
 class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Ad.objects.exclude(deletado=True)
     serializer_class = AdSerializer
+
+    def get_queryset(self):
+        Ad.atualizar_vencidos()
+        return Ad.objects.exclude(deletado=True)
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -295,6 +309,7 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         from django.db.models import Q
 
+        Ad.atualizar_vencidos()
         queryset = Candidatura.objects.select_related(
             'ad__author', 'user',
         ).filter(
@@ -321,6 +336,10 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             raise ValidationError('O anúncio é obrigatório.')
         if ad.author_id == self.request.user.id:
             raise ValidationError('Você não pode se candidatar ao próprio anúncio.')
+        Ad.atualizar_vencidos()
+        ad.refresh_from_db(fields=['status_anuncio'])
+        if ad.status_anuncio == 'Vencido':
+            raise ValidationError('Este anúncio expirou e não aceita novas candidaturas.')
         if ad.status_anuncio == 'Finalizado' or ad.candidaturas.filter(status='aprovada').exists():
             raise ValidationError('Este anúncio já possui uma candidatura aprovada.')
         if ad.candidaturas.filter(user=self.request.user).exists():
@@ -366,11 +385,18 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
             )
 
         with transaction.atomic():
+            Ad.atualizar_vencidos()
             candidatura = get_object_or_404(
                 self.get_queryset().select_for_update(),
                 pk=kwargs['pk'],
             )
-            Ad.objects.select_for_update().get(pk=candidatura.ad_id)
+            ad = Ad.objects.select_for_update().get(pk=candidatura.ad_id)
+
+            if ad.status_anuncio == 'Vencido':
+                return Response(
+                    {'error': 'Não é possível decidir candidaturas de um anúncio vencido.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             if candidatura.status != 'pendente':
                 return Response(
