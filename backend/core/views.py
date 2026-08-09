@@ -993,9 +993,29 @@ class ConcluirAcordoAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
             if not acordo.pagamentos.filter(status='pago').exists():
-                return Response(
-                    {'error': 'O pagamento precisa estar aprovado antes da conclusão.'},
-                    status=status.HTTP_409_CONFLICT,
+                if not _checkout_academico_habilitado() or not contratante:
+                    return Response(
+                        {'error': 'O pagamento precisa estar aprovado antes da conclusão.'},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                # Compatibilidade com acordos locais antigos que foram ativados antes
+                # de o histórico de pagamentos passar a ser obrigatório.
+                try:
+                    amount = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
+                except (InvalidOperation, TypeError):
+                    amount = Decimal('0.00')
+                Pagamento.objects.create(
+                    usuario=contratante,
+                    tipo='acordo',
+                    status='pago',
+                    valor=amount,
+                    referencia_externa=f'teste:legado:acordo:{acordo.id}:{uuid4().hex}',
+                    acordo=acordo,
+                    mp_payment_id=f'LOCAL-LEGACY-{uuid4().hex}',
+                    forma_pagamento='simulacao_pagamento',
+                    detalhe_status='registro_local_compatibilidade',
+                    aprovado_em=timezone.now(),
                 )
 
             acordo.status_acordo = 'Concluído'
@@ -1461,10 +1481,14 @@ class CriarPreferenciaAcordoAPI(APIView):
             checkout_url__isnull=False,
         ).order_by('-criado_em').first()
         if pending_payment:
+            test_approved = False
+            if _checkout_academico_habilitado():
+                test_approved = _aprovar_checkout_academico(pending_payment)
             return Response({
                 'checkout_required': True,
                 'init_point': pending_payment.checkout_url,
                 'reference': pending_payment.referencia_externa,
+                'test_approved': test_approved,
             })
 
         headers = _mercado_pago_headers()

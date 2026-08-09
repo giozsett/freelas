@@ -252,7 +252,7 @@ class PagamentoAPITests(TestCase):
         'MERCADO_PAGO_TEST_MODE': 'true',
     })
     @patch('core.views.requests.post')
-    def test_checkout_academico_aprova_e_inicia_acordo_ao_criar_link(self, post):
+    def test_checkout_academico_registra_pagamento_e_inicia_acordo(self, post):
         post.return_value = MercadoPagoResponse(
             201,
             {'id': 'preference-test', 'init_point': 'https://mercadopago.com/checkout/test'},
@@ -272,6 +272,10 @@ class PagamentoAPITests(TestCase):
         pagamento = Pagamento.objects.get(acordo=self.acordo)
         self.assertEqual(pagamento.status, 'pago')
         self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
+        self.assertEqual(
+            response.data['init_point'],
+            'https://mercadopago.com/checkout/test',
+        )
 
     def test_plano_gratuito_nao_exige_checkout(self):
         self.contratante.profile.subscription_plan = 'Gold'
@@ -413,6 +417,30 @@ class PagamentoAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 409)
+
+    @override_settings(DEBUG=True)
+    @patch.dict('os.environ', {'MERCADO_PAGO_TEST_MODE': 'true'})
+    def test_acordo_ativo_legado_pode_ser_concluido_no_ambiente_local(self):
+        self.acordo.status_acordo = 'Ativo'
+        self.acordo.save(update_fields=['status_acordo'])
+        self.client.force_authenticate(self.freelancer)
+
+        response = self.client.post(
+            f'/api/acordos/{self.acordo.id}/concluir/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Concluído')
+        self.assertTrue(
+            Pagamento.objects.filter(
+                acordo=self.acordo,
+                status='pago',
+                forma_pagamento='simulacao_pagamento',
+            ).exists(),
+        )
 
     def test_cancelamento_precisa_de_admin_e_move_acordo_para_cancelados(self):
         self.acordo.status_acordo = 'Ativo'
@@ -600,6 +628,30 @@ class PagamentoAPITests(TestCase):
                 status='pendente',
             ).exists(),
         )
+
+    def test_solicitante_nao_pode_decidir_a_propria_alteracao(self):
+        self.client.force_authenticate(self.freelancer)
+        request = self.client.patch(
+            f'/api/acordos/{self.acordo.id}/',
+            {
+                'tem_solicitacao': True,
+                'justificativa_alteracao': 'Precisamos rever o valor antes do pagamento.',
+                'proposto_valor': 1400,
+            },
+            format='json',
+        )
+        self.assertEqual(request.status_code, 200)
+
+        decision = self.client.patch(
+            f'/api/acordos/{self.acordo.id}/',
+            {'aprovar_solicitacao': True},
+            format='json',
+        )
+
+        self.assertEqual(decision.status_code, 400)
+        self.acordo.refresh_from_db()
+        self.assertTrue(self.acordo.tem_solicitacao)
+        self.assertEqual(self.acordo.valor_acordado, 1250)
 
     def test_retorno_publico_redireciona_para_frontend_local(self):
         response = self.client.get('/api/pagamentos/retorno/acordo/success/')
