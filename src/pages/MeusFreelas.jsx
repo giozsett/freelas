@@ -31,7 +31,6 @@ export default function MeusFreelas() {
   const { confirmar } = useDialogo();
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
-  const backendRole = isFreelancer ? 'freelancer' : 'contratante';
 
   useEffect(() => {
     marcarLidas(['acordo']);
@@ -91,8 +90,10 @@ export default function MeusFreelas() {
         checkoutWindow.opener = null;
         checkoutWindow.location.href = data.init_point;
         if (data.test_approved) {
-          showStatus('Checkout criado. Pagamento acadêmico aprovado e acordo iniciado.', 'success');
+          showStatus('Checkout aberto. Pagamento registrado e freela movido para Em andamento.', 'success');
           fetchAgreements();
+        } else {
+          showStatus('Checkout aberto. O freela será iniciado após a aprovação do pagamento.', 'success');
         }
         setPayingAgreementId(null);
       } else {
@@ -281,6 +282,10 @@ export default function MeusFreelas() {
     return !isFreelancer;
   };
 
+  const userRoleInAgreement = (app) => (
+    isContractorOfAgreement(app) ? 'contratante' : 'freelancer'
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get('checkout');
@@ -327,7 +332,6 @@ export default function MeusFreelas() {
     const token = localStorage.getItem('token');
     const bodyData = {
       tem_solicitacao: true,
-      solicitado_por: backendRole,
       justificativa_alteracao: justificativa,
       proposto_valor: parseFloat(valorProposto) || null,
       proposta_descricao: descricaoProposta,
@@ -342,25 +346,12 @@ export default function MeusFreelas() {
       },
       body: JSON.stringify(bodyData)
     })
-    .then(res => {
-      if (res.ok) {
-        showStatus('Solicitação de alteração enviada com sucesso!', 'success');
-        fetchAgreements();
-        handleCloseModal();
-      } else {
-        // Fallback simulate locally if mock data
-        setAgreements(prev => prev.map(item => {
-          if (item.id === selectedAgreement.id) {
-            return {
-              ...item,
-              ...bodyData
-            };
-          }
-          return item;
-        }));
-        showStatus('Solicitação enviada com sucesso (Simulação Local)!', 'success');
-        handleCloseModal();
-      }
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || 'Não foi possível enviar a solicitação.');
+      showStatus('Solicitação de alteração enviada com sucesso!', 'success');
+      fetchAgreements();
+      handleCloseModal();
     })
     .catch(err => {
       console.error(err);
@@ -381,43 +372,11 @@ export default function MeusFreelas() {
       },
       body: JSON.stringify(bodyData)
     })
-    .then(res => {
-      if (res.ok) {
-        showStatus(approved ? 'Alterações aprovadas e aplicadas!' : 'Solicitação de alteração recusada.', 'success');
-        fetchAgreements();
-      } else {
-        // Fallback simulate locally if mock data
-        setAgreements(prev => prev.map(item => {
-          if (item.id === agreementId) {
-            if (approved) {
-              return {
-                ...item,
-                valor_acordado: item.proposto_valor !== null ? item.proposto_valor : item.valor_acordado,
-                descricao_servico: item.proposta_descricao !== null ? item.proposta_descricao : item.descricao_servico,
-                conclusao_prevista: item.proposta_conclusao_prevista !== null ? item.proposta_conclusao_prevista : item.conclusao_prevista,
-                tem_solicitacao: false,
-                solicitado_por: null,
-                justificativa_alteracao: null,
-                proposto_valor: null,
-                proposta_descricao: null,
-                proposta_conclusao_prevista: null
-              };
-            } else {
-              return {
-                ...item,
-                tem_solicitacao: false,
-                solicitado_por: null,
-                justificativa_alteracao: null,
-                proposto_valor: null,
-                proposta_descricao: null,
-                proposta_conclusao_prevista: null
-              };
-            }
-          }
-          return item;
-        }));
-        showStatus(approved ? 'Alterações aprovadas com sucesso (Simulação Local)!' : 'Solicitação de alteração recusada.', 'success');
-      }
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || 'Não foi possível processar a decisão.');
+      showStatus(approved ? 'Alterações aprovadas e aplicadas!' : 'Solicitação de alteração recusada.', 'success');
+      fetchAgreements();
     })
     .catch(err => {
       console.error(err);
@@ -433,7 +392,9 @@ export default function MeusFreelas() {
   const historyAgreements = agreementTab === 'concluidos' ? completedAgreements : cancelledAgreements;
 
   // Check for received requests (notifications)
-  const receivedRequests = agreements.filter(app => app.tem_solicitacao && app.solicitado_por !== backendRole);
+  const receivedRequests = agreements.filter(app => (
+    app.tem_solicitacao && app.solicitado_por !== userRoleInAgreement(app)
+  ));
 
   return (
     <div style={{ maxWidth: '950px', margin: '2rem auto', padding: '0 1rem' }}>
@@ -866,7 +827,7 @@ export default function MeusFreelas() {
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
                             <Clock size={16} />
-                            {app.solicitado_por === backendRole ? (
+                            {app.solicitado_por === userRoleInAgreement(app) ? (
                               <span>Você solicitou alterações neste acordo</span>
                             ) : (
                               <span>Alterações solicitadas pela outra parte</span>
@@ -880,7 +841,7 @@ export default function MeusFreelas() {
                             <strong>Novos valores propostos:</strong> Orçamento de R$ {app.proposto_valor} | Conclusão em {app.proposta_conclusao_prevista ? new Date(app.proposta_conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não informada'}
                           </p>
 
-                          {app.solicitado_por !== backendRole && (
+                          {app.solicitado_por !== userRoleInAgreement(app) && (
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
                               <button
                                 onClick={() => handleDecidirSolicitacao(app.id, false)}
