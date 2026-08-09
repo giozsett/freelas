@@ -23,9 +23,11 @@ import MeusPagamentos from './pages/MeusPagamentos';
 import EsqueciSenha from './pages/EsqueciSenha';
 import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
+import { ProvedorDialogo } from './context/ContextoDialogo';
 
 function App() {
   return (
+    <ProvedorDialogo>
     <Router>
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <BarraNavegacao />
@@ -57,6 +59,7 @@ function App() {
       <Rodape />
       </div>
     </Router>
+    </ProvedorDialogo>
   );
 }
 

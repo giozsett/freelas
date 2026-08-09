@@ -5,11 +5,13 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 import { calcularTempo } from '../utils/calcularTempo';
 import ModalCrop from '../components/ModalCrop';
+import { useDialogo } from '../context/ContextoDialogo';
 
 const API = 'http://localhost:8000';
 
 export default function EditProfile() {
   const { user: authUser, token, login } = useAuth();
+  const { alerta } = useDialogo();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [activeEditTab, setActiveEditTab] = useState('identidade');
@@ -193,7 +195,7 @@ export default function EditProfile() {
 
     try {
       if (!firstName.trim() || !lastName.trim()) {
-        alert('Preencha o nome e sobrenome.');
+        await alerta('Preencha o nome e sobrenome.', { titulo: 'Dados incompletos', variante: 'perigo' });
         setEnviando(false);
         return;
       }
@@ -285,7 +287,7 @@ export default function EditProfile() {
       navigate('/profile');
     } catch(err) {
       console.error(err);
-      alert('Erro ao salvar. Tente novamente.');
+      await alerta('Erro ao salvar. Tente novamente.', { titulo: 'Não foi possível salvar', variante: 'perigo' });
     } finally {
       setEnviando(false);
     }

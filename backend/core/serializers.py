@@ -405,9 +405,9 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             if solicitando:
-                if instance.status_acordo != 'Ativo':
+                if instance.status_acordo not in {'Ativo', 'Pendente Pagamento'}:
                     raise serializers.ValidationError(
-                        'Alterações só podem ser solicitadas em acordos em andamento.',
+                        'Alterações só podem ser solicitadas em acordos ativos ou pendentes de pagamento.',
                     )
                 if instance.tem_solicitacao or instance.solicitacoes_alteracao.filter(status='pendente').exists():
                     raise serializers.ValidationError(

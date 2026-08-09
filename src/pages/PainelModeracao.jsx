@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import DashboardModeracao from './DashboardModeracao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 const API = 'http://localhost:8000';
 const PAGE_SIZE = 10;
@@ -344,6 +345,7 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
 }
 
 export default function ModerationPanel() {
+  const { confirmar, solicitarTexto } = useDialogo();
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -468,8 +470,8 @@ export default function ModerationPanel() {
 
   const handleCancellationDecision = async (item, decisao) => {
     const action = decisao === 'aprovar' ? 'aprovar' : 'recusar';
-    if (!window.confirm(`Deseja ${action} o cancelamento do acordo "${item.acordo_titulo}"?`)) return;
-    const resposta = window.prompt('Observação administrativa (opcional):', '');
+    if (!await confirmar(`Deseja ${action} o cancelamento do acordo "${item.acordo_titulo}"?`, { titulo: 'Decisão de cancelamento', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
+    const resposta = await solicitarTexto('Inclua uma observação administrativa, se necessário.', { titulo: 'Observação administrativa', placeholder: 'Observação opcional' });
     if (resposta === null) return;
 
     try {
@@ -491,7 +493,7 @@ export default function ModerationPanel() {
 
   const handleReportDecision = async (report, newStatus) => {
     const action = newStatus === 'procedente' ? 'aprovar' : 'recusar';
-    if (!window.confirm(`Deseja ${action} a denúncia contra "${report.target_name || report.target_id}"?`)) return;
+    if (!await confirmar(`Deseja ${action} a denúncia contra "${report.target_name || report.target_id}"?`, { titulo: 'Decisão sobre denúncia', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
 
     setError('');
     try {

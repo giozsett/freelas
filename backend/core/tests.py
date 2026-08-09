@@ -575,6 +575,32 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(listing.data['count'], 1)
         self.assertEqual(listing.data['results'][0]['status'], 'aprovada')
 
+    def test_acordo_pendente_pagamento_aceita_solicitacao_de_alteracao(self):
+        self.client.force_authenticate(self.freelancer)
+
+        response = self.client.patch(
+            f'/api/acordos/{self.acordo.id}/',
+            {
+                'tem_solicitacao': True,
+                'justificativa_alteracao': 'Precisamos alinhar o escopo antes do pagamento.',
+                'proposto_valor': 1350,
+                'proposta_descricao': 'Site institucional com uma página adicional.',
+                'proposta_conclusao_prevista': '2026-11-10',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Pendente Pagamento')
+        self.assertTrue(self.acordo.tem_solicitacao)
+        self.assertTrue(
+            SolicitacaoAlteracaoAcordo.objects.filter(
+                acordo=self.acordo,
+                status='pendente',
+            ).exists(),
+        )
+
     def test_retorno_publico_redireciona_para_frontend_local(self):
         response = self.client.get('/api/pagamentos/retorno/acordo/success/')
         self.assertEqual(response.status_code, 302)
