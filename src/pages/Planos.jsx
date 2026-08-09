@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 export default function Plans() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const { alerta } = useDialogo();
 
   const plans = [
     {
@@ -41,7 +43,7 @@ export default function Plans() {
   const handleSubscribe = async (planId) => {
     const checkoutWindow = planId === 'free' ? null : window.open('', '_blank');
     if (planId !== 'free' && !checkoutWindow) {
-      alert('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.');
+      await alerta('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
       return;
     }
 
@@ -75,7 +77,7 @@ export default function Plans() {
     } catch (err) {
       if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
       console.error(err);
-      alert(err.message || 'Erro na comunicação com o servidor.');
+      await alerta(err.message || 'Erro na comunicação com o servidor.', { titulo: 'Erro ao alterar o plano', variante: 'perigo' });
       setLoadingPlan(null);
     }
   };

@@ -22,11 +22,13 @@ import {
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 import { useNotificacoes } from '../context/ContextoNotificacao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 export default function MeusFreelas() {
   const { user } = useAuth();
   const { role } = useRole();
   const { marcarLidas } = useNotificacoes();
+  const { confirmar } = useDialogo();
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
   const backendRole = isFreelancer ? 'freelancer' : 'contratante';
@@ -38,9 +40,9 @@ export default function MeusFreelas() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCards, setExpandedCards] = useState({});
   const [payingAgreementId, setPayingAgreementId] = useState(null);
-  const [simulatingAgreementId, setSimulatingAgreementId] = useState(null);
   const [concludingAgreementId, setConcludingAgreementId] = useState(null);
   const [agreementTab, setAgreementTab] = useState('ativos');
+  const [pendingRequestsExpanded, setPendingRequestsExpanded] = useState(false);
   const [cancellationAgreement, setCancellationAgreement] = useState(null);
   const [cancellationReason, setCancellationReason] = useState('');
   const [requestingCancellation, setRequestingCancellation] = useState(false);
@@ -105,8 +107,9 @@ export default function MeusFreelas() {
   };
 
   const handleConcludeAgreement = async (agreement) => {
-    const confirmed = window.confirm(
-      `Deseja concluir o acordo "${agreement.titulo_anuncio}"? Depois disso, as duas partes poderão enviar suas avaliações.`
+    const confirmed = await confirmar(
+      `Deseja concluir o acordo "${agreement.titulo_anuncio}"? Depois disso, as duas partes poderão enviar suas avaliações.`,
+      { titulo: 'Concluir acordo', confirmarTexto: 'Concluir acordo' },
     );
     if (!confirmed) return;
 
@@ -129,35 +132,6 @@ export default function MeusFreelas() {
     } catch (error) {
       showStatus(error.message, 'error');
       setConcludingAgreementId(null);
-    }
-  };
-
-  const handleSimulatePayment = async (agreement) => {
-    if (!window.confirm(
-      `Ativar o acordo "${agreement.titulo_anuncio}" usando uma aprovação exclusivamente local de teste?`,
-    )) return;
-
-    setSimulatingAgreementId(agreement.id);
-    try {
-      const response = await fetch(
-        `http://localhost:8000/api/pagamentos/acordo/${agreement.id}/simular/`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${localStorage.getItem('token')}`,
-          },
-        },
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `Falha na simulação (HTTP ${response.status}).`);
-      }
-      showStatus(data.message, 'success');
-      fetchAgreements();
-    } catch (error) {
-      showStatus(error.message, 'error');
-    } finally {
-      setSimulatingAgreementId(null);
     }
   };
 
@@ -538,14 +512,17 @@ export default function MeusFreelas() {
       {/* Notifications / Received Requests Section */}
       {receivedRequests.length > 0 && (
         <div style={{ marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Bell size={20} color="var(--primary)" />
-            <h2 style={{ fontSize: '1.25rem', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Solicitações Pendentes ({receivedRequests.length})
-            </h2>
-          </div>
+          <button
+            type="button"
+            onClick={() => setPendingRequestsExpanded(current => !current)}
+            aria-expanded={pendingRequestsExpanded}
+            className="pending-requests-toggle"
+          >
+            <span><Bell size={20} /> Você possui solicitações pendentes ({receivedRequests.length})</span>
+            <ChevronDown size={21} className={`rotate-chevron ${pendingRequestsExpanded ? 'rotated' : ''}`} />
+          </button>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {pendingRequestsExpanded && <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             {receivedRequests.map(app => (
               <div
                 key={app.id}
@@ -627,7 +604,7 @@ export default function MeusFreelas() {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
         </div>
       )}
 
@@ -682,7 +659,7 @@ export default function MeusFreelas() {
       {/* Aguardando Pagamento Section */}
       {pendingPaymentAgreements.length > 0 && (
         <div style={{ marginBottom: '3rem' }}>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--warning-color)' }}>
+          <h2 className="pending-payment-value" style={{ fontSize: '1.6rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Aguardando Pagamento do Serviço ({pendingPaymentAgreements.length})</span>
             <span style={{ fontSize: '0.9rem', opacity: 0.6, fontWeight: 'normal' }}>Checkout pendente</span>
           </h2>
@@ -691,14 +668,14 @@ export default function MeusFreelas() {
             {pendingPaymentAgreements.map(app => {
               const userIsContractor = isContractorOfAgreement(app);
               return (
-                <div key={app.id} className="card" style={{ borderLeft: '5px solid var(--warning-color)', background: 'var(--warning-soft)' }}>
+                <div key={app.id} className="card pending-payment-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className="badge" style={{ background: 'var(--warning-color)', color: 'var(--warning-contrast)' }}>
+                        <span className="badge pending-payment-badge">
                           Pendente de Pagamento
                         </span>
-                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', fontWeight: 'bold' }}>
+                        <span className="badge role-badge">
                           Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                         </span>
                         {app.cancelamento_pendente && (
@@ -725,42 +702,35 @@ export default function MeusFreelas() {
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                    <div className="pending-payment-actions">
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--warning-color)' }}>
+                        <div className="pending-payment-value" style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
                           Valor do serviço: {Number(app.valor_acordado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>
                       </div>
 
                       {userIsContractor ? (
-                        <>
                           <button
                             onClick={() => handlePayService(app.id)}
-                            className="btn"
+                            className="btn pending-payment-button"
                             disabled={payingAgreementId !== null || Boolean(app.cancelamento_pendente)}
-                            style={{ background: 'var(--warning-color)', color: 'var(--warning-contrast)', border: 'none', padding: '0.6rem 1.2rem', fontSize: '0.95rem', cursor: 'pointer' }}
+                            style={{ border: 'none', padding: '0.6rem 1.2rem', fontSize: '0.95rem', cursor: 'pointer' }}
                           >
-                            {payingAgreementId === app.id ? 'Abrindo checkout...' : 'Pagar serviço'}
+                            {payingAgreementId === app.id ? 'Abrindo checkout...' : 'Pagar'}
                           </button>
-                          {import.meta.env.DEV && !app.cancelamento_pendente && (
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              disabled={simulatingAgreementId !== null}
-                              onClick={() => handleSimulatePayment(app)}
-                              style={{ fontSize: '0.82rem', padding: '0.45rem 0.75rem' }}
-                            >
-                              {simulatingAgreementId === app.id
-                                ? 'Ativando teste...'
-                                : 'Simular aprovação de teste'}
-                            </button>
-                          )}
-                        </>
                       ) : (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--warning-color)', fontStyle: 'italic', textAlign: 'right' }}>
+                        <div className="pending-payment-waiting" style={{ fontSize: '0.85rem', fontStyle: 'italic', textAlign: 'right' }}>
                           Aguardando pagamento pelo contratante
                         </div>
                       )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={Boolean(app.tem_solicitacao) || Boolean(app.cancelamento_pendente)}
+                        onClick={() => handleOpenModal(app)}
+                      >
+                        <Edit size={15} /> {app.tem_solicitacao ? 'Alteração pendente' : 'Solicitar alteração'}
+                      </button>
                       {app.cancelamento_pendente ? (
                         <div style={{ fontSize: '0.82rem', color: 'var(--danger-color)', textAlign: 'right', maxWidth: '260px' }}>
                           Você enviou sua solicitação de cancelamento. Aguarde a aprovação da moderação.
@@ -810,7 +780,7 @@ export default function MeusFreelas() {
                   >
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', fontWeight: 'bold' }}>
+                        <span className="badge role-badge">
                           Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                         </span>
                         {app.tem_solicitacao && (
@@ -1030,11 +1000,7 @@ export default function MeusFreelas() {
               return (
                 <div
                   key={app.id}
-                  className="card hover-lift"
-                  style={{
-                    borderLeft: `5px solid ${isConcluido ? 'var(--success-color)' : 'var(--danger-color)'}`,
-                    opacity: 0.85
-                  }}
+                  className={`card hover-lift history-agreement-card ${agreementTab === 'concluidos' ? 'completed-agreement-card' : 'cancelled-agreement-card'}`}
                 >
                   {/* Summary / Header view - Always Visible */}
                   <div
@@ -1043,13 +1009,10 @@ export default function MeusFreelas() {
                   >
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className={`badge ${isConcluido ? 'success' : 'danger'}`} style={{
-                          background: isConcluido ? 'var(--success-soft)' : 'var(--danger-soft)',
-                          color: isConcluido ? 'var(--success-color)' : 'var(--danger-color)'
-                        }}>
+                        <span className={`badge history-status-badge ${isConcluido ? 'completed' : 'cancelled'}`}>
                           {app.status_acordo}
                         </span>
-                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', fontWeight: 'bold' }}>
+                        <span className="badge role-badge">
                           Seu Papel: {isContractorOfAgreement(app) ? 'Contratante' : 'Freelancer'}
                         </span>
                         <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>

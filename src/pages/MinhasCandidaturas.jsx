@@ -9,6 +9,7 @@ export default function MyApplications() {
   const { marcarLidas } = useNotificacoes();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('ativas');
 
   useEffect(() => {
     marcarLidas(['candidatura']);
@@ -37,6 +38,11 @@ export default function MyApplications() {
     });
   }, [user]);
 
+  const isFinalizada = (app) => app.indisponivel || app.status !== 'pendente';
+  const activeApplications = applications.filter(app => !isFinalizada(app));
+  const finishedApplications = applications.filter(isFinalizada);
+  const visibleApplications = activeTab === 'ativas' ? activeApplications : finishedApplications;
+
   return (
     <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
@@ -48,11 +54,29 @@ export default function MyApplications() {
         Confira o histórico das suas propostas enviadas aos contratantes e acompanhe os resultados.
       </p>
 
+      <div role="tablist" aria-label="Filtrar candidaturas" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' }}>
+        {[
+          ['ativas', `Ativas (${activeApplications.length})`],
+          ['finalizadas', `Finalizadas (${finishedApplications.length})`],
+        ].map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            onClick={() => setActiveTab(tab)}
+            style={{ background: 'none', border: 'none', borderBottom: activeTab === tab ? '3px solid var(--primary)' : '3px solid transparent', color: activeTab === tab ? 'var(--primary)' : 'var(--text-secondary)', cursor: 'pointer', font: 'inherit', fontWeight: activeTab === tab ? 700 : 500, padding: '0.8rem 1rem', whiteSpace: 'nowrap' }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando candidaturas...</div>
-        ) : applications.length > 0 ? (
-          applications.map(app => {
+        ) : visibleApplications.length > 0 ? (
+          visibleApplications.map(app => {
             const isUnavailable = app.indisponivel || app.status === 'encerrada';
             const isExpired = app.motivo_indisponibilidade === 'Anúncio expirado.';
             return (
@@ -107,11 +131,20 @@ export default function MyApplications() {
             </div>
             );
           })
-        ) : (
+        ) : applications.length === 0 ? (
            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
              <h3 style={{ marginBottom: '1rem' }}>Você ainda não se candidatou a nenhum anúncio.</h3>
              <Link to="/" className="btn dark-text">Procurar vagas e serviços</Link>
            </div>
+        ) : (
+          <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>
+              {activeTab === 'ativas' ? 'Nenhuma candidatura ativa.' : 'Nenhuma candidatura finalizada.'}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              {activeTab === 'ativas' ? 'Suas candidaturas pendentes aparecerão aqui.' : 'O histórico de candidaturas encerradas aparecerá aqui.'}
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 export default function SubscriptionSetup() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [selectedPlanId, setSelectedPlanId] = useState('gold'); // Default is 'gold'
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { alerta } = useDialogo();
 
   const plans = [
     {
@@ -43,7 +45,7 @@ export default function SubscriptionSetup() {
     e.preventDefault();
     const checkoutWindow = selectedPlanId === 'free' ? null : window.open('', '_blank');
     if (selectedPlanId !== 'free' && !checkoutWindow) {
-      alert('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.');
+      await alerta('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
       return;
     }
 
@@ -83,7 +85,7 @@ export default function SubscriptionSetup() {
     } catch (err) {
       if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
       console.error('Error saving subscription plan', err);
-      alert(err.message || 'Erro ao configurar a assinatura.');
+      await alerta(err.message || 'Erro ao configurar a assinatura.', { titulo: 'Erro na assinatura', variante: 'perigo' });
       setIsSubmitting(false);
     }
   };
