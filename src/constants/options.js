@@ -1,41 +1,15 @@
-export const CATEGORIAS_SERVICO = [
-  "Desenvolvimento Web",
-  "Design Gráfico",
-  "Marketing Digital",
-  "Redação e Tradução",
-  "Edição de Vídeo",
-  "Suporte Administrativo",
-  "Atendimento ao Cliente",
-  "Gestão de Projetos",
-  "Desenvolvimento Mobile",
-  "Consultoria",
-  "Animais",
-  "Serviços Domésticos",
-  "Tecnologia",
-  "Educação",
-  "Outros"
-];
+import professionalOptions from '../data/professional-options.json';
+
+export const CATEGORIAS_COM_HABILIDADES = professionalOptions.categories;
+
+export const CATEGORIAS_SERVICO = CATEGORIAS_COM_HABILIDADES.map(
+  (categoria) => categoria.name,
+);
+
+export const HABILIDADES_POR_CATEGORIA = Object.fromEntries(
+  CATEGORIAS_COM_HABILIDADES.map((categoria) => [categoria.name, categoria.skills]),
+);
 
 export const HABILIDADES_PROFISSIONAIS = [
-  "React",
-  "Node.js",
-  "Python",
-  "JavaScript",
-  "UI/UX Design",
-  "Figma",
-  "Photoshop",
-  "SEO",
-  "Copywriting",
-  "Inglês",
-  "Espanhol",
-  "Gestão de Tráfego",
-  "AWS",
-  "Docker",
-  "Atendimento B2B",
-  "Atendimento B2C",
-  "Edição Premiere",
-  "HTML/CSS",
-  "Adestramento Básico",
-  "Cuidados com Pet",
-  "Passeador de Cães"
-].sort();
+  ...new Set(CATEGORIAS_COM_HABILIDADES.flatMap((categoria) => categoria.skills)),
+].sort((a, b) => a.localeCompare(b, 'pt-BR'));

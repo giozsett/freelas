@@ -5,13 +5,16 @@ import './index.css';
 import { ThemeProvider } from './context/ContextoTema.jsx';
 import { AuthProvider } from './context/ContextoAutenticacao.jsx';
 import { RoleProvider } from './context/ContextoPapel.jsx';
+import { NotificacaoProvider } from './context/ContextoNotificacao.jsx';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
       <RoleProvider>
         <ThemeProvider>
-          <App />
+          <NotificacaoProvider>
+            <App />
+          </NotificacaoProvider>
         </ThemeProvider>
       </RoleProvider>
     </AuthProvider>

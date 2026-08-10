@@ -1,13 +1,19 @@
 import { useParams, Link } from 'react-router-dom';
-import { User, Check, X, Tag, Clock } from 'lucide-react';
+import { Check, X, Tag } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function ManageAdApplications() {
   const { id } = useParams();
+  const { marcarLidas } = useNotificacoes();
   const [ad, setAd] = useState(null);
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    marcarLidas(['candidatura']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -64,23 +70,26 @@ export default function ManageAdApplications() {
       body: JSON.stringify({ status: newStatus.toLowerCase() })
     })
     .then(res => {
-      if (res.ok) {
-        // Update local state for candidatures
-        setApplications(apps => apps.map(app => 
-           app.id === appId ? { ...app, status: newStatus.toLowerCase() } : app
-        ));
-        
-        // If approved, update ad status locally as well
-        if (newStatus.toLowerCase() === 'aprovada') {
-           setAd(prev => prev ? { ...prev, status_anuncio: 'Finalizado' } : null);
+      return res.json().then(data => ({ ok: res.ok, data }));
+    })
+    .then(({ ok, data }) => {
+      if (!ok) {
+        throw new Error(data.error || 'Não foi possível atualizar a candidatura.');
+      }
+
+      setApplications(apps => apps.map(app => {
+        if (app.id === appId) return { ...app, status: newStatus.toLowerCase() };
+        if (newStatus.toLowerCase() === 'aprovada' && app.status === 'pendente') {
+          return { ...app, status: 'encerrada', indisponivel: true };
         }
-      } else {
-        console.error('Failed to update status');
+        return app;
+      }));
+
+      if (newStatus.toLowerCase() === 'aprovada') {
+        setAd(prev => prev ? { ...prev, status_anuncio: 'Finalizado' } : null);
       }
     })
-    .catch(err => {
-      console.error('Error updating status:', err);
-    });
+    .catch(err => setErrorMsg(err.message));
   };
 
   if (isLoading) {
@@ -92,6 +101,7 @@ export default function ManageAdApplications() {
   }
 
   const adStatus = ad.status_anuncio || 'Em aberto';
+  const isExpired = adStatus === 'Vencido';
 
   return (
     <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
@@ -110,6 +120,10 @@ export default function ManageAdApplications() {
          </div>
          <div className="badge"><Tag size={12} style={{ marginRight: '4px' }}/> {ad.category}</div>
       </div>
+
+      {isExpired && (
+        <p className="expired-ads-help">Este anúncio expirou. As candidaturas podem ser consultadas, mas não podem mais ser aprovadas ou recusadas.</p>
+      )}
       
       <h3 style={{ fontSize: '1.25rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
          Propostas Recebidas ({applications.length})
@@ -134,18 +148,24 @@ export default function ManageAdApplications() {
                </div>
 
                {app.status !== 'pendente' && (
-                  <span className="badge" style={{ background: app.status === 'aprovada' ? '#1dd1a1' : '#ff6b6b', color: 'white', borderColor: 'transparent' }}>
-                    {app.status === 'aprovada' ? 'Aprovada' : 'Recusada'}
+                  <span className="badge" style={{ background: app.status === 'aprovada' ? '#1dd1a1' : app.status === 'encerrada' ? '#777' : '#ff6b6b', color: 'white', borderColor: 'transparent' }}>
+                    {app.status === 'aprovada' ? 'Aprovada' : app.status === 'encerrada' ? 'Indisponível' : 'Recusada'}
                   </span>
                )}
             </div>
 
+            {app.status === 'encerrada' && (
+              <p style={{ margin: 0, padding: '0.75rem 1rem', borderRadius: '8px', background: 'rgba(120,120,120,0.12)', opacity: 0.8 }}>
+                Esta candidatura foi encerrada porque outra proposta já foi aprovada.
+              </p>
+            )}
+
             <div style={{ background: 'var(--bg-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                <div style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Mensagem de Apresentação</div>
-               <p style={{ margin: 0, fontStyle: 'italic', opacity: 0.9 }}>"{app.mensagem}"</p>
+               <p style={{ margin: 0, fontStyle: 'italic', opacity: 0.9 }}>“{app.mensagem}”</p>
             </div>
 
-            {app.status === 'pendente' && (
+            {app.status === 'pendente' && !isExpired && (
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                  <button className="btn" style={{ flex: 1, background: '#1dd1a1', border: 'none' }} onClick={() => handleUpdateStatus(app.id, 'aprovada')}>
                    <Check size={18} /> Aprovar

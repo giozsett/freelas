@@ -1,21 +1,41 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
+import { useAuth } from '../context/ContextoAutenticacao';
 
 export default function ModeratorLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Simplified mock logic since we don't have complete roles on backend token yet
-    if (username === 'admin' && password === 'admin') {
+    setError('');
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error('Usuário ou senha inválidos.');
+      }
+      if (!data.user?.is_staff) {
+        throw new Error('Este usuário não possui permissão administrativa.');
+      }
+      login(data.user, data.token);
       localStorage.setItem('isModerator', 'true');
-      console.log('Login efetuado com sucesso.');
       navigate('/moderation-panel');
-    } else {
-      console.error('Credenciais inválidas. Tente admin / admin.');
+    } catch (err) {
+      localStorage.removeItem('isModerator');
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,6 +47,12 @@ export default function ModeratorLogin() {
           <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Acesso Restrito</h1>
           <p style={{ opacity: 0.8, marginTop: '0.5rem' }}>Login para Moderadores</p>
         </div>
+
+        {error && (
+          <div style={{ color: '#ff4757', marginBottom: '1rem', fontSize: '0.9rem' }}>
+            {error}
+          </div>
+        )}
         
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div>
@@ -51,8 +77,8 @@ export default function ModeratorLogin() {
             />
           </div>
           
-          <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', padding: '1rem' }}>
-            Acessar Painel
+          <button type="submit" disabled={loading} className="btn dark-text" style={{ marginTop: '0.5rem', padding: '1rem' }}>
+            {loading ? 'Entrando...' : 'Acessar Painel'}
           </button>
         </form>
       </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
+import { useDialogo } from '../context/ContextoDialogo';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 48 48" style={{ marginRight: '8px' }}>
@@ -29,6 +30,7 @@ export default function Cadastro() {
 
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { alerta } = useDialogo();
 
   const checkPasswordStrength = (pwd) => {
     if (!pwd) return '';
@@ -67,15 +69,9 @@ export default function Cadastro() {
       });
       const data = await response.json();
       if (response.ok) {
-        // 2. Envia o código de verificação
-        await fetch('http://localhost:8000/api/auth/enviar-codigo/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-        // 3. Muda para a etapa de verificação
-        setEmailCadastrado(email);
-        setEtapa('verificacao');
+        // 2. Realiza o login direto sem exigir código de verificação no cadastro comum
+        login(data.user, data.token);
+        navigate('/subscription-setup');
       } else {
         if (data.username || data.email) {
           setErrorMsg('Já há um usuário cadastrado com esse email.');
@@ -118,7 +114,7 @@ export default function Cadastro() {
         body: JSON.stringify({ email: emailCadastrado })
       });
       setErrorMsg('');
-      alert('Código reenviado para o seu email!');
+      await alerta('Código reenviado para o seu email!', { titulo: 'Código enviado', variante: 'sucesso' });
     } catch (err) {
       setErrorMsg('Erro ao reenviar o código.');
     }

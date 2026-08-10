@@ -1,21 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Bell, MessageSquare, UserCircle } from 'lucide-react';
+import { Moon, Sun, MessageSquare } from 'lucide-react';
 import { useTheme } from '../context/ContextoTema';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { role, toggleRole } = useRole();
+  const { naoLidas, porTipo, marcarLidas } = useNotificacoes();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // Mocking notifications for demonstration
-  const [hasNewMessages] = useState(true);
-  const [hasNewApplications] = useState(true);
+  const initial = user
+    ? (`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || '?').charAt(0).toUpperCase()
+    : '?';
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -68,7 +70,6 @@ export default function Navbar() {
 
             <Link to="/chat" title="Mensagens" aria-label="Mensagens" style={{ color: 'var(--text-color)', display: 'flex', alignItems: 'center', position: 'relative' }}>
               <MessageSquare size={24} />
-              {hasNewMessages && <div className="notification-dot"></div>}
             </Link>
 
             {/* Profile Dropdown */}
@@ -81,23 +82,35 @@ export default function Navbar() {
                 {user?.profile?.foto_perfil ? (
                   <img src={user.profile.foto_perfil} alt="Foto" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                 ) : (
-                  <UserCircle size={28} />
+                  <span style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--holo-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: '700', color: 'var(--primary)', textTransform: 'uppercase' }}>
+                    {initial}
+                  </span>
                 )}
-                {hasNewApplications && <div className="notification-dot"></div>}
+                {naoLidas > 0 && <div className="notification-dot"></div>}
               </div>
               <div className="dropdown-content" style={{ display: dropdownOpen ? 'block' : 'none' }}>
                 <Link to="/profile" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meu Perfil</Link>
-                <Link to="/my-ads" className="dropdown-item" onClick={() => setDropdownOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Link to="/my-ads" className="dropdown-item" onClick={() => { setDropdownOpen(false); marcarLidas(['candidatura']); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   Meus Anúncios
-                  {hasNewApplications && role === 'contractor' && <div className="notification-dot" style={{ position: 'static' }}></div>}
+                  {porTipo.candidatura > 0 && role === 'contractor' && <div className="notification-dot" style={{ position: 'static' }}></div>}
                 </Link>
-                <Link to="/my-applications" className="dropdown-item" onClick={() => setDropdownOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Link to="/my-applications" className="dropdown-item" onClick={() => { setDropdownOpen(false); marcarLidas(['candidatura']); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   Minhas Candidaturas
-                  {hasNewApplications && role === 'freelancer' && <div className="notification-dot" style={{ position: 'static' }}></div>}
+                  {porTipo.candidatura > 0 && role === 'freelancer' && <div className="notification-dot" style={{ position: 'static' }}></div>}
+                </Link>
+                <Link to="/my-freelas" className="dropdown-item" onClick={() => { setDropdownOpen(false); marcarLidas(['acordo']); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Meus Freelas
+                  {porTipo.acordo > 0 && <div className="notification-dot" style={{ position: 'static' }}></div>}
+                </Link>
+                <Link to="/my-reviews" className="dropdown-item" onClick={() => { setDropdownOpen(false); marcarLidas(['avaliacao']); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Minhas Avaliações
+                  {porTipo.avaliacao > 0 && <div className="notification-dot" style={{ position: 'static' }}></div>}
+                </Link>
+                <Link to="/my-payments" className="dropdown-item" onClick={() => { setDropdownOpen(false); marcarLidas(['pagamento']); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Meus Pagamentos
+                  {porTipo.pagamento > 0 && <div className="notification-dot" style={{ position: 'static' }}></div>}
                 </Link>
                 <Link to="/plans" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Planos e Assinaturas</Link>
-                <Link to="/my-payments" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Pagamentos</Link>
-                <Link to="/my-freelas" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meus Freelas</Link>
                 <button
                   onClick={handleLogout}
                   className="dropdown-item"

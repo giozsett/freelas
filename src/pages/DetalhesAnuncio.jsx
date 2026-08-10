@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { User, MapPin, Tag, MessageSquare, Star, Zap, Search, ShieldCheck, X, AlertTriangle } from 'lucide-react';
+import { User, MapPin, Wifi, Tag, MessageSquare, Star, ShieldCheck, X, AlertTriangle } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import { useAuth } from '../context/ContextoAutenticacao';
 
@@ -51,13 +51,14 @@ export default function AdDetails() {
           status_anuncio: data.status_anuncio || 'Em aberto',
           author_id: data.author,
           author: data.author_name || 'Usuário Desconhecido',
-          rating: data.author_rating || 4.5,
-          reviews: 10,
+          rating: data.author_rating ?? null,
           category: data.category,
           skills: data.skills || [],
           locationType: data.location_type,
-          address: data.address,
-          city: 'Digital', // City could be inferred or stored in future
+          address: data.address || '',
+          addressNumber: data.address_number || '',
+          city: data.cidade || '',
+          state: data.estado || '',
           price: data.price,
           price_unit: data.price_unit,
           description: data.description,
@@ -142,6 +143,8 @@ export default function AdDetails() {
     return <div style={{ textAlign: 'center', padding: '3rem' }}>Anúncio não encontrado.</div>;
   }
 
+  const isExpired = ad.status_anuncio === 'Vencido';
+
   // Determine reputation traits based on ad type
   const reputationLabel = ad.type === 'contractor' 
     ? "Este contratante é conhecido por responder rapidamente e efetuar pagamentos em dia."
@@ -153,6 +156,9 @@ export default function AdDetails() {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <div className="card">
+        {isExpired && (
+          <p className="expired-ads-help">Este anúncio expirou e não está mais disponível para novas candidaturas.</p>
+        )}
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1.5rem', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '250px' }}>
@@ -183,15 +189,21 @@ export default function AdDetails() {
               >
                 <User size={18} /> {ad.author}
               </Link>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f39c12', fontWeight: 'bold' }}>
-                <Star size={18} fill="currentColor" /> {ad.rating} ({ad.reviews})
+              <span className="ad-detail-rating" title={`Avaliação do anunciante como ${ad.type === 'contractor' ? 'contratante' : 'freelancer'}`}>
+                <Star size={18} fill={ad.rating !== null ? 'currentColor' : 'none'} /> {ad.rating ?? '—'}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', opacity: 0.8 }}>
-                <MapPin size={18} /> 
-                {ad.locationType === 'remoto' 
-                  ? 'Remoto' 
-                  : (ad.type === 'contractor' ? `${ad.address} - ${ad.city}` : ad.city)
-                }
+              <span className="ad-detail-location">
+                {ad.locationType === 'remoto' ? <Wifi size={18} /> : <MapPin size={18} />}
+                <span>
+                  <strong>
+                    {ad.locationType === 'remoto'
+                      ? 'Serviço remoto'
+                      : ([ad.city, ad.state].filter(Boolean).join(' - ') || 'Localização não informada')}
+                  </strong>
+                  {ad.locationType !== 'remoto' && (ad.address || ad.addressNumber) && (
+                    <small>{[ad.address, ad.addressNumber].filter(Boolean).join(', ')}</small>
+                  )}
+                </span>
               </span>
             </div>
           </div>
@@ -306,12 +318,12 @@ export default function AdDetails() {
         {(!user || user.id !== ad.author_id) && (
           <div style={{ display: 'flex', gap: '1rem', borderTop: 'var(--border-width) solid var(--border-color)', paddingTop: '2rem', flexWrap: 'wrap' }}>
              <button 
-               className={hasApplied ? "btn btn-secondary" : "btn"} 
+               className={hasApplied || isExpired ? "btn btn-secondary" : "btn"}
                style={{ flex: 2, padding: '1rem', fontSize: '1.2rem', minWidth: '200px' }}
-               onClick={() => !hasApplied && setIsModalOpen(true)}
-               disabled={hasApplied}
+               onClick={() => !hasApplied && !isExpired && setIsModalOpen(true)}
+               disabled={hasApplied || isExpired}
              >
-               <Star size={20} fill="currentColor" /> {hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
+               <Star size={20} fill="currentColor" /> {isExpired ? 'Anúncio expirado' : hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
              </button>
              <Link to="/chat" className="btn btn-secondary" style={{ flex: 1, padding: '1rem', minWidth: '150px' }}>
                <MessageSquare size={20} /> Tirar Dúvidas
@@ -406,7 +418,7 @@ export default function AdDetails() {
               </div>
               
               <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.5' }}>
-                Tem certeza que deseja excluir o anúncio <strong>"{ad.title}"</strong>?
+                Tem certeza que deseja excluir o anúncio <strong>&quot;{ad.title}&quot;</strong>?
                 <br /><br />
                 Atenção: Este anúncio continuará contando no limite mensal de anúncios do seu plano de assinatura (<strong>{user?.profile?.subscription_plan || 'Gratuito'}</strong>).
               </p>
