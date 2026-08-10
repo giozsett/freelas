@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, User, Plus, Trash2, Upload, ToggleLeft, ToggleRight, Briefcase, MapPin, Calendar, Pencil } from 'lucide-react';
+import { Camera, User, Plus, Trash2, Upload, ToggleLeft, ToggleRight, Briefcase, Pencil, Check } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 import { calcularTempo } from '../utils/calcularTempo';
 import ModalCrop from '../components/ModalCrop';
+import { useDialogo } from '../context/ContextoDialogo';
 
 const API = 'http://localhost:8000';
 
 export default function EditProfile() {
   const { user: authUser, token, login } = useAuth();
+  const { alerta } = useDialogo();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [activeEditTab, setActiveEditTab] = useState('identidade');
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState([{ name: '', level: 'iniciante' }]);
   const [categories, setCategories] = useState(['']);
@@ -35,7 +38,6 @@ export default function EditProfile() {
   const [emailVisivel, setEmailVisivel] = useState(true);
   const [telefoneVisivel, setTelefoneVisivel] = useState(true);
 
-  const [certificados, setCertificados] = useState([]);
   const [novoCertificado, setNovoCertificado] = useState({
     instituicao: '',
     nome_certificado: '',
@@ -193,7 +195,7 @@ export default function EditProfile() {
 
     try {
       if (!firstName.trim() || !lastName.trim()) {
-        alert('Preencha o nome e sobrenome.');
+        await alerta('Preencha o nome e sobrenome.', { titulo: 'Dados incompletos', variante: 'perigo' });
         setEnviando(false);
         return;
       }
@@ -285,7 +287,7 @@ export default function EditProfile() {
       navigate('/profile');
     } catch(err) {
       console.error(err);
-      alert('Erro ao salvar. Tente novamente.');
+      await alerta('Erro ao salvar. Tente novamente.', { titulo: 'Não foi possível salvar', variante: 'perigo' });
     } finally {
       setEnviando(false);
     }
@@ -491,10 +493,25 @@ export default function EditProfile() {
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Editar Perfil</h1>
       <div className="card">
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="edit-profile-tabs" role="tablist" aria-label="Seções da edição do perfil">
+          {[
+            ['identidade', 'Identidade e perfil'],
+            ['contato', 'Localização e contato'],
+            ['atuacao', 'Atuação profissional'],
+            ['historico', 'Formação e experiência'],
+          ].map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={activeEditTab === id} className={`profile-tab-option${activeEditTab === id ? ' selected' : ''}`} onClick={() => setActiveEditTab(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <h2 className="edit-profile-section-title">
+          {{ identidade: 'Identidade e apresentação', contato: 'Localização e contato', atuacao: 'Atuação profissional', historico: 'Formação e experiência' }[activeEditTab]}
+        </h2>
+        <form className="edit-profile-form tab-content-animation" data-active-tab={activeEditTab} onSubmit={handleSave}>
 
           {/* Banner */}
-          <div>
+          <div data-section="identidade">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Banner do Perfil</label>
             <div
               onClick={() => bannerInputRef.current?.click()}
@@ -567,7 +584,7 @@ export default function EditProfile() {
           </div>
 
           {/* Profile Picture */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <div data-section="identidade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
             <div style={{
               position: 'relative',
               width: '120px',
@@ -634,7 +651,7 @@ export default function EditProfile() {
           </div>
 
           {/* Curriculo */}
-          <div>
+          <div data-section="identidade">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Currículo (PDF)</label>
             <div style={{
               display: 'flex',
@@ -690,7 +707,7 @@ export default function EditProfile() {
           </div>
 
           {/* Name */}
-          <div>
+          <div data-section="identidade">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nome</label>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <input
@@ -715,7 +732,7 @@ export default function EditProfile() {
           </div>
 
           {/* Working Status */}
-          <div style={{
+          <div data-section="identidade" style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -748,7 +765,7 @@ export default function EditProfile() {
           </div>
 
           {/* Estado e Cidade */}
-          <div>
+          <div data-section="contato">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Localização</label>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <select
@@ -778,7 +795,7 @@ export default function EditProfile() {
           </div>
 
           {/* Telefone + Visibilidade */}
-          <div>
+          <div data-section="contato">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Telefone</label>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input className="input" type="tel" placeholder="(11) 99999-9999" value={telefone} onChange={(e) => setTelefone(e.target.value)} style={{ flex: 1 }} />
@@ -789,7 +806,7 @@ export default function EditProfile() {
           </div>
 
           {/* Visibilidade Email */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-color)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <div data-section="identidade" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-color)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
             <div>
               <span style={{ fontWeight: '500' }}>Email no perfil</span>
               <span style={{ display: 'block', fontSize: '0.85rem', opacity: 0.7, marginTop: '0.15rem' }}>{authUser?.email}</span>
@@ -801,7 +818,7 @@ export default function EditProfile() {
           </div>
 
           {/* Redes Sociais */}
-          <div>
+          <div data-section="contato">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Redes Sociais <span style={{ fontWeight: '400', fontSize: '0.85rem', opacity: 0.6 }}>(máx. 4)</span></label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {redesSociais.map((item, idx) => (
@@ -863,13 +880,13 @@ export default function EditProfile() {
           </div>
 
           {/* Bio */}
-          <div>
+          <div data-section="atuacao">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Biografia</label>
             <textarea className="input" rows="5" value={bio} onChange={(e) => setBio(e.target.value)} style={{ resize: 'none' }}></textarea>
           </div>
 
           {/* Categories */}
-          <div>
+          <div data-section="atuacao">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categorias de Serviço</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {categories.map((cat, index) => (
@@ -890,7 +907,7 @@ export default function EditProfile() {
           </div>
 
           {/* Skills */}
-          <div>
+          <div data-section="atuacao">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades e Expertise</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {skills.map((skill, index) => (
@@ -917,7 +934,7 @@ export default function EditProfile() {
           </div>
 
           {/* Certificates Section */}
-          <div>
+          <div data-section="historico">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Formação Acadêmica</label>
 
             {certificadosExistentes.length > 0 && (
@@ -1118,7 +1135,7 @@ export default function EditProfile() {
           </div>
 
           {/* Experience Section */}
-          <div>
+          <div data-section="historico">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <label style={{ fontWeight: '500', display: 'block' }}>Experiência Profissional</label>
               <button

@@ -1,377 +1,671 @@
-import { useState, useEffect } from 'react';
+/* eslint-disable react/prop-types */
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, User, FileText, CheckCircle, XCircle, X } from 'lucide-react';
+import {
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  RefreshCw,
+  ShieldAlert,
+  XCircle,
+} from 'lucide-react';
+import { useAuth } from '../context/ContextoAutenticacao';
+import DashboardModeracao from './DashboardModeracao';
+import { useDialogo } from '../context/ContextoDialogo';
+
+const API = 'http://localhost:8000';
+const PAGE_SIZE = 10;
+
+const statusStyle = (status) => {
+  if (status === 'aprovada' || status === 'procedente') {
+    return { color: '#1f9d62', background: 'rgba(46, 213, 115, 0.14)' };
+  }
+  if (status === 'recusada' || status === 'improcedente') {
+    return { color: '#ff4757', background: 'rgba(255, 71, 87, 0.12)' };
+  }
+  return { color: '#9a7200', background: 'rgba(255, 193, 7, 0.16)' };
+};
+
+const formatDate = (value) => (
+  value ? new Date(value).toLocaleString('pt-BR') : '—'
+);
+
+const formatMoney = (value) => Number(value || 0).toLocaleString('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
+
+const requestStatusLabel = (status) => {
+  if (status === 'aprovada') return 'Aprovado';
+  if (status === 'recusada') return 'Rejeitado';
+  return 'Pendente';
+};
+
+function StatusBadge({ status, label = status }) {
+  const statusLabel = status === 'pending' ? 'Pendente' : label;
+  return (
+    <span
+      className="badge"
+      style={{
+        ...statusStyle(status),
+        display: 'inline-flex',
+        textTransform: 'capitalize',
+        fontWeight: 700,
+      }}
+    >
+      {statusLabel}
+    </span>
+  );
+}
+
+function Pagination({ page, count, onChange }) {
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginTop: '1rem' }}>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        aria-label="Página anterior"
+        style={{ padding: '0.45rem 0.65rem' }}
+      >
+        <ChevronLeft size={17} />
+      </button>
+      <span style={{ fontSize: '0.9rem' }}>
+        Página <strong>{page}</strong> de <strong>{totalPages}</strong> · {count} registros
+      </span>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={page >= totalPages}
+        onClick={() => onChange(page + 1)}
+        aria-label="Próxima página"
+        style={{ padding: '0.45rem 0.65rem' }}
+      >
+        <ChevronRight size={17} />
+      </button>
+    </div>
+  );
+}
+
+function ReportTable({
+  data,
+  page,
+  loading,
+  expanded,
+  onToggle,
+  onPageChange,
+  onDecision,
+}) {
+  const rows = data.results || [];
+
+  return (
+    <>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+          <thead style={{ background: 'var(--surface-color)', textAlign: 'left' }}>
+            <tr>
+              {['ID', 'Alvo', 'Tipo', 'Status', 'Data', 'Detalhes'].map((label) => (
+                <th key={label} style={{ padding: '0.8rem', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center' }}>Carregando denúncias...</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center', opacity: 0.7 }}>Nenhuma denúncia encontrada.</td></tr>
+            ) : rows.map((report) => (
+              <ReportRows
+                key={report.id}
+                report={report}
+                isExpanded={Boolean(expanded[report.id])}
+                onToggle={() => onToggle(report.id)}
+                onDecision={onDecision}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination page={page} count={data.count || 0} onChange={onPageChange} />
+    </>
+  );
+}
+
+function ReportRows({ report, isExpanded, onToggle, onDecision }) {
+  const typeLabel = report.type === 'ad' ? 'Anúncio' : 'Usuário';
+
+  return (
+    <>
+      <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border-color)' }}>
+        <td style={{ padding: '0.75rem' }}>#{report.id}</td>
+        <td style={{ padding: '0.75rem', fontWeight: 600 }}>{report.target_name || `Registro ${report.target_id}`}</td>
+        <td style={{ padding: '0.75rem' }}>{typeLabel}</td>
+        <td style={{ padding: '0.75rem' }}><StatusBadge status={report.status} /></td>
+        <td style={{ padding: '0.75rem', fontSize: '0.85rem' }}>{formatDate(report.created_at)}</td>
+        <td style={{ padding: '0.75rem' }}>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            Ver <ChevronDown size={17} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
+          </button>
+        </td>
+      </tr>
+      {isExpanded && (
+        <tr className="moderation-expanded-row" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <td colSpan="6" style={{ padding: '0 1rem 1rem' }}>
+            <div className="moderation-expanded-content" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.8rem', fontSize: '0.9rem' }}>
+                <div><strong>Categoria:</strong><br />{report.category || 'Não informada'}</div>
+                <div><strong>Tipo do alvo:</strong><br />{typeLabel}</div>
+                <div><strong>ID do alvo:</strong><br />{report.target_id || '—'}</div>
+              </div>
+              <div style={{ marginTop: '1rem' }}>
+                <strong>Descrição da denúncia:</strong>
+                <p style={{ margin: '0.35rem 0 0', whiteSpace: 'pre-wrap' }}>{report.comment || 'Sem comentário adicional.'}</p>
+              </div>
+
+              {report.status === 'pending' && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => onDecision(report, 'improcedente')}>
+                    <XCircle size={16} /> Recusar denúncia
+                  </button>
+                  <button type="button" className="btn" onClick={() => onDecision(report, 'procedente')} style={{ background: '#2ed573', color: '#17351f' }}>
+                    <CheckCircle size={16} /> Aprovar denúncia
+                  </button>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function RequestTable({
+  kind,
+  data,
+  page,
+  loading,
+  expanded,
+  onToggle,
+  onPageChange,
+  onDecision,
+}) {
+  const isCancellation = kind === 'cancelamentos';
+  const rows = data.results || [];
+
+  return (
+    <>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '780px' }}>
+          <thead style={{ background: 'var(--surface-color)', textAlign: 'left' }}>
+            <tr>
+              {['ID', 'Acordo', 'Solicitante', 'Status', 'Data', 'Detalhes'].map((label) => (
+                <th key={label} style={{ padding: '0.8rem', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center' }}>Carregando registros...</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center', opacity: 0.7 }}>Nenhum registro encontrado.</td></tr>
+            ) : rows.map((item) => (
+              <RequestRows
+                key={item.id}
+                item={item}
+                isCancellation={isCancellation}
+                isExpanded={Boolean(expanded[item.id])}
+                onToggle={() => onToggle(item.id)}
+                onDecision={onDecision}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination page={page} count={data.count || 0} onChange={onPageChange} />
+    </>
+  );
+}
+
+function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision }) {
+  return (
+    <>
+      <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border-color)' }}>
+        <td style={{ padding: '0.75rem' }}>#{item.id}</td>
+        <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.acordo_titulo || `Acordo ${item.acordo}`}</td>
+        <td style={{ padding: '0.75rem' }}>
+          {item.solicitante_nome}
+          <div style={{ fontSize: '0.75rem', opacity: 0.65, textTransform: 'capitalize' }}>{item.papel_solicitante}</div>
+        </td>
+        <td style={{ padding: '0.75rem' }}>
+          <StatusBadge status={item.status} label={requestStatusLabel(item.status)} />
+        </td>
+        <td style={{ padding: '0.75rem', fontSize: '0.85rem' }}>{formatDate(item.criado_em)}</td>
+        <td style={{ padding: '0.75rem' }}>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            Ver <ChevronDown size={17} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
+          </button>
+        </td>
+      </tr>
+      {isExpanded && (
+        <tr className="moderation-expanded-row" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <td colSpan="6" style={{ padding: '0 1rem 1rem' }}>
+            <div className="moderation-expanded-content" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.8rem', fontSize: '0.9rem' }}>
+                <div><strong>Contratante:</strong><br />{item.nome_contratante || '—'}</div>
+                <div><strong>Freelancer:</strong><br />{item.nome_prestador || '—'}</div>
+                <div><strong>Status do acordo:</strong><br />{item.status_acordo || '—'}</div>
+                {isCancellation && <div><strong>Valor:</strong><br />{formatMoney(item.valor_acordado)}</div>}
+              </div>
+
+              <div style={{ marginTop: '1rem' }}>
+                <strong>Justificativa:</strong>
+                <p style={{ margin: '0.35rem 0 0', whiteSpace: 'pre-wrap' }}>{item.justificativa}</p>
+              </div>
+
+              {!isCancellation && (
+                <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.8rem' }}>
+                  <div>
+                    <strong>Valor:</strong><br />
+                    {formatMoney(item.valor_anterior)} → {formatMoney(item.valor_proposto)}
+                  </div>
+                  <div>
+                    <strong>Conclusão:</strong><br />
+                    {item.conclusao_anterior || '—'} → {item.conclusao_proposta || '—'}
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <strong>Descrição proposta:</strong>
+                    <p style={{ margin: '0.35rem 0 0', whiteSpace: 'pre-wrap' }}>{item.descricao_proposta || 'Sem alteração.'}</p>
+                  </div>
+                </div>
+              )}
+
+              {isCancellation && item.resposta_admin && (
+                <p style={{ margin: '1rem 0 0' }}><strong>Resposta do administrador:</strong> {item.resposta_admin}</p>
+              )}
+
+              {item.status !== 'pendente' && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '0.8rem',
+                  borderRadius: '8px',
+                  background: statusStyle(item.status).background,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  flexWrap: 'wrap',
+                }}>
+                  <div>
+                    <strong>Resultado:</strong>{' '}
+                    <StatusBadge status={item.status} label={requestStatusLabel(item.status)} />
+                  </div>
+                  <div>
+                    <strong>Avaliado em:</strong>{' '}
+                    {formatDate(isCancellation ? item.analisado_em : item.decidido_em)}
+                  </div>
+                  <div>
+                    <strong>Avaliado por:</strong>{' '}
+                    {(isCancellation ? item.analisado_por_nome : item.decidido_por_nome) || '—'}
+                  </div>
+                </div>
+              )}
+
+              {isCancellation && item.status === 'pendente' && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => onDecision(item, 'recusar')}>
+                    <XCircle size={16} /> Recusar
+                  </button>
+                  <button type="button" className="btn" onClick={() => onDecision(item, 'aprovar')} style={{ background: '#2ed573', color: '#17351f' }}>
+                    <CheckCircle size={16} /> Aprovar cancelamento
+                  </button>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
 
 export default function ModerationPanel() {
+  const { confirmar, solicitarTexto } = useDialogo();
   const navigate = useNavigate();
-  const [reports, setReports] = useState([]);
-  const [alteracoes, setAlteracoes] = useState([]);
-  const [activeTab, setActiveTab] = useState('denuncias');
-  const [selectedReport, setSelectedReport] = useState(null);
+  const { logout } = useAuth();
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [reports, setReports] = useState({ count: 0, results: [] });
+  const [cancelamentos, setCancelamentos] = useState({ count: 0, results: [] });
+  const [alteracoes, setAlteracoes] = useState({ count: 0, results: [] });
+  const [pages, setPages] = useState({ denuncias: 1, cancelamentos: 1, alteracoes: 1 });
+  const [filters, setFilters] = useState({ denuncias: '', cancelamentos: '', alteracoes: '' });
+  const [expanded, setExpanded] = useState({ denuncias: {}, cancelamentos: {}, alteracoes: {} });
+  const [loading, setLoading] = useState({ denuncias: false, cancelamentos: false, alteracoes: false });
+  const [error, setError] = useState('');
+
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
-    // Check if moderator is logged in
-    if (!localStorage.getItem('isModerator')) {
+    if (!localStorage.getItem('isModerator') || !token) {
       navigate('/moderator-login');
-      return;
     }
+  }, [navigate, token]);
 
-    // Fetch reports
-    fetch('http://localhost:8000/api/reports/')
-      .then(res => {
-        if (!res.ok) throw new Error('API indisponível');
-        return res.json();
-      })
-      .then(data => {
-         if (data.length > 0) {
-            setReports(data);
-         } else {
-             // Fallback to mock data to ensure UI displays clearly before seeding
-             setReports([
-                { id: 1, type: 'user', target_id: '2', target_name: 'Roberto Oliveira', category: 'spam', comment: 'Enviando mensagens irrelevantes no chat repetidamente.', status: 'pending', created_at: '2026-04-14T10:30:00Z' },
-                { id: 2, type: 'ad', target_id: '15', target_name: 'Passeador de Cães Estressado', category: 'fraude', comment: 'Pede pagamento adiantado e não aparece.', status: 'pending', created_at: '2026-04-14T11:45:00Z' },
-                { id: 3, type: 'user', target_id: '8', target_name: 'Usuário Falso', category: 'ofensivo', comment: 'Postou comentários rudes no meu perfil.', status: 'procedente', created_at: '2026-04-13T09:12:00Z' },
-             ]);
-         }
-      })
-      .catch((err) => {
-          console.error(err);
-          // Use mock data if API is down
-          setReports([
-            { id: 1, type: 'user', target_id: '2', target_name: 'Roberto Oliveira', category: 'spam', comment: 'Enviando mensagens irrelevantes no chat repetidamente.', status: 'pending', created_at: '2026-04-14T10:30:00Z' },
-            { id: 2, type: 'ad', target_id: '15', target_name: 'Passeador de Cães Estressado', category: 'fraude', comment: 'Pede pagamento adiantado e não aparece.', status: 'pending', created_at: '2026-04-14T11:45:00Z' },
-          ]);
-      });
+  const fetchReports = useCallback(async (page, statusFilter) => {
+    setLoading((prev) => ({ ...prev, denuncias: true }));
+    setError('');
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (statusFilter) params.set('status', statusFilter);
 
-    // Fetch agreement change requests (tem_solicitacao=true)
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:8000/api/acordos/?tem_solicitacao=true', {
-      headers: token ? { 'Authorization': `Token ${token}` } : {}
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('API de acordos indisponível');
-        return res.json();
-      })
-      .then(data => {
-         if (Array.isArray(data)) {
-            setAlteracoes(data);
-         }
-      })
-      .catch((err) => {
-          console.error('Error fetching alteracoes, using mock fallback:', err);
-          setAlteracoes([
-            {
-              id: 1,
-              titulo_anuncio: "Desenvolvimento de Landing Page responsiva",
-              nome_contratante: "Clínica Pet Feliz",
-              nome_prestador: "Gabriel Silva",
-              valor_acordado: 1200.0,
-              descricao_servico: "Criação de landing page responsiva em HTML/CSS/JS.",
-              status_acordo: "Ativo",
-              tem_solicitacao: true,
-              solicitado_por: "freelancer",
-              justificativa_alteracao: "O cliente pediu a inclusão de seções adicionais no formulário de contato e galeria de imagens.",
-              proposto_valor: 1600.0,
-              proposta_descricao: "Criação de landing page responsiva + formulário completo e galeria.",
-              proposta_conclusao_prevista: "2026-07-08",
-              data_confirmacao: "2026-06-15T10:00:00Z"
-            },
-            {
-              id: 4,
-              titulo_anuncio: "Criação de Identidade Visual",
-              nome_contratante: "Julia Souza",
-              nome_prestador: "Renato Dias",
-              valor_acordado: 500.0,
-              descricao_servico: "Design de logotipo, paleta de cores e tipografia.",
-              status_acordo: "Ativo",
-              tem_solicitacao: true,
-              solicitado_por: "contratante",
-              justificativa_alteracao: "Gostaria de estender o prazo em uma semana para revisar melhor os conceitos.",
-              proposto_valor: 500.0,
-              proposta_descricao: "Design de logotipo, paleta de cores e tipografia com mais revisões.",
-              proposta_conclusao_prevista: "2026-07-20",
-              data_confirmacao: "2026-06-18T11:00:00Z"
-            }
-          ]);
-      });
-  }, [navigate]);
-
-  const handleResolve = async (id, newStatus) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/reports/${id}/`, {
+      const response = await fetch(`${API}/api/reports/?${params}`, {
+        headers: { Authorization: `Token ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || 'Não foi possível carregar as denúncias.');
+      }
+      setReports(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading((prev) => ({ ...prev, denuncias: false }));
+    }
+  }, [token]);
+
+  const fetchRequests = useCallback(async (kind, page, statusFilter, silent = false) => {
+    if (!silent) {
+      setLoading((prev) => ({ ...prev, [kind]: true }));
+    }
+    setError('');
+    const endpoint = kind === 'cancelamentos'
+      ? '/api/admin/cancelamentos-acordo/'
+      : '/api/admin/alteracoes-acordo/';
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (statusFilter) params.set('status', statusFilter);
+
+    try {
+      const response = await fetch(`${API}${endpoint}?${params}`, {
+        headers: { Authorization: `Token ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || data.detail || 'Não foi possível carregar os registros.');
+      }
+      const normalizedData = Array.isArray(data)
+        ? { count: data.length, results: data }
+        : {
+            count: Number(data.count || 0),
+            results: Array.isArray(data.results) ? data.results : [],
+          };
+      if (kind === 'cancelamentos') setCancelamentos(normalizedData);
+      else setAlteracoes(normalizedData);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      if (!silent) {
+        setLoading((prev) => ({ ...prev, [kind]: false }));
+      }
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (activeTab === 'denuncias') {
+      fetchReports(pages.denuncias, filters.denuncias);
+    } else if (activeTab === 'cancelamentos' || activeTab === 'alteracoes') {
+      fetchRequests(activeTab, pages[activeTab], filters[activeTab]);
+    }
+  }, [activeTab, pages, filters, fetchReports, fetchRequests]);
+
+  useEffect(() => {
+    if (activeTab !== 'cancelamentos' && activeTab !== 'alteracoes') return undefined;
+
+    const refreshRequests = () => {
+      fetchRequests(
+        activeTab,
+        pages[activeTab],
+        filters[activeTab],
+        true,
+      );
+    };
+    const refreshInterval = window.setInterval(refreshRequests, 10000);
+    window.addEventListener('focus', refreshRequests);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+      window.removeEventListener('focus', refreshRequests);
+    };
+  }, [activeTab, fetchRequests, filters, pages]);
+
+  const changePage = (kind, page) => {
+    setPages((prev) => ({ ...prev, [kind]: page }));
+  };
+
+  const changeFilter = (kind, value) => {
+    setFilters((prev) => ({ ...prev, [kind]: value }));
+    setPages((prev) => ({ ...prev, [kind]: 1 }));
+  };
+
+  const toggleExpanded = (kind, id) => {
+    setExpanded((prev) => ({
+      ...prev,
+      [kind]: { ...prev[kind], [id]: !prev[kind][id] },
+    }));
+  };
+
+  const handleCancellationDecision = async (item, decisao) => {
+    const action = decisao === 'aprovar' ? 'aprovar' : 'recusar';
+    if (!await confirmar(`Deseja ${action} o cancelamento do acordo "${item.acordo_titulo}"?`, { titulo: 'Decisão de cancelamento', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
+    const resposta = await solicitarTexto('Inclua uma observação administrativa, se necessário.', { titulo: 'Observação administrativa', placeholder: 'Observação opcional' });
+    if (resposta === null) return;
+
+    try {
+      const response = await fetch(`${API}/api/admin/cancelamentos-acordo/${item.id}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Token ${token}`,
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ decisao, resposta_admin: resposta }),
       });
-      if (response.ok) {
-        setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
-      } else {
-        console.error('Erro ao resolver denúncia no backend.');
-        setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Não foi possível registrar a decisão.');
+      await fetchRequests('cancelamentos', pages.cancelamentos, filters.cancelamentos);
     } catch (err) {
-      console.error(err);
-      setReports(reports.map(r => r.id === id ? { ...r, status: newStatus } : r));
+      setError(err.message);
     }
-    setSelectedReport(null);
+  };
+
+  const handleReportDecision = async (report, newStatus) => {
+    const action = newStatus === 'procedente' ? 'aprovar' : 'recusar';
+    if (!await confirmar(`Deseja ${action} a denúncia contra "${report.target_name || report.target_id}"?`, { titulo: 'Decisão sobre denúncia', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
+
+    setError('');
+    try {
+      const response = await fetch(`${API}/api/reports/${report.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || data.detail || 'Não foi possível atualizar a denúncia.');
+      await fetchReports(pages.denuncias, filters.denuncias);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('isModerator');
+    logout();
     navigate('/moderator-login');
   };
 
+  const tabs = [
+    ['dashboard', 'Dashboard'],
+    ['denuncias', 'Denúncias'],
+    ['alteracoes', 'Alterações'],
+    ['cancelamentos', 'Cancelamentos'],
+    ['admin', 'Django Admin'],
+  ];
+
+  const currentData = activeTab === 'cancelamentos' ? cancelamentos : alteracoes;
+
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <ShieldAlert size={36} color="var(--holo-purple-real)" />
-            <h1 style={{ margin: 0 }}>Painel de Moderação</h1>
-         </div>
-         <button onClick={handleLogout} className="btn btn-secondary">Sair</button>
+    <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '0 1rem 2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <ShieldAlert size={36} color="var(--holo-purple-real)" />
+          <h1 style={{ margin: 0 }}>Painel de Moderação</h1>
+        </div>
+        <button type="button" onClick={handleLogout} className="btn btn-secondary">Sair</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-        <button 
-          onClick={() => setActiveTab('denuncias')} 
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: activeTab === 'denuncias' ? 'var(--holo-purple-real)' : 'inherit', 
-            fontWeight: activeTab === 'denuncias' ? 'bold' : 'normal',
-            borderBottom: activeTab === 'denuncias' ? '2px solid var(--holo-purple-real)' : 'none',
-            padding: '0.5rem 1rem',
-            cursor: 'pointer',
-            fontSize: '1.1rem'
-          }}
-        >
-          Denúncias
-        </button>
-        <button 
-          onClick={() => setActiveTab('alteracoes')} 
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: activeTab === 'alteracoes' ? 'var(--holo-purple-real)' : 'inherit', 
-            fontWeight: activeTab === 'alteracoes' ? 'bold' : 'normal',
-            borderBottom: activeTab === 'alteracoes' ? '2px solid var(--holo-purple-real)' : 'none',
-            padding: '0.5rem 1rem',
-            cursor: 'pointer',
-            fontSize: '1.1rem'
-          }}
-        >
-          Solicitações de Alteração
-        </button>
-        <button 
-          onClick={() => setActiveTab('admin')} 
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: activeTab === 'admin' ? 'var(--holo-purple-real)' : 'inherit', 
-            fontWeight: activeTab === 'admin' ? 'bold' : 'normal',
-            borderBottom: activeTab === 'admin' ? '2px solid var(--holo-purple-real)' : 'none',
-            padding: '0.5rem 1rem',
-            cursor: 'pointer',
-            fontSize: '1.1rem'
-          }}
-        >
-          Mais opções de admin
-        </button>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' }}>
+        {tabs.map(([id, label]) => (
+          <button
+            type="button"
+            key={id}
+            onClick={() => setActiveTab(id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === id ? '3px solid var(--holo-purple-real)' : '3px solid transparent',
+              color: activeTab === id ? 'var(--holo-purple-real)' : 'inherit',
+              padding: '0.8rem 1rem',
+              cursor: 'pointer',
+              fontWeight: activeTab === id ? 700 : 500,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'denuncias' && (
-        <div className="card">
-           <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Denúncias Recentes</h2>
-           
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {reports.length === 0 ? (
-                 <p>Nenhuma denúncia no momento.</p>
-              ) : (
-                 reports.map(report => (
-                    <div key={report.id} style={{ 
-                        padding: '1.25rem', 
-                        background: 'var(--bg-color)', 
-                        border: '1px solid var(--border-color)', 
-                        borderRadius: '8px',
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '1.5rem',
-                        alignItems: 'flex-start',
-                        opacity: report.status !== 'pending' ? 0.7 : 1
-                    }}>
-                        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '80px' }}>
-                            {report.type === 'user' ? <User size={32} color="var(--holo-salmon)" /> : <FileText size={32} color="var(--holo-purple-real)" />}
-                            <span className="badge" style={{ background: 'var(--surface-color)' }}>
-                                {report.type === 'user' ? 'Usuário' : 'Anúncio'}
-                            </span>
-                        </div>
-                        
-                        <div style={{ flex: 1, minWidth: '300px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{report.target_name}</h3>
-                                <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>
-                                   {new Date(report.created_at).toLocaleDateString()}
-                                </span>
-                            </div>
-                            
-                            <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#ff4757', textTransform: 'capitalize' }}>
-                               Motivo: {report.category}
-                            </p>
-                            <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '400px' }}>
-                               "{report.comment}"
-                            </p>
-                        </div>
-                        
-                        <div style={{ alignSelf: 'center' }}>
-                           {report.status !== 'pending' ? (
-                               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: report.status === 'procedente' ? '#1dd1a1' : '#ff4757', fontWeight: 'bold', textTransform: 'capitalize' }}>
-                                   {report.status === 'procedente' ? <CheckCircle size={20} /> : <XCircle size={20} />} {report.status}
-                               </span>
-                           ) : (
-                               <button onClick={() => setSelectedReport(report)} className="btn dark-text" style={{ padding: '0.5rem 1rem' }}>
-                                   Avaliar Denúncia
-                               </button>
-                           )}
-                        </div>
-                    </div>
-                 ))
-              )}
-           </div>
+      {error && (
+        <div style={{ color: '#ff4757', background: 'rgba(255,71,87,.1)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
+          {error}
         </div>
       )}
 
-      {activeTab === 'alteracoes' && (
-        <div className="card">
-           <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Solicitações de Alteração de Acordo</h2>
-           
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {alteracoes.length === 0 ? (
-                 <p>Nenhuma solicitação de alteração pendente no momento.</p>
-              ) : (
-                 alteracoes.map(alt => (
-                    <div key={alt.id} style={{ 
-                        padding: '1.25rem', 
-                        background: 'var(--bg-color)', 
-                        border: '1px solid var(--border-color)', 
-                        borderRadius: '8px'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
-                            <div>
-                                <span className="badge" style={{ background: 'var(--primary)', color: 'white', marginRight: '0.5rem' }}>
-                                    Acordo Ativo
-                                </span>
-                                <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.1)', color: '#ff4757' }}>
-                                    Solicitado por {alt.solicitado_por === 'freelancer' ? 'Freelancer' : 'Contratante'}
-                                </span>
-                                <h3 style={{ margin: '0.5rem 0 0 0', fontSize: '1.2rem' }}>{alt.titulo_anuncio}</h3>
-                            </div>
-                            <div style={{ textAlign: 'right', fontSize: '0.9rem', opacity: 0.8 }}>
-                                <strong>Contratante:</strong> {alt.nome_contratante}<br />
-                                <strong>Prestador:</strong> {alt.nome_prestador}
-                            </div>
-                        </div>
+      {activeTab === 'dashboard' && (
+        <DashboardModeracao />
+      )}
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.95rem' }}>
-                            <p style={{ margin: 0 }}>
-                                <strong>Justificativa do pedido:</strong> <span style={{ fontStyle: 'italic' }}>"{alt.justificativa_alteracao}"</span>
-                            </p>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.5rem', background: 'var(--surface-color)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                                <div>
-                                    <strong>Orçamento:</strong><br />
-                                    <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '0.5rem' }}>R$ {alt.valor_acordado}</span>
-                                    <span style={{ color: '#2ed573', fontWeight: 'bold' }}>→ R$ {alt.proposto_valor}</span>
-                                </div>
-                                <div>
-                                    <strong>Prazo Conclusão:</strong><br />
-                                    <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '0.5rem' }}>
-                                      {alt.conclusao_prevista ? new Date(alt.conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
-                                    </span>
-                                    <span style={{ color: '#7c3aed', fontWeight: 'bold' }}>
-                                      → {alt.proposta_conclusao_prevista ? new Date(alt.proposta_conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            {alt.proposta_descricao && alt.proposta_descricao !== alt.descricao_servico && (
-                                <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-                                    <strong>Nova Descrição Proposta:</strong>
-                                    <p style={{ margin: '0.25rem 0 0 0', opacity: 0.9 }}>{alt.proposta_descricao}</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                 ))
-              )}
-           </div>
+      {activeTab === 'denuncias' && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Denúncias</h2>
+              <p style={{ margin: '0.35rem 0 0', opacity: 0.7, fontSize: '0.9rem' }}>
+                Registros resumidos; expanda uma linha para analisar e tomar uma decisão.
+              </p>
+            </div>
+            <select
+              className="input"
+              value={filters.denuncias}
+              onChange={(event) => changeFilter('denuncias', event.target.value)}
+              style={{ width: 'auto', minWidth: '190px' }}
+            >
+              <option value="">Todos os status</option>
+              <option value="pending">Pendentes</option>
+              <option value="procedente">Procedentes</option>
+              <option value="improcedente">Improcedentes</option>
+            </select>
+          </div>
+
+          <ReportTable
+            data={reports}
+            page={pages.denuncias}
+            loading={loading.denuncias}
+            expanded={expanded.denuncias}
+            onToggle={(id) => toggleExpanded('denuncias', id)}
+            onPageChange={(page) => changePage('denuncias', page)}
+            onDecision={handleReportDecision}
+          />
+        </div>
+      )}
+
+      {(activeTab === 'cancelamentos' || activeTab === 'alteracoes') && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <h2 style={{ margin: 0 }}>
+                {activeTab === 'cancelamentos' ? 'Solicitações de cancelamento' : 'Solicitações de alteração'}
+              </h2>
+              <p style={{ margin: '0.35rem 0 0', opacity: 0.7, fontSize: '0.9rem' }}>
+                Histórico completo; expanda uma linha para visualizar os dados e o resultado da avaliação.
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => fetchRequests(
+                  activeTab,
+                  pages[activeTab],
+                  filters[activeTab],
+                )}
+                disabled={loading[activeTab]}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <RefreshCw size={16} />
+                {loading[activeTab] ? 'Atualizando...' : 'Atualizar registros'}
+              </button>
+              <select
+                className="input"
+                value={filters[activeTab]}
+                onChange={(event) => changeFilter(activeTab, event.target.value)}
+                style={{ width: 'auto', minWidth: '170px' }}
+              >
+                <option value="">Todos os status</option>
+                <option value="pendente">Pendentes</option>
+                <option value="aprovada">Aprovados</option>
+                <option value="recusada">Rejeitados</option>
+              </select>
+            </div>
+          </div>
+
+          <RequestTable
+            kind={activeTab}
+            data={currentData}
+            page={pages[activeTab]}
+            loading={loading[activeTab]}
+            expanded={expanded[activeTab]}
+            onToggle={(id) => toggleExpanded(activeTab, id)}
+            onPageChange={(page) => changePage(activeTab, page)}
+            onDecision={handleCancellationDecision}
+          />
         </div>
       )}
 
       {activeTab === 'admin' && (
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '3rem', textAlign: 'center' }}>
-           <h2 style={{ marginBottom: '1rem' }}>Painel de Administração do Django</h2>
-           <p style={{ marginBottom: '2rem', maxWidth: '600px', opacity: 0.8 }}>
-              Acesse o painel completo do Django para gerenciar usuários, perfis, anúncios e ter controle total sobre o banco de dados do sistema.
-           </p>
-           <a href="http://localhost:8000/admin" target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
-              Ir para o Painel do Django
-           </a>
-        </div>
-      )}
-
-      {selectedReport && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem'
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedReport(null);
-          }}
-        >
-          <div className="card" style={{ maxWidth: '600px', width: '100%', position: 'relative' }}>
-            <button 
-              onClick={() => setSelectedReport(null)}
-              style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
-            >
-              <X size={24} />
-            </button>
-            <h2 style={{ marginTop: 0, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <ShieldAlert color="var(--holo-purple-real)" /> Avaliar Denúncia
-            </h2>
-            
-            <div style={{ background: 'var(--bg-color)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
-              <p><strong>Alvo:</strong> {selectedReport.target_name} ({selectedReport.type === 'user' ? 'Usuário' : 'Anúncio'})</p>
-              <p><strong>Motivo:</strong> <span style={{ textTransform: 'capitalize', color: '#ff4757', fontWeight: 'bold' }}>{selectedReport.category}</span></p>
-              <p><strong>Data:</strong> {new Date(selectedReport.created_at).toLocaleString()}</p>
-              <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface-color)', borderLeft: '4px solid #ff4757', borderRadius: '4px' }}>
-                <p style={{ margin: 0, fontStyle: 'italic' }}>"{selectedReport.comment}"</p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <button onClick={() => setSelectedReport(null)} className="btn btn-secondary">
-                Cancelar
-              </button>
-              <button onClick={() => handleResolve(selectedReport.id, 'improcedente')} className="btn" style={{ background: 'var(--holo-salmon)', color: 'white' }}>
-                Improcedente
-              </button>
-              <button onClick={() => handleResolve(selectedReport.id, 'procedente')} className="btn" style={{ background: 'var(--holo-purple-real)', color: 'black', fontWeight: 'bold' }}>
-                Procedente
-              </button>
-            </div>
-          </div>
+        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+          <FileText size={38} color="var(--holo-purple-real)" />
+          <h2>Painel de Administração do Django</h2>
+          <p style={{ opacity: 0.75 }}>Gerencie usuários, acordos e registros diretamente no Django Admin.</p>
+          <a href={`${API}/admin/`} target="_blank" rel="noopener noreferrer" className="btn">
+            Abrir Django Admin
+          </a>
         </div>
       )}
     </div>

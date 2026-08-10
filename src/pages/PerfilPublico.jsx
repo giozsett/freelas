@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, User, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
+import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import { calcularTempo } from '../utils/calcularTempo';
@@ -34,10 +34,8 @@ export default function PublicProfile() {
       experiencias: [],
       curriculo: null
     },
-    roles: [
-      { type: 'Freelancer', rating: 4.9, reviews: 31 },
-      { type: 'Contratante', rating: 5.0, reviews: 12 }
-    ]
+    roles: [],
+    reviews: [],
   });
 
   useEffect(() => {
@@ -69,7 +67,20 @@ export default function PublicProfile() {
             certificados: data.profile?.certificados || [],
             experiencias: data.profile?.experiencias || [],
             curriculo: data.profile?.curriculo || null
-          }
+          },
+          roles: [
+            {
+              type: 'Freelancer',
+              rating: data.resumo_avaliacoes?.freelancer?.nota,
+              reviews: data.resumo_avaliacoes?.freelancer?.total || 0,
+            },
+            {
+              type: 'Contratante',
+              rating: data.resumo_avaliacoes?.contratante?.nota,
+              reviews: data.resumo_avaliacoes?.contratante?.total || 0,
+            },
+          ],
+          reviews: Array.isArray(data.avaliacoes_recebidas) ? data.avaliacoes_recebidas : [],
         }));
         setIsLoading(false);
       })
@@ -80,37 +91,16 @@ export default function PublicProfile() {
       });
   }, [id]);
 
-  const dummyReviews = [
-    {
-      id: 1,
-      role_received: 'freelancer',
-      reviewer: 'Ana Costa',
-      comment: 'Trabalho super rápido e a comunicação foi excelente!',
-      criteria: { 'Comunicação': 5, 'Qualidade': 5, 'Prazo': 4 },
-      stars: 5
-    },
-    {
-      id: 2,
-      role_received: 'contractor',
-      reviewer: 'Carlos Dev',
-      comment: 'Ótimo cliente. Pagou no prazo e foi muito claro nas instruções do projeto.',
-      criteria: { 'Clareza': 5, 'Pagamento': 5, 'Suporte': 4 },
-      stars: 4
-    }
-  ];
-
   if (isLoading) {
     return <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando perfil...</div>;
   }
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="card" style={{ padding: '2rem' }}>
+    <div className="profile-page">
+      <div className="card profile-card">
 
         {/* Banner */}
-        <div style={{
-          width: 'calc(100% + 4rem)',
-          margin: '-2rem -2rem 0 -2rem',
+        <div className="profile-banner" style={{
           aspectRatio: '4 / 1',
           background: user.profile?.banner ? `url(${user.profile.banner}) center/cover no-repeat` : '#e0e0e0',
           borderRadius: '12px 12px 0 0',
@@ -165,7 +155,7 @@ export default function PublicProfile() {
                 <div key={role.type} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={role.type === 'Freelancer' ? "badge salmon" : "badge purple"} style={{ color: 'white' }}>{role.type}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                      <Star fill="currentColor" size={22} color="#f1c40f" /> {role.rating} ({role.reviews})
+                      <Star fill={role.rating ? 'currentColor' : 'transparent'} size={22} color="#f1c40f" /> {role.rating ?? '—'} ({role.reviews})
                   </span>
                 </div>
               ))}
@@ -220,13 +210,13 @@ export default function PublicProfile() {
           </div>
         )}
 
-        <div style={{ marginBottom: '2.5rem' }}>
+        <section className="profile-section">
           <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
-          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{user.profile?.bio || 'Sem biografia.'}</p>
-        </div>
+          <p style={{ fontSize: '1.1rem', lineHeight: 1.8, overflowWrap: 'anywhere' }}>{user.profile?.bio || 'Sem biografia.'}</p>
+        </section>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', gap: '0.5rem' }}>
+        <div className="profile-tabs" role="tablist" aria-label="Informações do perfil">
           {[
             { key: 'skills', label: 'Habilidades e Especialidades' },
             { key: 'experiencia', label: `Experiência${user.profile?.experiencias?.length > 0 ? ` (${user.profile.experiencias.length})` : ''}` },
@@ -236,16 +226,15 @@ export default function PublicProfile() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              style={{
-                background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 'bold',
-                color: activeTab === tab.key ? 'var(--text-color)' : 'gray',
-                borderBottom: activeTab === tab.key ? '3px solid var(--holo-salmon)' : '3px solid transparent',
-                whiteSpace: 'nowrap'
-              }}>
+              className={`profile-tab-option ${activeTab === tab.key ? 'selected' : ''}`}
+              role="tab"
+              aria-selected={activeTab === tab.key}>
               {tab.label}
             </button>
           ))}
         </div>
+
+        <div key={activeTab} className="profile-tab-content tab-content-animation">
 
         {activeTab === 'skills' && (
           <div>
@@ -369,7 +358,7 @@ export default function PublicProfile() {
 
         {activeTab === 'reviews' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {dummyReviews.map((review) => {
+            {user.reviews.map((review) => {
               const starsColor = review.role_received === 'freelancer' ? 'var(--holo-salmon)' : 'var(--holo-purple-real)';
               return (
                 <div key={review.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem' }}>
@@ -386,7 +375,7 @@ export default function PublicProfile() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem', background: 'var(--surface-color)', padding: '0.75rem', borderRadius: '8px' }}>
-                    {Object.entries(review.criteria).map(([criterion, score]) => (
+                    {Object.entries(review.criterios_exibicao || {}).map(([criterion, score]) => (
                       <div key={criterion} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-color)' }}>
                           <span>{criterion}</span>
@@ -401,13 +390,20 @@ export default function PublicProfile() {
 
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                     <MessageCircle size={20} style={{ marginTop: '0.1rem', opacity: 0.5, flexShrink: 0 }} />
-                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>"{review.comment}"</p>
+                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '1rem', opacity: 0.85, lineHeight: 1.5, wordBreak: 'break-word' }}>“{review.comment}”</p>
                   </div>
                 </div>
               )
             })}
+            {user.reviews.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>
+                Este usuário ainda não recebeu avaliações de serviços concluídos.
+              </div>
+            )}
           </div>
         )}
+
+        </div>
 
       </div>
 

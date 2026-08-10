@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, CheckCircle, Clock } from 'lucide-react';
+import { Package, CheckCircle, Clock, TimerOff } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function MyAds() {
   const { user } = useAuth();
+  const { marcarLidas } = useNotificacoes();
   const [myAds, setMyAds] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('ativos');
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    marcarLidas(['candidatura']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     if (!user) {
@@ -28,6 +35,15 @@ export default function MyAds() {
       });
   }, [user]);
 
+  const isFinalized = (ad) => String(ad.status_anuncio || '').toLowerCase() === 'finalizado';
+  const isExpired = (ad) => String(ad.status_anuncio || '').toLowerCase() === 'vencido';
+  const activeAds = myAds.filter(ad => !isFinalized(ad) && !isExpired(ad));
+  const finalizedAds = myAds.filter(isFinalized);
+  const expiredAds = myAds.filter(isExpired);
+  const visibleAds = statusFilter === 'ativos'
+    ? activeAds
+    : statusFilter === 'finalizados' ? finalizedAds : expiredAds;
+
   return (
     <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
@@ -39,11 +55,50 @@ export default function MyAds() {
         Acompanhe os anúncios que você postou, verifique o status de cada um e veja quantas candidaturas foram recebidas.
       </p>
 
+      <div role="tablist" aria-label="Filtrar anúncios por status" className="card" style={{ display: 'flex', gap: '0.75rem', padding: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statusFilter === 'ativos'}
+          onClick={() => setStatusFilter('ativos')}
+          className={statusFilter === 'ativos' ? 'btn' : 'btn btn-secondary'}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <Clock size={17} /> Ativos ({activeAds.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statusFilter === 'finalizados'}
+          onClick={() => setStatusFilter('finalizados')}
+          className={statusFilter === 'finalizados' ? 'btn' : 'btn btn-secondary'}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <CheckCircle size={17} /> Finalizados ({finalizedAds.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statusFilter === 'vencidos'}
+          onClick={() => setStatusFilter('vencidos')}
+          className={statusFilter === 'vencidos' ? 'btn' : 'btn btn-secondary'}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <TimerOff size={17} /> Vencidos ({expiredAds.length})
+        </button>
+      </div>
+
+      {statusFilter === 'vencidos' && (
+        <p className="expired-ads-help">
+          Anúncios postados há mais de 30 dias são considerados vencidos e ficam indisponíveis para receber candidaturas.
+        </p>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {isLoading ? (
            <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando anúncios...</div>
-        ) : myAds.length > 0 ? (
-          myAds.map(ad => (
+        ) : visibleAds.length > 0 ? (
+          visibleAds.map(ad => (
             <div key={ad.id} className="card card-hover" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'space-between', alignItems: 'center' }}>
               
               <div style={{ flex: '1 1 300px' }}>
@@ -51,7 +106,7 @@ export default function MyAds() {
                   <Link to={`/ad/${ad.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <h2 style={{ fontSize: '1.5rem', margin: 0, textDecoration: 'underline' }}>{ad.title || ad.titulo}</h2>
                   </Link>
-                  <span className="badge salmon">Publicado</span>
+                  <span className="badge salmon">{isExpired(ad) ? 'Vencido' : 'Publicado'}</span>
                 </div>
                 <div style={{ fontSize: '0.9rem', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Clock size={16} /> Publicado em {new Date(ad.created_at).toLocaleDateString()}
@@ -72,8 +127,14 @@ export default function MyAds() {
           ))
         ) : (
            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-             <h3 style={{ marginBottom: '1rem' }}>Você ainda não publicou nenhum anúncio.</h3>
-             <Link to="/create-ad" className="btn dark-text">Postar meu primeiro anúncio</Link>
+             <h3 style={{ marginBottom: '1rem' }}>
+               {statusFilter === 'ativos'
+                 ? 'Você não possui anúncios ativos.'
+                 : statusFilter === 'finalizados'
+                   ? 'Você ainda não possui anúncios finalizados.'
+                   : 'Você não possui anúncios vencidos.'}
+             </h3>
+             {statusFilter === 'ativos' && <Link to="/create-ad" className="btn dark-text">Postar um anúncio</Link>}
            </div>
         )}
       </div>

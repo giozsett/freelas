@@ -22,9 +22,12 @@ import ConfigurarAssinatura from './pages/ConfigurarAssinatura';
 import MeusPagamentos from './pages/MeusPagamentos';
 import EsqueciSenha from './pages/EsqueciSenha';
 import MeusFreelas from './pages/MeusFreelas';
+import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
+import { ProvedorDialogo } from './context/ContextoDialogo';
 
 function App() {
   return (
+    <ProvedorDialogo>
     <Router>
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <BarraNavegacao />
@@ -49,12 +52,14 @@ function App() {
           <Route path="/subscription-setup" element={<RotaPrivada><ConfigurarAssinatura /></RotaPrivada>} />
           <Route path="/my-payments" element={<RotaPrivada><MeusPagamentos /></RotaPrivada>} />
           <Route path="/my-freelas" element={<RotaPrivada><MeusFreelas /></RotaPrivada>} />
+          <Route path="/my-reviews" element={<RotaPrivada><MinhasAvaliacoes /></RotaPrivada>} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         </Routes>
       </div>
       <Rodape />
       </div>
     </Router>
+    </ProvedorDialogo>
   );
 }
 

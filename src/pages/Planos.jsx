@@ -1,14 +1,22 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
+import { useAuth } from '../context/ContextoAutenticacao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 export default function Plans() {
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const { alerta } = useDialogo();
+
   const plans = [
     {
       id: 'free',
       name: 'Gratuito',
       price: 'R$ 0/mês',
       ads: 2,
-      color: 'var(--surface-color)',
+      color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
     },
@@ -17,7 +25,7 @@ export default function Plans() {
       name: 'Gold',
       price: 'R$ 29,90/mês',
       ads: 10,
-      color: 'var(--holo-gradient-salmon)',
+      color: 'var(--holo-gradient-gold)',
       badge: 'Mais Popular',
       icon: <Star size={32} />
     },
@@ -26,11 +34,53 @@ export default function Plans() {
       name: 'Platinum',
       price: 'R$ 79,90/mês',
       ads: 'Ilimitados',
-      color: 'var(--holo-gradient-purple)',
+      color: 'var(--holo-gradient-platinum)',
       badge: 'Profissional',
       icon: <Gem size={32} />
     }
   ];
+
+  const handleSubscribe = async (planId) => {
+    const checkoutWindow = planId === 'free' ? null : window.open('', '_blank');
+    if (planId !== 'free' && !checkoutWindow) {
+      await alerta('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
+      return;
+    }
+
+    setLoadingPlan(planId);
+    try {
+      const res = await fetch('http://localhost:8000/api/pagamentos/assinatura/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify({ plano: planId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Não foi possível alterar o plano.');
+      }
+      if (data.checkout_required && data.init_point) {
+        checkoutWindow.opener = null;
+        checkoutWindow.location.href = data.init_point;
+        if (data.test_approved) {
+          navigate('/my-payments?checkout=academic-approved');
+        } else {
+          setLoadingPlan(null);
+        }
+      } else if (!data.checkout_required) {
+        navigate('/my-payments');
+      } else {
+        throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+      }
+    } catch (err) {
+      if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
+      console.error(err);
+      await alerta(err.message || 'Erro na comunicação com o servidor.', { titulo: 'Erro ao alterar o plano', variante: 'perigo' });
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <div style={{ maxWidth: '1000px', margin: '2rem auto' }}>
@@ -41,8 +91,8 @@ export default function Plans() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         {plans.map((plan) => (
-          <div key={plan.id} className="card card-hover" style={{ 
-            background: plan.color, 
+          <div key={plan.id} className="card card-hover" style={{
+            background: plan.color,
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             position: 'relative', textAlign: 'center'
           }}>
@@ -51,44 +101,49 @@ export default function Plans() {
                 {plan.badge}
               </div>
             )}
-            
-            <div className="dark-text" style={{ marginBottom: '1rem', color: plan.id === 'free' ? 'var(--text-color) !important' : '#1a1a1a' }}>
-              {/* If it's the free plan, we don't force dark text natively, we let it be var(--text-color) */}
-              <div style={{ color: plan.id === 'free' ? 'var(--text-color)' : 'inherit' }}>
+
+            <div className="dark-text" style={{ marginBottom: '1rem', color: '#1a1a1a' }}>
+              <div style={{ color: 'inherit' }}>
                 {plan.icon}
               </div>
             </div>
 
-            <h2 style={{ fontSize: '2rem', marginBottom: '1rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+            <h2 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#1a1a1a' }}>
               {plan.name}
             </h2>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '2rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '2rem', color: '#1a1a1a' }}>
               {plan.price}
             </div>
 
             <ul style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, textAlign: 'left', width: '100%' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                 <CheckCircle size={20} />
                 <span style={{ fontWeight: '500' }}>{plan.ads} anúncios por mês</span>
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                 <CheckCircle size={20} />
                 <span>Acesso a todos os freelancers e contratantes</span>
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: plan.id === 'free' ? 'var(--text-color)' : '#1a1a1a' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                 <CheckCircle size={20} />
                 <span>Chat integrado</span>
               </li>
             </ul>
 
-            <Link to="/" className="btn" style={{ 
-              width: '100%', 
-              background: plan.id === 'free' ? 'transparent' : 'var(--surface-color)',
-              color: 'var(--text-color)',
-              border: plan.id === 'free' ? '1px solid var(--border-color)' : 'none'
-            }}>
-              Assinar {plan.name}
-            </Link>
+            <button
+              onClick={() => handleSubscribe(plan.id)}
+              className="btn plan-subscribe-btn"
+              disabled={loadingPlan !== null}
+              style={{
+                width: '100%',
+                background: 'var(--surface-color)',
+                color: 'var(--text-color)',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {loadingPlan === plan.id ? 'Carregando...' : `Assinar ${plan.name}`}
+            </button>
           </div>
         ))}
       </div>

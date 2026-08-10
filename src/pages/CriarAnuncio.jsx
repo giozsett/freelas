@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRole } from '../context/ContextoPapel';
-import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
+import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
+import DisponibilidadeSemanal, { disponibilidadeVazia } from '../components/DisponibilidadeSemanal';
+import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
 
 export default function CreateAd() {
+  const limiteDescricao = 1000;
   const { role } = useRole();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIAS_SERVICO[0]);
   const [skills, setSkills] = useState([]);
   const [currentSkill, setCurrentSkill] = useState('');
   const [skillError, setSkillError] = useState('');
+  const habilidadesDisponiveis = HABILIDADES_POR_CATEGORIA[category] || [];
   
   const [price, setPrice] = useState('');
   const [priceUnit, setPriceUnit] = useState('/h');
@@ -17,11 +21,12 @@ export default function CreateAd() {
   const [description, setDescription] = useState('');
   
   const [locationType, setLocationType] = useState('remoto');
-  const [address, setAddress] = useState('');
-  const [addressNumber, setAddressNumber] = useState('');
+  const [localizacao, setLocalizacao] = useState({
+    estado: '', cidade: '', bairro: '', address: '', addressNumber: '',
+  });
   
   const [deadline, setDeadline] = useState('');
-  const [availability, setAvailability] = useState('');
+  const [availability, setAvailability] = useState(disponibilidadeVazia);
 
   const navigate = useNavigate();
 
@@ -65,8 +70,11 @@ export default function CreateAd() {
       price_unit: priceUnit,
       skills,
       location_type: locationType,
-      address,
-      address_number: addressNumber,
+      address: locationType === 'presencial' ? localizacao.address : '',
+      address_number: locationType === 'presencial' ? localizacao.addressNumber : '',
+      estado: locationType === 'presencial' ? localizacao.estado : '',
+      cidade: locationType === 'presencial' ? localizacao.cidade : '',
+      bairro: locationType === 'presencial' ? localizacao.bairro : '',
       description,
       role,
       deadline,
@@ -97,15 +105,15 @@ export default function CreateAd() {
   };
 
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+    <div className="ad-form-page">
       <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Postar Novo Anúncio</h1>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <span className={role === 'freelancer' ? 'badge purple' : 'badge green'} style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
           {role === 'freelancer' ? 'Criar anúncio como freelancer' : 'Criar anúncio como contratante'}
         </span>
       </div>
-      <div className="card">
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="card ad-form-card">
+        <form className="ad-form" onSubmit={handleSubmit}>
           
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Título do Anúncio</label>
@@ -122,7 +130,10 @@ export default function CreateAd() {
           <div className="form-row">
              <div style={{ flex: 1 }}>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categoria</label>
-                <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+                <select className="input" value={category} onChange={(e) => {
+                  setCategory(e.target.value);
+                  setCurrentSkill('');
+                }}>
                   {CATEGORIAS_SERVICO.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
@@ -163,7 +174,7 @@ export default function CreateAd() {
                 onChange={(e) => setCurrentSkill(e.target.value)}
               >
                 <option value="">Selecione uma habilidade...</option>
-                {HABILIDADES_PROFISSIONAIS.map(skill => (
+                {habilidadesDisponiveis.map(skill => (
                   <option key={skill} value={skill}>{skill}</option>
                 ))}
               </select>
@@ -195,54 +206,29 @@ export default function CreateAd() {
 
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Tipo de Trabalho</label>
-            <div style={{ display: 'flex', background: 'var(--bg-color)', borderRadius: '8px', padding: '0.3rem', border: '1px solid var(--border-color)', gap: '0.3rem' }}>
+            <div className="work-mode-toggle">
               <div 
                 onClick={() => setLocationType('remoto')}
-                style={{ flex: 1, textAlign: 'center', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', background: locationType === 'remoto' ? 'var(--surface-color)' : 'transparent', boxShadow: locationType === 'remoto' ? '0 2px 4px var(--shadow-color)' : 'none', fontWeight: locationType === 'remoto' ? '600' : '400', color: locationType === 'remoto' ? 'var(--primary)' : 'var(--text-secondary)', transition: 'all 0.3s ease' }}
+                className={`work-mode-option${locationType === 'remoto' ? ' selected' : ''}`}
               >
                 Remoto
               </div>
               <div 
                 onClick={() => setLocationType('presencial')}
-                style={{ flex: 1, textAlign: 'center', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', background: locationType === 'presencial' ? 'var(--surface-color)' : 'transparent', boxShadow: locationType === 'presencial' ? '0 2px 4px var(--shadow-color)' : 'none', fontWeight: locationType === 'presencial' ? '600' : '400', color: locationType === 'presencial' ? 'var(--primary)' : 'var(--text-secondary)', transition: 'all 0.3s ease' }}
+                className={`work-mode-option${locationType === 'presencial' ? ' selected' : ''}`}
               >
                 Presencial
               </div>
             </div>
           </div>
 
-          <div style={{ 
-            maxHeight: locationType === 'presencial' ? '200px' : '0', 
-            opacity: locationType === 'presencial' ? 1 : 0, 
-            overflow: 'hidden', 
-            transition: 'all 0.3s ease-in-out',
-            marginBottom: locationType === 'presencial' ? '0.5rem' : '0'
-          }}>
-            <div className="form-row" style={{ paddingTop: '0.5rem' }}>
-              <div style={{ flex: 3 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Endereço</label>
-                <input 
-                  type="text" 
-                  className="input" 
-                  placeholder="Ex: Rua das Flores, Bairro Centro"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  required={locationType === 'presencial'}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Número</label>
-                <input 
-                  type="text" 
-                  className="input" 
-                  placeholder="Ex: 123"
-                  value={addressNumber}
-                  onChange={(e) => setAddressNumber(e.target.value)}
-                  required={locationType === 'presencial'}
-                />
-              </div>
+          {locationType === 'presencial' && (
+            <div>
+              <h3 style={{ marginBottom: '0.25rem' }}>{locationType === 'presencial' ? 'Local do trabalho' : 'Sua área de atendimento'}</h3>
+              <p className="form-help">Cidade obrigatória para o anúncio. Endereço, bairro e localização exata são opcionais.</p>
+              <LocalizacaoAnuncio value={localizacao} onChange={setLocalizacao} cidadeObrigatoria />
             </div>
-          </div>
+          )}
 
           {role === 'contractor' ? (
              <div>
@@ -258,18 +244,7 @@ export default function CreateAd() {
                />
              </div>
           ) : (
-             <div>
-               <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Disponibilidade</label>
-               <textarea 
-                 className="input"
-                 rows="3"
-                 placeholder="Ex: Disponível todos os dias na parte da tarde..."
-                 value={availability}
-                 onChange={(e) => setAvailability(e.target.value)}
-                 style={{ resize: 'none' }}
-                 required
-               ></textarea>
-             </div>
+             <DisponibilidadeSemanal value={availability} onChange={setAvailability} />
           )}
 
           <div>
@@ -280,9 +255,11 @@ export default function CreateAd() {
               placeholder="Descreva o que você oferece ou o que você precisa..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              maxLength={limiteDescricao}
               style={{ resize: 'none' }}
               required
             ></textarea>
+            <small className="character-counter">{limiteDescricao - description.length} caracteres restantes</small>
           </div>
 
           <button type="submit" className="btn dark-text" style={{ padding: '1rem', fontSize: '1.2rem', marginTop: '1rem' }}>
