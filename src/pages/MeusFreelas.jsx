@@ -884,7 +884,7 @@ export default function MeusFreelas() {
 
                       {/* Action buttons */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', flexWrap: 'wrap' }}>
-                        <Link to="/chat" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Link to={`/chat/${app.id}`} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <MessageSquare size={16} /> Abrir Chat de Conversa
                         </Link>
 
@@ -1031,7 +1031,7 @@ export default function MeusFreelas() {
                             <Star size={14} /> Avaliar agora
                           </Link>
                         )}
-                        <Link to="/chat" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}>
+                        <Link to={`/chat/${app.id}`} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}>
                           <MessageSquare size={14} /> Histórico de Chat
                         </Link>
                       </div>

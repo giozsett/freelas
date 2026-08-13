@@ -8,16 +8,40 @@ import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const { role, toggleRole } = useRole();
   const { naoLidas, porTipo, marcarLidas } = useNotificacoes();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [chatNaoLidas, setChatNaoLidas] = useState(0);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   const initial = user
     ? (`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || '?').charAt(0).toUpperCase()
     : '?';
+
+  useEffect(() => {
+    if (!token) return;
+    let ativo = true;
+    const buscar = () => {
+      fetch('http://localhost:8000/api/chat/nao-lidas/', {
+        headers: { Authorization: `Token ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((dados) => {
+          if (ativo && dados && typeof dados.total === 'number') {
+            setChatNaoLidas(dados.total);
+          }
+        })
+        .catch(() => {});
+    };
+    buscar();
+    const intervalo = setInterval(buscar, 8000);
+    return () => {
+      ativo = false;
+      clearInterval(intervalo);
+    };
+  }, [token]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -70,6 +94,9 @@ export default function Navbar() {
 
             <Link to="/chat" title="Mensagens" aria-label="Mensagens" style={{ color: 'var(--text-color)', display: 'flex', alignItems: 'center', position: 'relative' }}>
               <MessageSquare size={24} />
+              {chatNaoLidas > 0 && (
+                <span className="notification-dot chat-unread-dot">{chatNaoLidas > 99 ? '99+' : chatNaoLidas}</span>
+              )}
             </Link>
 
             {/* Profile Dropdown */}

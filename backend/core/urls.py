@@ -24,6 +24,13 @@ from .views import (
     NotificacaoMarcarLidaAPIView,
     NotificacaoMarcarLidasAPIView,
 )
+from .views import (
+    ChatListAPIView,
+    ChatDetailAPIView,
+    ChatEnviarMensagemAPIView,
+    ChatMarcarLidaAPIView,
+    ChatNaoLidasAPIView,
+)
 
 urlpatterns = [
     path('api/auth/register/', RegisterAPI.as_view(), name='register'),
@@ -70,4 +77,9 @@ urlpatterns = [
     path('api/notificacoes/nao-lidas/', NotificacaoNaoLidasAPIView.as_view(), name='notificacao-nao-lidas'),
     path('api/notificacoes/ler-todas/', NotificacaoMarcarLidasAPIView.as_view(), name='notificacao-marcar-lidas'),
     path('api/notificacoes/<int:pk>/ler/', NotificacaoMarcarLidaAPIView.as_view(), name='notificacao-marcar-lida'),
+    path('api/chat/', ChatListAPIView.as_view(), name='chat-list'),
+    path('api/chat/nao-lidas/', ChatNaoLidasAPIView.as_view(), name='chat-nao-lidas'),
+    path('api/chat/<int:pk>/', ChatDetailAPIView.as_view(), name='chat-detail'),
+    path('api/chat/<int:pk>/messages/', ChatEnviarMensagemAPIView.as_view(), name='chat-enviar'),
+    path('api/chat/<int:pk>/ler/', ChatMarcarLidaAPIView.as_view(), name='chat-marcar-lida'),
 ]

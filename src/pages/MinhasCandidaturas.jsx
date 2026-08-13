@@ -122,7 +122,7 @@ export default function MyApplications() {
                     Candidatura indisponível
                   </button>
                 ) : (
-                  <Link to="/chat" className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', width: '100%', marginTop: '0.5rem' }}>
+                  <Link to={app.acordo_id ? `/chat/${app.acordo_id}` : '/chat'} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', width: '100%', marginTop: '0.5rem' }}>
                     Ver no Chat
                   </Link>
                 )}
