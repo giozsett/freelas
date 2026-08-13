@@ -140,6 +140,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
+# Redis (NoSQL) — usado para armazenar as mensagens do chat.
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 

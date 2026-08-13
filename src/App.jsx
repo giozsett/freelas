@@ -42,6 +42,7 @@ function App() {
           <Route path="/edit-ad/:id" element={<RotaPrivada><EditarAnuncio /></RotaPrivada>} />
           <Route path="/ad/:id" element={<RotaPrivada><DetalhesAnuncio /></RotaPrivada>} />
           <Route path="/chat" element={<RotaPrivada><Conversa /></RotaPrivada>} />
+          <Route path="/chat/:acordoId" element={<RotaPrivada><Conversa /></RotaPrivada>} />
           <Route path="/plans" element={<RotaPrivada><Planos /></RotaPrivada>} />
           <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
           <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
