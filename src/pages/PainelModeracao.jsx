@@ -12,6 +12,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import DashboardModeracao from './DashboardModeracao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 const API = 'http://localhost:8000';
 const PAGE_SIZE = 10;
@@ -42,6 +44,7 @@ const requestStatusLabel = (status) => {
 };
 
 function StatusBadge({ status, label = status }) {
+  const statusLabel = status === 'pending' ? 'Pendente' : label;
   return (
     <span
       className="badge"
@@ -52,7 +55,7 @@ function StatusBadge({ status, label = status }) {
         fontWeight: 700,
       }}
     >
-      {label}
+      {statusLabel}
     </span>
   );
 }
@@ -151,14 +154,14 @@ function ReportRows({ report, isExpanded, onToggle, onDecision }) {
             onClick={onToggle}
             style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            Ver <ChevronDown size={17} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
+            Ver <ChevronDown size={17} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
           </button>
         </td>
       </tr>
       {isExpanded && (
-        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <tr className="moderation-expanded-row" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <td colSpan="6" style={{ padding: '0 1rem 1rem' }}>
-            <div style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+            <div className="moderation-expanded-content" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.8rem', fontSize: '0.9rem' }}>
                 <div><strong>Categoria:</strong><br />{report.category || 'Não informada'}</div>
                 <div><strong>Tipo do alvo:</strong><br />{typeLabel}</div>
@@ -256,14 +259,14 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
             onClick={onToggle}
             style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            Ver <ChevronDown size={17} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
+            Ver <ChevronDown size={17} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
           </button>
         </td>
       </tr>
       {isExpanded && (
-        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <tr className="moderation-expanded-row" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <td colSpan="6" style={{ padding: '0 1rem 1rem' }}>
-            <div style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+            <div className="moderation-expanded-content" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.8rem', fontSize: '0.9rem' }}>
                 <div><strong>Contratante:</strong><br />{item.nome_contratante || '—'}</div>
                 <div><strong>Freelancer:</strong><br />{item.nome_prestador || '—'}</div>
@@ -342,9 +345,10 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
 }
 
 export default function ModerationPanel() {
+  const { confirmar, solicitarTexto } = useDialogo();
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('denuncias');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [reports, setReports] = useState({ count: 0, results: [] });
   const [cancelamentos, setCancelamentos] = useState({ count: 0, results: [] });
   const [alteracoes, setAlteracoes] = useState({ count: 0, results: [] });
@@ -466,8 +470,8 @@ export default function ModerationPanel() {
 
   const handleCancellationDecision = async (item, decisao) => {
     const action = decisao === 'aprovar' ? 'aprovar' : 'recusar';
-    if (!window.confirm(`Deseja ${action} o cancelamento do acordo "${item.acordo_titulo}"?`)) return;
-    const resposta = window.prompt('Observação administrativa (opcional):', '');
+    if (!await confirmar(`Deseja ${action} o cancelamento do acordo "${item.acordo_titulo}"?`, { titulo: 'Decisão de cancelamento', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
+    const resposta = await solicitarTexto('Inclua uma observação administrativa, se necessário.', { titulo: 'Observação administrativa', placeholder: 'Observação opcional' });
     if (resposta === null) return;
 
     try {
@@ -489,7 +493,7 @@ export default function ModerationPanel() {
 
   const handleReportDecision = async (report, newStatus) => {
     const action = newStatus === 'procedente' ? 'aprovar' : 'recusar';
-    if (!window.confirm(`Deseja ${action} a denúncia contra "${report.target_name || report.target_id}"?`)) return;
+    if (!await confirmar(`Deseja ${action} a denúncia contra "${report.target_name || report.target_id}"?`, { titulo: 'Decisão sobre denúncia', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
 
     setError('');
     try {
@@ -516,6 +520,7 @@ export default function ModerationPanel() {
   };
 
   const tabs = [
+    ['dashboard', 'Dashboard'],
     ['denuncias', 'Denúncias'],
     ['alteracoes', 'Alterações'],
     ['cancelamentos', 'Cancelamentos'],
@@ -560,6 +565,10 @@ export default function ModerationPanel() {
         <div style={{ color: '#ff4757', background: 'rgba(255,71,87,.1)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
           {error}
         </div>
+      )}
+
+      {activeTab === 'dashboard' && (
+        <DashboardModeracao />
       )}
 
       {activeTab === 'denuncias' && (

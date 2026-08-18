@@ -5,10 +5,12 @@ set -Eeuo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="${PROJECT_DIR}/backend"
 BACKEND_ENV="${BACKEND_DIR}/.env"
-BACKEND_PORT="${BACKEND_PORT:-8000}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"=
+
 NGROK_API="http://127.0.0.1:4040/api/tunnels"
-NGROK_LOG="$(mktemp "${TEMP:-/tmp}/freelas-ngrok.XXXXXX.log")"
+NGROK_LOG="$(mktemp /tmp/freelas-ngrok.XXXXXX.log)"
 NGROK_PID=""
+REDIS_PID=""
 BACKEND_PID=""
 FRONTEND_PID=""
 
@@ -16,13 +18,13 @@ cleanup() {
     local exit_code=$?
     trap - EXIT INT TERM
 
-    for pid in "${FRONTEND_PID}" "${BACKEND_PID}" "${NGROK_PID}"; do
+    for pid in "${FRONTEND_PID}" "${BACKEND_PID}" "${NGROK_PID}" "${REDIS_PID}"; do
         if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
             kill "${pid}" 2>/dev/null || true
         fi
     done
 
-    rm -f "${NGROK_LOG}"
+    rm -f "${NGROK_LOG}" "${REDIS_LOG}"
     exit "${exit_code}"
 }
 
@@ -83,6 +85,30 @@ elif [[ -f "${BACKEND_DIR}/venv/Scripts/python.exe" ]]; then
 else
     echo "O ambiente virtual não foi encontrado em backend/venv."
     exit 1
+fi
+
+# Redis — usado para armazenar as mensagens do chat
+if redis-cli ping >/dev/null 2>&1; then
+    echo "Redis já está rodando em redis://127.0.0.1:6379."
+else
+    if command -v redis-server >/dev/null 2>&1; then
+        echo "Iniciando o Redis (porta 6379) para o chat..."
+        redis-server --port 6379 --bind 127.0.0.1 --save "" --appendonly no --logfile "${REDIS_LOG}" &
+        REDIS_PID=$!
+        for _ in {1..20}; do
+            if redis-cli ping >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.5
+        done
+        if ! redis-cli ping >/dev/null 2>&1; then
+            echo "Não foi possível iniciar o Redis na porta 6379."
+            exit 1
+        fi
+        echo "Redis rodando em redis://127.0.0.1:6379 (log: ${REDIS_LOG})"
+    else
+        echo "ATENÇÃO: redis-server não encontrado. O chat não funcionará sem o Redis."
+    fi
 fi
 
 NGROK_AUTHTOKEN="$(read_env_value "NGROK_AUTHTOKEN" "${BACKEND_ENV}")"
@@ -229,6 +255,10 @@ BACKEND_PID=$!
 ) &
 FRONTEND_PID=$!
 
-echo "Backend, frontend e túnel iniciados. Pressione Ctrl+C para encerrar todos."
+echo "Backend, frontend, Redis e túnel iniciados. Pressione Ctrl+C para encerrar todos."
 
-wait -n "${NGROK_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"
+if [[ -n "${REDIS_PID}" ]]; then
+    wait -n "${NGROK_PID}" "${BACKEND_PID}" "${FRONTEND_PID}" "${REDIS_PID}"
+else
+    wait -n "${NGROK_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"
+fi

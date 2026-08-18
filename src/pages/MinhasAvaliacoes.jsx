@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, ClipboardCheck, History, MessageCircle, Star } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 const API = 'http://localhost:8000';
 
 export default function MinhasAvaliacoes() {
   const { token } = useAuth();
+  const { marcarLidas } = useNotificacoes();
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingReviews, setPendingReviews] = useState([]);
   const [sentReviews, setSentReviews] = useState([]);
@@ -13,6 +15,10 @@ export default function MinhasAvaliacoes() {
   const [submittingId, setSubmittingId] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    marcarLidas(['avaliacao']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     if (!token) return;

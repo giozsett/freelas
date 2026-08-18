@@ -15,6 +15,7 @@ from .models import (
     Report,
     SolicitacaoAlteracaoAcordo,
     SolicitacaoCancelamentoAcordo,
+    UserProfile,
 )
 
 
@@ -251,7 +252,7 @@ class PagamentoAPITests(TestCase):
         'MERCADO_PAGO_TEST_MODE': 'true',
     })
     @patch('core.views.requests.post')
-    def test_checkout_academico_aprova_e_inicia_acordo_ao_criar_link(self, post):
+    def test_checkout_academico_registra_pagamento_e_inicia_acordo(self, post):
         post.return_value = MercadoPagoResponse(
             201,
             {'id': 'preference-test', 'init_point': 'https://mercadopago.com/checkout/test'},
@@ -271,6 +272,10 @@ class PagamentoAPITests(TestCase):
         pagamento = Pagamento.objects.get(acordo=self.acordo)
         self.assertEqual(pagamento.status, 'pago')
         self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
+        self.assertEqual(
+            response.data['init_point'],
+            'https://mercadopago.com/checkout/test',
+        )
 
     def test_plano_gratuito_nao_exige_checkout(self):
         self.contratante.profile.subscription_plan = 'Gold'
@@ -412,6 +417,30 @@ class PagamentoAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 409)
+
+    @override_settings(DEBUG=True)
+    @patch.dict('os.environ', {'MERCADO_PAGO_TEST_MODE': 'true'})
+    def test_acordo_ativo_legado_pode_ser_concluido_no_ambiente_local(self):
+        self.acordo.status_acordo = 'Ativo'
+        self.acordo.save(update_fields=['status_acordo'])
+        self.client.force_authenticate(self.freelancer)
+
+        response = self.client.post(
+            f'/api/acordos/{self.acordo.id}/concluir/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Concluído')
+        self.assertTrue(
+            Pagamento.objects.filter(
+                acordo=self.acordo,
+                status='pago',
+                forma_pagamento='simulacao_pagamento',
+            ).exists(),
+        )
 
     def test_cancelamento_precisa_de_admin_e_move_acordo_para_cancelados(self):
         self.acordo.status_acordo = 'Ativo'
@@ -574,6 +603,56 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(listing.data['count'], 1)
         self.assertEqual(listing.data['results'][0]['status'], 'aprovada')
 
+    def test_acordo_pendente_pagamento_aceita_solicitacao_de_alteracao(self):
+        self.client.force_authenticate(self.freelancer)
+
+        response = self.client.patch(
+            f'/api/acordos/{self.acordo.id}/',
+            {
+                'tem_solicitacao': True,
+                'justificativa_alteracao': 'Precisamos alinhar o escopo antes do pagamento.',
+                'proposto_valor': 1350,
+                'proposta_descricao': 'Site institucional com uma página adicional.',
+                'proposta_conclusao_prevista': '2026-11-10',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Pendente Pagamento')
+        self.assertTrue(self.acordo.tem_solicitacao)
+        self.assertTrue(
+            SolicitacaoAlteracaoAcordo.objects.filter(
+                acordo=self.acordo,
+                status='pendente',
+            ).exists(),
+        )
+
+    def test_solicitante_nao_pode_decidir_a_propria_alteracao(self):
+        self.client.force_authenticate(self.freelancer)
+        request = self.client.patch(
+            f'/api/acordos/{self.acordo.id}/',
+            {
+                'tem_solicitacao': True,
+                'justificativa_alteracao': 'Precisamos rever o valor antes do pagamento.',
+                'proposto_valor': 1400,
+            },
+            format='json',
+        )
+        self.assertEqual(request.status_code, 200)
+
+        decision = self.client.patch(
+            f'/api/acordos/{self.acordo.id}/',
+            {'aprovar_solicitacao': True},
+            format='json',
+        )
+
+        self.assertEqual(decision.status_code, 400)
+        self.acordo.refresh_from_db()
+        self.assertTrue(self.acordo.tem_solicitacao)
+        self.assertEqual(self.acordo.valor_acordado, 1250)
+
     def test_retorno_publico_redireciona_para_frontend_local(self):
         response = self.client.get('/api/pagamentos/retorno/acordo/success/')
         self.assertEqual(response.status_code, 302)
@@ -653,3 +732,78 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Report.objects.get(pk=response.data['id']).status, 'pending')
+
+
+class DashboardAdminAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='admin@example.com',
+            email='admin@example.com',
+            password='secret123',
+            is_staff=True,
+        )
+        self.common = User.objects.create_user(
+            username='comum@example.com',
+            email='comum@example.com',
+            password='secret123',
+        )
+
+    def test_requer_admin(self):
+        self.client.force_authenticate(self.common)
+        response = self.client.get('/api/admin/dashboard/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_agrega_estatisticas_do_site(self):
+        self.client.force_authenticate(self.admin)
+
+        Ad.objects.create(author=self.common, title='Serviço', role='freelancer')
+        Ad.objects.create(author=self.common, title='Vaga', role='contractor')
+        Report.objects.create(
+            type='user',
+            target_id=str(self.common.id),
+            target_name='Comum',
+            category='Comportamento',
+        )
+        UserProfile.objects.filter(user=self.common).update(subscription_plan='Gold')
+
+        response = self.client.get('/api/admin/dashboard/')
+        self.assertEqual(response.status_code, 200)
+
+        data = response.data
+        self.assertEqual(data['geral']['usuarios']['total'], 2)
+        self.assertEqual(data['geral']['freelancers']['total'], 1)
+        self.assertEqual(data['geral']['contratantes']['total'], 1)
+        self.assertEqual(data['geral']['freelas']['total'], 1)
+        self.assertEqual(data['geral']['freelas']['fecharam_acordo_mes'], 0)
+        self.assertEqual(data['denuncias']['pendentes'], 1)
+        self.assertEqual(data['assinaturas_ativas'], 1)
+
+        planos = {p['nome']: p['total'] for p in data['planos']}
+        self.assertEqual(planos['Gold'], 1)
+        self.assertEqual(planos['Gratuito'], 1)
+        self.assertEqual(planos['Platinum'], 0)
+
+    def test_freelas_conta_quem_fechou_acordo_no_mes(self):
+        self.client.force_authenticate(self.admin)
+
+        freelancer = User.objects.create_user(
+            username='freela@example.com',
+            email='freela@example.com',
+            password='secret123',
+        )
+        contratante = User.objects.create_user(
+            username='contra@example.com',
+            email='contra@example.com',
+            password='secret123',
+        )
+        ad = Ad.objects.create(author=contratante, title='Vaga', role='contractor')
+        candidatura = Candidatura.objects.create(user=freelancer, ad=ad, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+
+        response = self.client.get('/api/admin/dashboard/')
+        self.assertEqual(response.status_code, 200)
+
+        freelas = response.data['geral']['freelas']
+        self.assertEqual(freelas['fecharam_acordo_mes'], 2)

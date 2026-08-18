@@ -101,12 +101,10 @@ export default function Profile() {
   };
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="card" style={{ padding: '2rem' }}>
+    <div className="profile-page">
+      <div className="card profile-card">
         {/* Banner */}
-          <div style={{
-            width: 'calc(100% + 4rem)',
-            margin: '-2rem -2rem 0 -2rem',
+          <div className="profile-banner" style={{
             aspectRatio: '4 / 1',
             background: profile.banner ? `url(${profile.banner}) center/cover no-repeat` : '#e0e0e0',
             borderRadius: '12px 12px 0 0',
@@ -211,13 +209,13 @@ export default function Profile() {
           </div>
         )}
 
-        <div style={{ marginBottom: '2.5rem' }}>
+        <section className="profile-section">
           <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
           <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{profile.bio || "Adicione uma biografia no botão 'Editar'."}</p>
-        </div>
+        </section>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', gap: '0.5rem' }}>
+        <div className="profile-tabs" role="tablist">
           {[
             { key: 'skills', label: 'Habilidades e Especialidades' },
             { key: 'experiencia', label: `Experiência${experiencias.length > 0 ? ` (${experiencias.length})` : ''}` },
@@ -227,17 +225,13 @@ export default function Profile() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              style={{
-                background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 'bold',
-                color: activeTab === tab.key ? 'var(--text-color)' : 'var(--text-secondary)',
-                borderBottom: activeTab === tab.key ? '3px solid var(--primary)' : '3px solid transparent',
-                whiteSpace: 'nowrap'
-              }}>
+              className={`profile-tab-option${activeTab === tab.key ? ' selected' : ''}`}>
               {tab.label}
             </button>
           ))}
         </div>
 
+        <div key={activeTab} className="tab-content-animation profile-tab-content">
         {activeTab === 'skills' && (
           <div>
             <div style={{ marginBottom: '2.5rem' }}>
@@ -408,6 +402,7 @@ export default function Profile() {
             )}
           </div>
         )}
+        </div>
 
       </div>
     </div>

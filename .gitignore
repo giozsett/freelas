@@ -28,6 +28,9 @@ venv/
 .venv/
 env/
 
+# Redis portátil para Windows (binário local, baixado pelo dev script)
+tools/redis/
+
 # Python / Django
 __pycache__/
 *.py[cod]
@@ -38,3 +41,10 @@ backend/media/
 # Environment variables
 .env
 .env.local
+
+# Testes e artefatos de build
+Next_Steps.md
+Testes.md
+roteiro.txt
+roteiro2.txt
+Implementation.md
