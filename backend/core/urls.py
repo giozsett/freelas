@@ -18,6 +18,18 @@ from .views import (
     SimularPagamentoAcordoAPI,
     AvaliacaoListCreateAPIView,
     AvaliacoesPendentesAPIView,
+    DashboardAdminAPIView,
+    NotificacaoListAPIView,
+    NotificacaoNaoLidasAPIView,
+    NotificacaoMarcarLidaAPIView,
+    NotificacaoMarcarLidasAPIView,
+)
+from .views import (
+    ChatListAPIView,
+    ChatDetailAPIView,
+    ChatEnviarMensagemAPIView,
+    ChatMarcarLidaAPIView,
+    ChatNaoLidasAPIView,
 )
 
 urlpatterns = [
@@ -60,4 +72,14 @@ urlpatterns = [
     path('api/pagamentos/retorno/<str:flow>/<str:result>/', MercadoPagoReturnAPI.as_view(), name='pagamento-retorno'),
     path('api/pagamentos/historico/', PagamentoHistoricoAPIView.as_view(), name='pagamento-historico'),
     path('api/pagamentos/cartoes/', CartaoUsuarioListAPIView.as_view(), name='pagamento-cartoes'),
+    path('api/admin/dashboard/', DashboardAdminAPIView.as_view(), name='admin-dashboard'),
+    path('api/notificacoes/', NotificacaoListAPIView.as_view(), name='notificacao-list'),
+    path('api/notificacoes/nao-lidas/', NotificacaoNaoLidasAPIView.as_view(), name='notificacao-nao-lidas'),
+    path('api/notificacoes/ler-todas/', NotificacaoMarcarLidasAPIView.as_view(), name='notificacao-marcar-lidas'),
+    path('api/notificacoes/<int:pk>/ler/', NotificacaoMarcarLidaAPIView.as_view(), name='notificacao-marcar-lida'),
+    path('api/chat/', ChatListAPIView.as_view(), name='chat-list'),
+    path('api/chat/nao-lidas/', ChatNaoLidasAPIView.as_view(), name='chat-nao-lidas'),
+    path('api/chat/<int:pk>/', ChatDetailAPIView.as_view(), name='chat-detail'),
+    path('api/chat/<int:pk>/messages/', ChatEnviarMensagemAPIView.as_view(), name='chat-enviar'),
+    path('api/chat/<int:pk>/ler/', ChatMarcarLidaAPIView.as_view(), name='chat-marcar-lida'),
 ]

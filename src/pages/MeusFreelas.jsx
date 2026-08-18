@@ -21,20 +21,27 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
+import { useNotificacoes } from '../context/ContextoNotificacao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 export default function MeusFreelas() {
   const { user } = useAuth();
   const { role } = useRole();
+  const { marcarLidas } = useNotificacoes();
+  const { confirmar } = useDialogo();
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
-  const backendRole = isFreelancer ? 'freelancer' : 'contratante';
+
+  useEffect(() => {
+    marcarLidas(['acordo']);
+  }, [marcarLidas]);
   const [agreements, setAgreements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCards, setExpandedCards] = useState({});
   const [payingAgreementId, setPayingAgreementId] = useState(null);
-  const [simulatingAgreementId, setSimulatingAgreementId] = useState(null);
   const [concludingAgreementId, setConcludingAgreementId] = useState(null);
   const [agreementTab, setAgreementTab] = useState('ativos');
+  const [pendingRequestsExpanded, setPendingRequestsExpanded] = useState(false);
   const [cancellationAgreement, setCancellationAgreement] = useState(null);
   const [cancellationReason, setCancellationReason] = useState('');
   const [requestingCancellation, setRequestingCancellation] = useState(false);
@@ -83,8 +90,10 @@ export default function MeusFreelas() {
         checkoutWindow.opener = null;
         checkoutWindow.location.href = data.init_point;
         if (data.test_approved) {
-          showStatus('Checkout criado. Pagamento acadêmico aprovado e acordo iniciado.', 'success');
+          showStatus('Checkout aberto. Pagamento registrado e freela movido para Em andamento.', 'success');
           fetchAgreements();
+        } else {
+          showStatus('Checkout aberto. O freela será iniciado após a aprovação do pagamento.', 'success');
         }
         setPayingAgreementId(null);
       } else {
@@ -99,8 +108,9 @@ export default function MeusFreelas() {
   };
 
   const handleConcludeAgreement = async (agreement) => {
-    const confirmed = window.confirm(
-      `Deseja concluir o acordo "${agreement.titulo_anuncio}"? Depois disso, as duas partes poderão enviar suas avaliações.`
+    const confirmed = await confirmar(
+      `Deseja concluir o acordo "${agreement.titulo_anuncio}"? Depois disso, as duas partes poderão enviar suas avaliações.`,
+      { titulo: 'Concluir acordo', confirmarTexto: 'Concluir acordo' },
     );
     if (!confirmed) return;
 
@@ -123,35 +133,6 @@ export default function MeusFreelas() {
     } catch (error) {
       showStatus(error.message, 'error');
       setConcludingAgreementId(null);
-    }
-  };
-
-  const handleSimulatePayment = async (agreement) => {
-    if (!window.confirm(
-      `Ativar o acordo "${agreement.titulo_anuncio}" usando uma aprovação exclusivamente local de teste?`,
-    )) return;
-
-    setSimulatingAgreementId(agreement.id);
-    try {
-      const response = await fetch(
-        `http://localhost:8000/api/pagamentos/acordo/${agreement.id}/simular/`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${localStorage.getItem('token')}`,
-          },
-        },
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `Falha na simulação (HTTP ${response.status}).`);
-      }
-      showStatus(data.message, 'success');
-      fetchAgreements();
-    } catch (error) {
-      showStatus(error.message, 'error');
-    } finally {
-      setSimulatingAgreementId(null);
     }
   };
 
@@ -301,6 +282,10 @@ export default function MeusFreelas() {
     return !isFreelancer;
   };
 
+  const userRoleInAgreement = (app) => (
+    isContractorOfAgreement(app) ? 'contratante' : 'freelancer'
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get('checkout');
@@ -347,7 +332,6 @@ export default function MeusFreelas() {
     const token = localStorage.getItem('token');
     const bodyData = {
       tem_solicitacao: true,
-      solicitado_por: backendRole,
       justificativa_alteracao: justificativa,
       proposto_valor: parseFloat(valorProposto) || null,
       proposta_descricao: descricaoProposta,
@@ -362,25 +346,12 @@ export default function MeusFreelas() {
       },
       body: JSON.stringify(bodyData)
     })
-    .then(res => {
-      if (res.ok) {
-        showStatus('Solicitação de alteração enviada com sucesso!', 'success');
-        fetchAgreements();
-        handleCloseModal();
-      } else {
-        // Fallback simulate locally if mock data
-        setAgreements(prev => prev.map(item => {
-          if (item.id === selectedAgreement.id) {
-            return {
-              ...item,
-              ...bodyData
-            };
-          }
-          return item;
-        }));
-        showStatus('Solicitação enviada com sucesso (Simulação Local)!', 'success');
-        handleCloseModal();
-      }
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || 'Não foi possível enviar a solicitação.');
+      showStatus('Solicitação de alteração enviada com sucesso!', 'success');
+      fetchAgreements();
+      handleCloseModal();
     })
     .catch(err => {
       console.error(err);
@@ -401,43 +372,11 @@ export default function MeusFreelas() {
       },
       body: JSON.stringify(bodyData)
     })
-    .then(res => {
-      if (res.ok) {
-        showStatus(approved ? 'Alterações aprovadas e aplicadas!' : 'Solicitação de alteração recusada.', 'success');
-        fetchAgreements();
-      } else {
-        // Fallback simulate locally if mock data
-        setAgreements(prev => prev.map(item => {
-          if (item.id === agreementId) {
-            if (approved) {
-              return {
-                ...item,
-                valor_acordado: item.proposto_valor !== null ? item.proposto_valor : item.valor_acordado,
-                descricao_servico: item.proposta_descricao !== null ? item.proposta_descricao : item.descricao_servico,
-                conclusao_prevista: item.proposta_conclusao_prevista !== null ? item.proposta_conclusao_prevista : item.conclusao_prevista,
-                tem_solicitacao: false,
-                solicitado_por: null,
-                justificativa_alteracao: null,
-                proposto_valor: null,
-                proposta_descricao: null,
-                proposta_conclusao_prevista: null
-              };
-            } else {
-              return {
-                ...item,
-                tem_solicitacao: false,
-                solicitado_por: null,
-                justificativa_alteracao: null,
-                proposto_valor: null,
-                proposta_descricao: null,
-                proposta_conclusao_prevista: null
-              };
-            }
-          }
-          return item;
-        }));
-        showStatus(approved ? 'Alterações aprovadas com sucesso (Simulação Local)!' : 'Solicitação de alteração recusada.', 'success');
-      }
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || 'Não foi possível processar a decisão.');
+      showStatus(approved ? 'Alterações aprovadas e aplicadas!' : 'Solicitação de alteração recusada.', 'success');
+      fetchAgreements();
     })
     .catch(err => {
       console.error(err);
@@ -453,7 +392,9 @@ export default function MeusFreelas() {
   const historyAgreements = agreementTab === 'concluidos' ? completedAgreements : cancelledAgreements;
 
   // Check for received requests (notifications)
-  const receivedRequests = agreements.filter(app => app.tem_solicitacao && app.solicitado_por !== backendRole);
+  const receivedRequests = agreements.filter(app => (
+    app.tem_solicitacao && app.solicitado_por !== userRoleInAgreement(app)
+  ));
 
   return (
     <div style={{ maxWidth: '950px', margin: '2rem auto', padding: '0 1rem' }}>
@@ -507,11 +448,11 @@ export default function MeusFreelas() {
       {/* Status Message */}
       {statusMsg.text && (
         <div role="status" aria-live="polite" style={{
-          background: statusMsg.type === 'success' ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 71, 87, 0.15)',
-          borderLeft: `4px solid ${statusMsg.type === 'success' ? '#2ed573' : '#ff4757'}`,
+          background: statusMsg.type === 'success' ? 'var(--success-soft)' : 'var(--danger-soft)',
+          borderLeft: `4px solid ${statusMsg.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)'}`,
           padding: '1rem',
           borderRadius: '8px',
-          color: statusMsg.type === 'success' ? '#2ed573' : '#ff4757',
+          color: statusMsg.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)',
           fontWeight: '500',
           display: 'flex',
           alignItems: 'center',
@@ -532,27 +473,30 @@ export default function MeusFreelas() {
       {/* Notifications / Received Requests Section */}
       {receivedRequests.length > 0 && (
         <div style={{ marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Bell size={20} color="var(--primary)" />
-            <h2 style={{ fontSize: '1.25rem', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Solicitações Pendentes ({receivedRequests.length})
-            </h2>
-          </div>
+          <button
+            type="button"
+            onClick={() => setPendingRequestsExpanded(current => !current)}
+            aria-expanded={pendingRequestsExpanded}
+            className="pending-requests-toggle"
+          >
+            <span><Bell size={20} /> Você possui solicitações pendentes ({receivedRequests.length})</span>
+            <ChevronDown size={21} className={`rotate-chevron ${pendingRequestsExpanded ? 'rotated' : ''}`} />
+          </button>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {pendingRequestsExpanded && <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             {receivedRequests.map(app => (
               <div
                 key={app.id}
                 className="card notification-card"
                 style={{
                   border: '1.5px solid var(--primary)',
-                  background: 'rgba(255, 130, 110, 0.05)',
-                  boxShadow: '0 6px 15px rgba(255, 130, 110, 0.08)'
+                  background: 'var(--secondary)',
+                  boxShadow: '0 6px 15px var(--shadow-color)'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
-                    <span className="badge" style={{ background: 'var(--primary)', color: 'white', marginBottom: '0.5rem' }}>
+                    <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)', marginBottom: '0.5rem' }}>
                       Pendente de Aprovação
                     </span>
                     <h3 style={{ fontSize: '1.25rem', margin: '0.25rem 0' }}>{app.titulo_anuncio}</h3>
@@ -566,14 +510,14 @@ export default function MeusFreelas() {
                     <button
                       onClick={() => handleDecidirSolicitacao(app.id, false)}
                       className="btn btn-secondary"
-                      style={{ padding: '0.5rem 1rem', background: '#ff4757', color: 'white', borderColor: '#ff4757' }}
+                      style={{ padding: '0.5rem 1rem', background: 'var(--danger-color)', color: 'var(--danger-contrast)', borderColor: 'var(--danger-color)' }}
                     >
                       <X size={16} /> Recusar
                     </button>
                     <button
                       onClick={() => handleDecidirSolicitacao(app.id, true)}
                       className="btn"
-                      style={{ padding: '0.5rem 1rem', background: '#2ed573' }}
+                      style={{ padding: '0.5rem 1rem', background: 'var(--success-color)', color: 'var(--success-contrast)' }}
                     >
                       <Check size={16} /> Aprovar
                     </button>
@@ -593,7 +537,7 @@ export default function MeusFreelas() {
                       <strong>Orçamento Proposto:</strong>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
                         <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>R$ {app.valor_acordado}</span>
-                        <span style={{ color: '#2ed573', fontWeight: 'bold' }}><TrendingUp size={14} style={{ display: 'inline', marginRight: '2px' }} /> R$ {app.proposto_valor}</span>
+                        <span style={{ color: 'var(--success-color)', fontWeight: 'bold' }}><TrendingUp size={14} style={{ display: 'inline', marginRight: '2px' }} /> R$ {app.proposto_valor}</span>
                       </div>
                     </div>
 
@@ -603,7 +547,7 @@ export default function MeusFreelas() {
                         <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>
                           {app.conclusao_prevista ? new Date(app.conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
                         </span>
-                        <span style={{ color: '#7C3AED', fontWeight: 'bold' }}>
+                        <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
                           {app.proposta_conclusao_prevista ? new Date(app.proposta_conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não definido'}
                         </span>
                       </div>
@@ -621,13 +565,13 @@ export default function MeusFreelas() {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
         </div>
       )}
 
       {/* Informativo de Responsabilidade */}
       <div style={{
-        background: 'rgba(124, 58, 237, 0.05)',
+        background: 'var(--secondary)',
         borderLeft: '4px solid var(--primary)',
         padding: '1rem 1.5rem',
         borderRadius: '8px',
@@ -676,7 +620,7 @@ export default function MeusFreelas() {
       {/* Aguardando Pagamento Section */}
       {pendingPaymentAgreements.length > 0 && (
         <div style={{ marginBottom: '3rem' }}>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#ffc107' }}>
+          <h2 className="pending-payment-value" style={{ fontSize: '1.6rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Aguardando Pagamento do Serviço ({pendingPaymentAgreements.length})</span>
             <span style={{ fontSize: '0.9rem', opacity: 0.6, fontWeight: 'normal' }}>Checkout pendente</span>
           </h2>
@@ -685,18 +629,18 @@ export default function MeusFreelas() {
             {pendingPaymentAgreements.map(app => {
               const userIsContractor = isContractorOfAgreement(app);
               return (
-                <div key={app.id} className="card" style={{ borderLeft: '5px solid #ffc107', background: 'rgba(255, 193, 7, 0.02)' }}>
+                <div key={app.id} className="card pending-payment-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className="badge" style={{ background: '#ffc107', color: '#1a1a1a' }}>
+                        <span className="badge pending-payment-badge">
                           Pendente de Pagamento
                         </span>
-                        <span className="badge" style={{ background: userIsContractor ? 'var(--holo-salmon)' : 'var(--primary)', color: '#1a1a1a', fontWeight: 'bold' }}>
+                        <span className="badge role-badge">
                           Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                         </span>
                         {app.cancelamento_pendente && (
-                          <span className="badge" style={{ background: '#ff4757', color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Ban size={12} /> Cancelamento Pendente
                           </span>
                         )}
@@ -708,7 +652,7 @@ export default function MeusFreelas() {
                           <strong>Contratante:</strong> {app.nome_contratante || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <User size={15} color="var(--secondary)" />
+                          <User size={15} color="var(--accent)" />
                           <strong>Freelancer:</strong> {app.nome_prestador || 'Não informado'}
                         </span>
                       </div>
@@ -719,44 +663,37 @@ export default function MeusFreelas() {
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                    <div className="pending-payment-actions">
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ffc107' }}>
+                        <div className="pending-payment-value" style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
                           Valor do serviço: {Number(app.valor_acordado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>
                       </div>
 
                       {userIsContractor ? (
-                        <>
                           <button
                             onClick={() => handlePayService(app.id)}
-                            className="btn"
+                            className="btn pending-payment-button"
                             disabled={payingAgreementId !== null || Boolean(app.cancelamento_pendente)}
-                            style={{ background: '#ffc107', color: '#1a1a1a', border: 'none', padding: '0.6rem 1.2rem', fontSize: '0.95rem', cursor: 'pointer' }}
+                            style={{ border: 'none', padding: '0.6rem 1.2rem', fontSize: '0.95rem', cursor: 'pointer' }}
                           >
-                            {payingAgreementId === app.id ? 'Abrindo checkout...' : 'Pagar serviço'}
+                            {payingAgreementId === app.id ? 'Abrindo checkout...' : 'Pagar'}
                           </button>
-                          {import.meta.env.DEV && !app.cancelamento_pendente && (
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              disabled={simulatingAgreementId !== null}
-                              onClick={() => handleSimulatePayment(app)}
-                              style={{ fontSize: '0.82rem', padding: '0.45rem 0.75rem' }}
-                            >
-                              {simulatingAgreementId === app.id
-                                ? 'Ativando teste...'
-                                : 'Simular aprovação de teste'}
-                            </button>
-                          )}
-                        </>
                       ) : (
-                        <div style={{ fontSize: '0.85rem', color: '#ffc107', fontStyle: 'italic', textAlign: 'right' }}>
+                        <div className="pending-payment-waiting" style={{ fontSize: '0.85rem', fontStyle: 'italic', textAlign: 'right' }}>
                           Aguardando pagamento pelo contratante
                         </div>
                       )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={Boolean(app.tem_solicitacao) || Boolean(app.cancelamento_pendente)}
+                        onClick={() => handleOpenModal(app)}
+                      >
+                        <Edit size={15} /> {app.tem_solicitacao ? 'Alteração pendente' : 'Solicitar alteração'}
+                      </button>
                       {app.cancelamento_pendente ? (
-                        <div style={{ fontSize: '0.82rem', color: '#ff4757', textAlign: 'right', maxWidth: '260px' }}>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--danger-color)', textAlign: 'right', maxWidth: '260px' }}>
                           Você enviou sua solicitação de cancelamento. Aguarde a aprovação da moderação.
                         </div>
                       ) : (
@@ -764,7 +701,7 @@ export default function MeusFreelas() {
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => openCancellationModal(app)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#ff4757', borderColor: '#ff4757' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
                         >
                           <Ban size={15} /> Solicitar cancelamento
                         </button>
@@ -795,7 +732,7 @@ export default function MeusFreelas() {
               const isExpanded = expandedCards[app.id];
               const userIsContractor = isContractorOfAgreement(app);
               return (
-                <div key={app.id} className="card hover-lift" style={{ borderLeft: '5px solid #2ed573' }}>
+                <div key={app.id} className="card hover-lift" style={{ borderLeft: '5px solid var(--success-color)' }}>
 
                   {/* Summary / Header view - Always Visible */}
                   <div
@@ -804,16 +741,16 @@ export default function MeusFreelas() {
                   >
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                        <span className="badge" style={{ background: userIsContractor ? 'var(--holo-salmon)' : 'var(--primary)', color: '#1a1a1a', fontWeight: 'bold' }}>
+                        <span className="badge role-badge">
                           Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                         </span>
                         {app.tem_solicitacao && (
-                          <span className="badge" style={{ background: '#ff4757', color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Bell size={12} /> Alteração Pendente
                           </span>
                         )}
                         {app.cancelamento_pendente && (
-                          <span className="badge" style={{ background: '#ff4757', color: 'white', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Ban size={12} /> Cancelamento Pendente
                           </span>
                         )}
@@ -826,7 +763,7 @@ export default function MeusFreelas() {
                           <strong>Contratante:</strong> {app.nome_contratante || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <User size={15} color="var(--secondary)" />
+                          <User size={15} color="var(--accent)" />
                           <strong>Freelancer:</strong> {app.nome_prestador || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -883,14 +820,14 @@ export default function MeusFreelas() {
                       {/* Current Request Notice inside card */}
                       {app.tem_solicitacao && (
                         <div style={{
-                          background: app.solicitado_por === backendRole ? 'rgba(124, 58, 237, 0.05)' : 'rgba(255, 130, 110, 0.05)',
-                          border: `1px solid ${app.solicitado_por === backendRole ? 'var(--primary)' : 'var(--primary)'}`,
+                          background: 'var(--secondary)',
+                          border: '1px solid var(--primary)',
                           borderRadius: '8px',
                           padding: '1rem'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
                             <Clock size={16} />
-                            {app.solicitado_por === backendRole ? (
+                            {app.solicitado_por === userRoleInAgreement(app) ? (
                               <span>Você solicitou alterações neste acordo</span>
                             ) : (
                               <span>Alterações solicitadas pela outra parte</span>
@@ -904,19 +841,19 @@ export default function MeusFreelas() {
                             <strong>Novos valores propostos:</strong> Orçamento de R$ {app.proposto_valor} | Conclusão em {app.proposta_conclusao_prevista ? new Date(app.proposta_conclusao_prevista + 'T00:00:00').toLocaleDateString() : 'Não informada'}
                           </p>
 
-                          {app.solicitado_por !== backendRole && (
+                          {app.solicitado_por !== userRoleInAgreement(app) && (
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
                               <button
                                 onClick={() => handleDecidirSolicitacao(app.id, false)}
                                 className="btn btn-secondary"
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#ff4757', color: 'white', borderColor: '#ff4757' }}
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: 'var(--danger-color)', color: 'var(--danger-contrast)', borderColor: 'var(--danger-color)' }}
                               >
                                 Recusar
                               </button>
                               <button
                                 onClick={() => handleDecidirSolicitacao(app.id, true)}
                                 className="btn"
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#2ed573' }}
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: 'var(--success-color)', color: 'var(--success-contrast)' }}
                               >
                                 Aprovar e Atualizar Acordo
                               </button>
@@ -927,8 +864,8 @@ export default function MeusFreelas() {
 
                       {app.cancelamento_pendente && (
                         <div style={{
-                          background: 'rgba(255, 71, 87, 0.05)',
-                          border: '1px solid #ff4757',
+                          background: 'var(--danger-soft)',
+                          border: '1px solid var(--danger-color)',
                           borderRadius: '8px',
                           padding: '1rem',
                         }}>
@@ -947,7 +884,7 @@ export default function MeusFreelas() {
 
                       {/* Action buttons */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', flexWrap: 'wrap' }}>
-                        <Link to="/chat" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Link to={`/chat/${app.id}`} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <MessageSquare size={16} /> Abrir Chat de Conversa
                         </Link>
 
@@ -955,7 +892,7 @@ export default function MeusFreelas() {
                           onClick={() => handleConcludeAgreement(app)}
                           className="btn"
                           disabled={concludingAgreementId !== null || Boolean(app.cancelamento_pendente)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#2ed573', color: '#17351f' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--success-color)', color: 'var(--success-contrast)' }}
                         >
                           <CheckCircle size={16} />
                           {concludingAgreementId === app.id ? 'Concluindo...' : 'Concluir acordo'}
@@ -975,13 +912,13 @@ export default function MeusFreelas() {
                             type="button"
                             onClick={() => openCancellationModal(app)}
                             className="btn btn-secondary"
-                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4757', borderColor: '#ff4757' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
                           >
                             <Ban size={16} /> Solicitar Cancelamento
                           </button>
                         )}
                         {app.cancelamento_pendente && (
-                          <span style={{ color: '#ff4757', fontSize: '0.9rem', alignSelf: 'center' }}>
+                          <span style={{ color: 'var(--danger-color)', fontSize: '0.9rem', alignSelf: 'center' }}>
                             Cancelamento pendente — aguardando aprovação da moderação
                           </span>
                         )}
@@ -1024,11 +961,7 @@ export default function MeusFreelas() {
               return (
                 <div
                   key={app.id}
-                  className="card hover-lift"
-                  style={{
-                    borderLeft: `5px solid ${isConcluido ? '#2ed573' : '#ff4757'}`,
-                    opacity: 0.85
-                  }}
+                  className={`card hover-lift history-agreement-card ${agreementTab === 'concluidos' ? 'completed-agreement-card' : 'cancelled-agreement-card'}`}
                 >
                   {/* Summary / Header view - Always Visible */}
                   <div
@@ -1037,13 +970,10 @@ export default function MeusFreelas() {
                   >
                     <div style={{ flex: '1', minWidth: '250px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className={`badge ${isConcluido ? 'success' : 'danger'}`} style={{
-                          background: isConcluido ? 'rgba(46, 213, 115, 0.15)' : 'rgba(255, 71, 87, 0.15)',
-                          color: isConcluido ? '#2ed573' : '#ff4757'
-                        }}>
+                        <span className={`badge history-status-badge ${isConcluido ? 'completed' : 'cancelled'}`}>
                           {app.status_acordo}
                         </span>
-                        <span className="badge" style={{ background: isContractorOfAgreement(app) ? 'var(--holo-salmon)' : 'var(--primary)', color: '#1a1a1a', fontWeight: 'bold' }}>
+                        <span className="badge role-badge">
                           Seu Papel: {isContractorOfAgreement(app) ? 'Contratante' : 'Freelancer'}
                         </span>
                         <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>
@@ -1061,7 +991,7 @@ export default function MeusFreelas() {
                           <strong>Contratante:</strong> {app.nome_contratante || 'Não informado'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <User size={14} color="var(--secondary)" />
+                          <User size={14} color="var(--accent)" />
                           <strong>Freelancer:</strong> {app.nome_prestador || 'Não informado'}
                         </span>
                       </div>
@@ -1101,7 +1031,7 @@ export default function MeusFreelas() {
                             <Star size={14} /> Avaliar agora
                           </Link>
                         )}
-                        <Link to="/chat" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}>
+                        <Link to={`/chat/${app.id}`} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', padding: '0.5rem 1rem' }}>
                           <MessageSquare size={14} /> Histórico de Chat
                         </Link>
                       </div>
@@ -1157,7 +1087,7 @@ export default function MeusFreelas() {
 
               <div>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.95rem' }}>
-                  Justificativa da Alteração <span style={{ color: '#ff4757' }}>*</span>
+                  Justificativa da Alteração <span style={{ color: 'var(--danger-color)' }}>*</span>
                 </label>
                 <textarea
                   className="input"
@@ -1242,7 +1172,7 @@ export default function MeusFreelas() {
           zIndex: 1000,
           padding: '1rem',
         }}>
-          <div className="card" style={{ maxWidth: '540px', width: '100%', borderTop: '5px solid #ff4757', position: 'relative' }}>
+          <div className="card" style={{ maxWidth: '540px', width: '100%', borderTop: '5px solid var(--danger-color)', position: 'relative' }}>
             <button
               type="button"
               onClick={closeCancellationModal}
@@ -1253,13 +1183,13 @@ export default function MeusFreelas() {
               <X size={22} />
             </button>
             <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Ban size={23} color="#ff4757" /> Solicitar cancelamento
+              <Ban size={23} color="var(--danger-color)" /> Solicitar cancelamento
             </h2>
             <p style={{ opacity: 0.8, lineHeight: 1.5 }}>
               O acordo <strong>{cancellationAgreement.titulo_anuncio}</strong> continuará com o status atual até que um administrador analise a solicitação.
             </p>
             {cancellationAgreement.status_acordo === 'Ativo' && (
-              <div style={{ background: 'rgba(255,193,7,.12)', borderLeft: '4px solid #ffc107', padding: '0.8rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.88rem' }}>
+              <div style={{ background: 'var(--warning-soft)', borderLeft: '4px solid var(--warning-color)', padding: '0.8rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.88rem' }}>
                 A aprovação cancela o acordo na plataforma, mas não realiza automaticamente um estorno de pagamento já aprovado.
               </div>
             )}
@@ -1281,7 +1211,7 @@ export default function MeusFreelas() {
                 <button type="button" className="btn btn-secondary" onClick={closeCancellationModal} disabled={requestingCancellation}>
                   Voltar
                 </button>
-                <button type="submit" className="btn" disabled={requestingCancellation} style={{ background: '#ff4757', color: 'white' }}>
+                <button type="submit" className="btn" disabled={requestingCancellation} style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)' }}>
                   {requestingCancellation ? 'Enviando...' : 'Enviar para o administrador'}
                 </button>
               </div>

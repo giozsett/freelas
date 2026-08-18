@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, CheckCircle, Clock } from 'lucide-react';
+import { Package, CheckCircle, Clock, TimerOff } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function MyAds() {
   const { user } = useAuth();
+  const { marcarLidas } = useNotificacoes();
   const [myAds, setMyAds] = useState([]);
   const [statusFilter, setStatusFilter] = useState('ativos');
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    marcarLidas(['candidatura']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     if (!user) {
@@ -30,9 +36,13 @@ export default function MyAds() {
   }, [user]);
 
   const isFinalized = (ad) => String(ad.status_anuncio || '').toLowerCase() === 'finalizado';
-  const activeAds = myAds.filter(ad => !isFinalized(ad));
+  const isExpired = (ad) => String(ad.status_anuncio || '').toLowerCase() === 'vencido';
+  const activeAds = myAds.filter(ad => !isFinalized(ad) && !isExpired(ad));
   const finalizedAds = myAds.filter(isFinalized);
-  const visibleAds = statusFilter === 'ativos' ? activeAds : finalizedAds;
+  const expiredAds = myAds.filter(isExpired);
+  const visibleAds = statusFilter === 'ativos'
+    ? activeAds
+    : statusFilter === 'finalizados' ? finalizedAds : expiredAds;
 
   return (
     <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
@@ -66,7 +76,23 @@ export default function MyAds() {
         >
           <CheckCircle size={17} /> Finalizados ({finalizedAds.length})
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statusFilter === 'vencidos'}
+          onClick={() => setStatusFilter('vencidos')}
+          className={statusFilter === 'vencidos' ? 'btn' : 'btn btn-secondary'}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <TimerOff size={17} /> Vencidos ({expiredAds.length})
+        </button>
       </div>
+
+      {statusFilter === 'vencidos' && (
+        <p className="expired-ads-help">
+          Anúncios postados há mais de 30 dias são considerados vencidos e ficam indisponíveis para receber candidaturas.
+        </p>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {isLoading ? (
@@ -80,7 +106,7 @@ export default function MyAds() {
                   <Link to={`/ad/${ad.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <h2 style={{ fontSize: '1.5rem', margin: 0, textDecoration: 'underline' }}>{ad.title || ad.titulo}</h2>
                   </Link>
-                  <span className="badge salmon">Publicado</span>
+                  <span className="badge salmon">{isExpired(ad) ? 'Vencido' : 'Publicado'}</span>
                 </div>
                 <div style={{ fontSize: '0.9rem', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Clock size={16} /> Publicado em {new Date(ad.created_at).toLocaleDateString()}
@@ -102,7 +128,11 @@ export default function MyAds() {
         ) : (
            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
              <h3 style={{ marginBottom: '1rem' }}>
-               {statusFilter === 'ativos' ? 'Você não possui anúncios ativos.' : 'Você ainda não possui anúncios finalizados.'}
+               {statusFilter === 'ativos'
+                 ? 'Você não possui anúncios ativos.'
+                 : statusFilter === 'finalizados'
+                   ? 'Você ainda não possui anúncios finalizados.'
+                   : 'Você não possui anúncios vencidos.'}
              </h3>
              {statusFilter === 'ativos' && <Link to="/create-ad" className="btn dark-text">Postar um anúncio</Link>}
            </div>

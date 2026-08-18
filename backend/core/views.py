@@ -144,6 +144,52 @@ class ExperienciaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIV
         return Experiencia.objects.filter(usuario__user=self.request.user)
 
 
+class CertificadoListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = CertificadoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def get_queryset(self):
+        return Certificado.objects.filter(usuario__user=self.request.user).order_by('-criado_em')
+
+    def perform_create(self, serializer):
+        serializer.save(usuario=self.request.user.profile)
+
+
+class CertificadoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = CertificadoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def get_queryset(self):
+        return Certificado.objects.filter(usuario__user=self.request.user)
+
+
+class InstituicaoEnsinoListAPIView(generics.ListAPIView):
+    queryset = InstituicaoEnsino.objects.filter(verificado=True)
+    serializer_class = InstituicaoEnsinoSerializer
+    permission_classes = [permissions.AllowAny]
+
+
+class ExperienciaListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = ExperienciaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Experiencia.objects.filter(usuario__user=self.request.user).order_by('-data_inicio')
+
+    def perform_create(self, serializer):
+        serializer.save(usuario=self.request.user.profile)
+
+
+class ExperienciaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ExperienciaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Experiencia.objects.filter(usuario__user=self.request.user)
+
+
 class ReportAdminPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
@@ -160,7 +206,17 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
-        queryset = Report.objects.all().order_by('-created_at')
+        from django.db.models import Case, IntegerField, Value, When
+
+        queryset = Report.objects.annotate(
+            status_order=Case(
+                When(status='pending', then=Value(0)),
+                When(status='procedente', then=Value(1)),
+                When(status='improcedente', then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            ),
+        ).order_by('status_order', '-created_at')
         status_filter = self.request.query_params.get('status')
         valid_statuses = {choice[0] for choice in Report.STATUS_CHOICES}
         if status_filter in valid_statuses:
@@ -195,10 +251,26 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        queryset = Ad.objects.exclude(deletado=True).order_by('-created_at')
+        from django.db.models import Q, Avg
+
+        Ad.atualizar_vencidos()
+        queryset = (
+            Ad.objects.exclude(deletado=True)
+            .select_related('author', 'author__profile')
+            .annotate(
+                _media_freelancer=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='freelancer'),
+                ),
+                _media_contratante=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
+                ),
+            )
+            .order_by('-created_at')
+        )
         all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
         if not all_ads:
-            from django.db.models import Q
             # Only show ads that are open (status is NULL, empty, 'Em aberto', or 'Ativo')
             queryset = queryset.filter(Q(status_anuncio__isnull=True) | Q(status_anuncio='') | Q(status_anuncio='Em aberto') | Q(status_anuncio='Ativo'))
         return queryset
@@ -207,8 +279,26 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         serializer.save(author=self.request.user)
 
 class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Ad.objects.exclude(deletado=True)
     serializer_class = AdSerializer
+
+    def get_queryset(self):
+        from django.db.models import Q, Avg
+
+        Ad.atualizar_vencidos()
+        return (
+            Ad.objects.exclude(deletado=True)
+            .select_related('author', 'author__profile')
+            .annotate(
+                _media_freelancer=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='freelancer'),
+                ),
+                _media_contratante=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
+                ),
+            )
+        )
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -249,6 +339,7 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         from django.db.models import Q
 
+        Ad.atualizar_vencidos()
         queryset = Candidatura.objects.select_related(
             'ad__author', 'user',
         ).filter(
@@ -275,6 +366,10 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             raise ValidationError('O anúncio é obrigatório.')
         if ad.author_id == self.request.user.id:
             raise ValidationError('Você não pode se candidatar ao próprio anúncio.')
+        Ad.atualizar_vencidos()
+        ad.refresh_from_db(fields=['status_anuncio'])
+        if ad.status_anuncio == 'Vencido':
+            raise ValidationError('Este anúncio expirou e não aceita novas candidaturas.')
         if ad.status_anuncio == 'Finalizado' or ad.candidaturas.filter(status='aprovada').exists():
             raise ValidationError('Este anúncio já possui uma candidatura aprovada.')
         if ad.candidaturas.filter(user=self.request.user).exists():
@@ -284,11 +379,22 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             usuario_id = self.request.user.profile.id
         except Exception:
             usuario_id = self.request.user.id
-        serializer.save(
+        candidatura = serializer.save(
             user=self.request.user,
             usuario_id=usuario_id,
             status='pendente',
         )
+
+        if ad.author and ad.author_id != self.request.user.id:
+            profile = getattr(self.request.user, 'profile', None)
+            nome = getattr(profile, 'nome_completo', None) or self.request.user.username
+            criar_notificacao(
+                usuario=ad.author,
+                tipo='candidatura',
+                titulo='Nova candidatura no seu anúncio',
+                mensagem=f'{nome} se candidatou ao anúncio "{ad.title or ad.titulo}".',
+                link=f'/my-ads/manage/{ad.id}',
+            )
 
 class CandidaturaUpdateAPIView(generics.UpdateAPIView):
     serializer_class = CandidaturaSerializer
@@ -309,11 +415,18 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
             )
 
         with transaction.atomic():
+            Ad.atualizar_vencidos()
             candidatura = get_object_or_404(
                 self.get_queryset().select_for_update(),
                 pk=kwargs['pk'],
             )
-            Ad.objects.select_for_update().get(pk=candidatura.ad_id)
+            ad = Ad.objects.select_for_update().get(pk=candidatura.ad_id)
+
+            if ad.status_anuncio == 'Vencido':
+                return Response(
+                    {'error': 'Não é possível decidir candidaturas de um anúncio vencido.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             if candidatura.status != 'pendente':
                 return Response(
@@ -332,6 +445,24 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
             candidatura.status = new_status
             candidatura.save()
 
+            ad_titulo = candidatura.ad.title or candidatura.ad.titulo
+            if new_status == 'aprovada':
+                criar_notificacao(
+                    usuario=candidatura.user,
+                    tipo='acordo',
+                    titulo='Candidatura aprovada!',
+                    mensagem=f'Sua candidatura ao anúncio "{ad_titulo}" foi aprovada. Um acordo foi iniciado.',
+                    link='/my-freelas',
+                )
+            else:
+                criar_notificacao(
+                    usuario=candidatura.user,
+                    tipo='candidatura',
+                    titulo='Candidatura recusada',
+                    mensagem=f'Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
+                    link='/my-applications',
+                )
+
         return Response(self.get_serializer(candidatura).data)
 
 class CandidaturaRetrieveAPIView(generics.RetrieveAPIView):
@@ -343,6 +474,73 @@ class CandidaturaRetrieveAPIView(generics.RetrieveAPIView):
         return Candidatura.objects.filter(
             Q(user=self.request.user) | Q(ad__author=self.request.user)
         )
+
+
+### notificações ###
+from .models import Notificacao
+from .serializers import NotificacaoSerializer
+from .notificacoes import criar_notificacao
+
+
+class NotificacaoListAPIView(generics.ListAPIView):
+    serializer_class = NotificacaoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Notificacao.objects.filter(
+            usuario=self.request.user,
+        ).order_by('-criado_em')[:50]
+
+
+class NotificacaoNaoLidasAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Count
+
+        nao_lidas = Notificacao.objects.filter(
+            usuario=request.user,
+            lida=False,
+        )
+        total = nao_lidas.count()
+        por_tipo = dict(
+            nao_lidas.values_list('tipo').annotate(total_tipo=Count('id'))
+        )
+        return Response({
+            'count': total,
+            'tipos': por_tipo,
+        })
+
+
+class NotificacaoMarcarLidaAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+
+        notificacao = get_object_or_404(
+            Notificacao,
+            pk=pk,
+            usuario=request.user,
+        )
+        notificacao.lida = True
+        notificacao.save(update_fields=['lida'])
+        return Response({'ok': True})
+
+
+class NotificacaoMarcarLidasAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        queryset = Notificacao.objects.filter(
+            usuario=request.user,
+            lida=False,
+        )
+        tipos = request.data.get('tipos')
+        if tipos:
+            queryset = queryset.filter(tipo__in=tipos)
+        quantidade = queryset.update(lida=True)
+        return Response({'count': quantidade})
 
 
 ### autenticação com conta google ###
@@ -755,6 +953,11 @@ class DecidirCancelamentoAcordoAPI(APIView):
                     detalhe_status='cancelamento_acordo_aprovado',
                 )
 
+                contratante, freelancer = _partes_do_acordo(acordo)
+                mensagem = f'O acordo "{acordo.titulo_anuncio}" foi cancelado.'
+                criar_notificacao(contratante, 'acordo', 'Acordo cancelado', mensagem, '/my-freelas')
+                criar_notificacao(freelancer, 'acordo', 'Acordo cancelado', mensagem, '/my-freelas')
+
         return Response(
             SolicitacaoCancelamentoAcordoSerializer(
                 solicitacao,
@@ -820,14 +1023,43 @@ class ConcluirAcordoAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
             if not acordo.pagamentos.filter(status='pago').exists():
-                return Response(
-                    {'error': 'O pagamento precisa estar aprovado antes da conclusão.'},
-                    status=status.HTTP_409_CONFLICT,
+                if not _checkout_academico_habilitado() or not contratante:
+                    return Response(
+                        {'error': 'O pagamento precisa estar aprovado antes da conclusão.'},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                # Compatibilidade com acordos locais antigos que foram ativados antes
+                # de o histórico de pagamentos passar a ser obrigatório.
+                try:
+                    amount = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
+                except (InvalidOperation, TypeError):
+                    amount = Decimal('0.00')
+                Pagamento.objects.create(
+                    usuario=contratante,
+                    tipo='acordo',
+                    status='pago',
+                    valor=amount,
+                    referencia_externa=f'teste:legado:acordo:{acordo.id}:{uuid4().hex}',
+                    acordo=acordo,
+                    mp_payment_id=f'LOCAL-LEGACY-{uuid4().hex}',
+                    forma_pagamento='simulacao_pagamento',
+                    detalhe_status='registro_local_compatibilidade',
+                    aprovado_em=timezone.now(),
                 )
 
             acordo.status_acordo = 'Concluído'
             acordo.concluido_em = timezone.now()
             acordo.save(update_fields=['status_acordo', 'concluido_em'])
+
+            outra_parte = freelancer if request.user == contratante else contratante
+            criar_notificacao(
+                usuario=outra_parte,
+                tipo='acordo',
+                titulo='Acordo concluído',
+                mensagem=f'O acordo "{acordo.titulo_anuncio}" foi concluído. Deixe sua avaliação.',
+                link='/my-freelas',
+            )
 
         return Response({
             'message': 'Acordo concluído. As avaliações das duas partes estão disponíveis.',
@@ -847,6 +1079,23 @@ class AvaliacaoListCreateAPIView(generics.ListCreateAPIView):
             'avaliado__user',
             'acordo',
         ).order_by('-criado_em')
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        avaliacao = serializer.instance
+        avaliado_user = avaliacao.avaliado.user if avaliacao.avaliado and avaliacao.avaliado.user else None
+        avaliador_nome = (
+            avaliacao.avaliador.nome_completo
+            or avaliacao.avaliador.user.get_full_name()
+            or avaliacao.avaliador.user.username
+        )
+        criar_notificacao(
+            usuario=avaliado_user,
+            tipo='avaliacao',
+            titulo='Nova avaliação recebida',
+            mensagem=f'{avaliador_nome} avaliou seu trabalho no acordo "{avaliacao.acordo.titulo_anuncio}".',
+            link='/my-reviews',
+        )
 
 
 class AvaliacoesPendentesAPIView(APIView):
@@ -1056,10 +1305,26 @@ def _confirmar_pagamento(payment_data):
                 profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
                 profile.subscription_plan = pagamento.plano
                 profile.save(update_fields=['subscription_plan'])
+                criar_notificacao(
+                    usuario=pagamento.usuario,
+                    tipo='pagamento',
+                    titulo='Plano ativado',
+                    mensagem=f'Seu plano {pagamento.plano} foi ativado com sucesso.',
+                    link='/my-payments',
+                )
             elif pagamento.tipo == 'acordo' and pagamento.acordo:
                 if pagamento.acordo.status_acordo != 'Cancelado':
                     pagamento.acordo.status_acordo = 'Ativo'
                     pagamento.acordo.save(update_fields=['status_acordo'])
+
+                    _, freelancer = _partes_do_acordo(pagamento.acordo)
+                    criar_notificacao(
+                        usuario=freelancer,
+                        tipo='pagamento',
+                        titulo='Pagamento recebido',
+                        mensagem=f'O pagamento do acordo "{pagamento.acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
+                        link='/my-freelas',
+                    )
                 else:
                     logger.warning(
                         'Pagamento aprovado após cancelamento do acordo %s; '
@@ -1246,10 +1511,14 @@ class CriarPreferenciaAcordoAPI(APIView):
             checkout_url__isnull=False,
         ).order_by('-criado_em').first()
         if pending_payment:
+            test_approved = False
+            if _checkout_academico_habilitado():
+                test_approved = _aprovar_checkout_academico(pending_payment)
             return Response({
                 'checkout_required': True,
                 'init_point': pending_payment.checkout_url,
                 'reference': pending_payment.referencia_externa,
+                'test_approved': test_approved,
             })
 
         headers = _mercado_pago_headers()
@@ -1411,6 +1680,15 @@ class SimularPagamentoAcordoAPI(APIView):
             acordo.status_acordo = 'Ativo'
             acordo.save(update_fields=['status_acordo'])
 
+            _, freelancer = _partes_do_acordo(acordo)
+            criar_notificacao(
+                usuario=freelancer,
+                tipo='pagamento',
+                titulo='Pagamento recebido',
+                mensagem=f'O pagamento do acordo "{acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
+                link='/my-freelas',
+            )
+
         return Response({
             'message': 'Pagamento de teste aprovado e acordo movido para Em Andamento.',
             'acordo_id': acordo.id,
@@ -1479,3 +1757,369 @@ class CartaoUsuarioListAPIView(generics.ListAPIView):
             usuario=self.request.user,
             ativo=True,
         ).order_by('-atualizado_em')
+
+
+def _mes_inicio(data):
+    return data.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _variacao(atual, anterior):
+    if not anterior:
+        return 100 if atual else 0
+    return round(((atual - anterior) / anterior) * 100, 1)
+
+
+def _contagem_por_periodo(queryset, campo, agora):
+    inicio_atual = _mes_inicio(agora)
+    inicio_anterior = _mes_inicio(inicio_atual - timezone.timedelta(days=1))
+    atual = queryset.filter(**{f'{campo}__gte': inicio_atual}).count()
+    anterior = queryset.filter(
+        **{f'{campo}__gte': inicio_anterior, f'{campo}__lt': inicio_atual},
+    ).count()
+    return atual, anterior
+
+
+class DashboardAdminAPIView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request, *args, **kwargs):
+        from django.db.models import Count, Sum
+
+        agora = timezone.now()
+        inicio_mes = _mes_inicio(agora)
+        inicio_mes_anterior = _mes_inicio(inicio_mes - timezone.timedelta(days=1))
+
+        def serie_usuarios(qs):
+            return _contagem_por_periodo(qs, 'date_joined', agora)
+
+        usuarios_atual, usuarios_anterior = serie_usuarios(User.objects.all())
+
+        autores_freelancer = User.objects.filter(
+            ads__role='freelancer',
+            ads__deletado=False,
+        ).distinct()
+        autores_contratante = User.objects.filter(
+            ads__role__in=['contractor', 'contratante'],
+            ads__deletado=False,
+        ).distinct()
+
+        freelancer_atual, freelancer_anterior = serie_usuarios(autores_freelancer)
+        contratante_atual, contratante_anterior = serie_usuarios(autores_contratante)
+        freelas_atual, freelas_anterior = serie_usuarios(
+            (autores_freelancer | autores_contratante).distinct(),
+        )
+
+        acordos_do_mes = AcordoServico.objects.filter(data_confirmacao__gte=inicio_mes)
+        ids_freela_acordo_mes = set(
+            acordos_do_mes.exclude(candidatura__user=None)
+            .values_list('candidatura__user_id', flat=True),
+        )
+        ids_contratante_acordo_mes = set(
+            acordos_do_mes.exclude(candidatura__ad__author=None)
+            .values_list('candidatura__ad__author_id', flat=True),
+        )
+        pessoas_fecharam_acordo_mes = len(ids_freela_acordo_mes | ids_contratante_acordo_mes)
+
+        denuncias_atual, denuncias_anterior = _contagem_por_periodo(
+            Report.objects.all(), 'created_at', agora,
+        )
+        cancelamentos_atual, cancelamentos_anterior = _contagem_por_periodo(
+            Pagamento.objects.filter(tipo='assinatura', status='cancelado'),
+            'criado_em',
+            agora,
+        )
+
+        receita_assinatura_atual = Pagamento.objects.filter(
+            tipo='assinatura', status='pago', aprovado_em__gte=inicio_mes,
+        ).aggregate(total=Sum('valor'))['total'] or 0
+        receita_assinatura_anterior = Pagamento.objects.filter(
+            tipo='assinatura', status='pago',
+            aprovado_em__gte=inicio_mes_anterior,
+            aprovado_em__lt=inicio_mes,
+        ).aggregate(total=Sum('valor'))['total'] or 0
+
+        receita_acordo_atual = Pagamento.objects.filter(
+            tipo='acordo', status='pago', aprovado_em__gte=inicio_mes,
+        ).aggregate(total=Sum('valor'))['total'] or 0
+        receita_acordo_anterior = Pagamento.objects.filter(
+            tipo='acordo', status='pago',
+            aprovado_em__gte=inicio_mes_anterior,
+            aprovado_em__lt=inicio_mes,
+        ).aggregate(total=Sum('valor'))['total'] or 0
+
+        return Response({
+            'geral': {
+                'usuarios': _item_contagem(usuarios_atual, usuarios_anterior),
+                'freelancers': _item_contagem(freelancer_atual, freelancer_anterior),
+                'contratantes': _item_contagem(contratante_atual, contratante_anterior),
+                'freelas': {
+                    **_item_contagem(freelas_atual, freelas_anterior),
+                    'fecharam_acordo_mes': pessoas_fecharam_acordo_mes,
+                },
+                'denuncias': _item_contagem(denuncias_atual, denuncias_anterior),
+                'cancelamentos_planos': _item_contagem(cancelamentos_atual, cancelamentos_anterior),
+            },
+            'denuncias': {
+                'total': Report.objects.count(),
+                'pendentes': Report.objects.filter(status='pending').count(),
+                'procedentes': Report.objects.filter(status='procedente').count(),
+                'improcedentes': Report.objects.filter(status='improcedente').count(),
+            },
+            'cancelamentos': {
+                'total': SolicitacaoCancelamentoAcordo.objects.count(),
+                'pendentes': SolicitacaoCancelamentoAcordo.objects.filter(status='pendente').count(),
+                'aprovados': SolicitacaoCancelamentoAcordo.objects.filter(status='aprovada').count(),
+                'recusados': SolicitacaoCancelamentoAcordo.objects.filter(status='recusada').count(),
+            },
+            'alteracoes': {
+                'total': SolicitacaoAlteracaoAcordo.objects.count(),
+                'pendentes': SolicitacaoAlteracaoAcordo.objects.filter(status='pendente').count(),
+                'aprovadas': SolicitacaoAlteracaoAcordo.objects.filter(status='aprovada').count(),
+                'recusadas': SolicitacaoAlteracaoAcordo.objects.filter(status='recusada').count(),
+            },
+            'planos': _distribuicao_planos(),
+            'assinaturas_ativas': UserProfile.objects.exclude(
+                subscription_plan='Gratuito',
+            ).count(),
+            'receita': {
+                'assinatura': {
+                    'mes_atual': str(receita_assinatura_atual),
+                    'mes_anterior': str(receita_assinatura_anterior),
+                    'variacao': _variacao(receita_assinatura_atual, receita_assinatura_anterior),
+                },
+                'acordo': {
+                    'mes_atual': str(receita_acordo_atual),
+                    'mes_anterior': str(receita_acordo_anterior),
+                    'variacao': _variacao(receita_acordo_atual, receita_acordo_anterior),
+                },
+            },
+            'anuncios': {
+                'total': Ad.objects.filter(deletado=False).count(),
+                'ativos': Ad.objects.filter(deletado=False, status_anuncio__isnull=True).count()
+                          + Ad.objects.filter(deletado=False, status_anuncio='Ativo').count(),
+                'finalizados': Ad.objects.filter(deletado=False, status_anuncio='Finalizado').count(),
+            },
+            'acordos': {
+                'total': AcordoServico.objects.count(),
+                'ativos': AcordoServico.objects.filter(status_acordo='Ativo').count(),
+                'concluidos': AcordoServico.objects.filter(status_acordo='Concluído').count(),
+                'cancelados': AcordoServico.objects.filter(status_acordo='Cancelado').count(),
+                'pendentes_pagamento': AcordoServico.objects.filter(
+                    status_acordo='Pendente Pagamento',
+                ).count(),
+            },
+            'candidaturas': Candidatura.objects.count(),
+            'avaliacoes': Avaliacao.objects.count(),
+        })
+
+
+def _item_contagem(atual, anterior):
+    return {
+        'total': atual,
+        'mes_atual': atual,
+        'mes_anterior': anterior,
+        'variacao': _variacao(atual, anterior),
+    }
+
+
+def _distribuicao_planos():
+    from django.db.models import Count
+
+    contagem = (
+        UserProfile.objects.values('subscription_plan')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    planos = [
+        {'nome': item['subscription_plan'] or 'Gratuito', 'total': item['total']}
+        for item in contagem
+    ]
+    for nome in ('Gratuito', 'Gold', 'Platinum'):
+        if not any(p['nome'] == nome for p in planos):
+            planos.append({'nome': nome, 'total': 0})
+    return planos
+
+
+### chat entre freelancer e contratante (mensagens no Redis) ###
+from django.db.models import Q as _Q
+from .chat import (
+    chat_ativo,
+    enviar_mensagem,
+    listar_mensagens,
+    marcar_lidas,
+    nao_lidas,
+    partes_do_acordo as _partes_chat,
+)
+from .chat import ChatIndisponivel
+from .serializers import ChatConversaSerializer, _info_usuario_com_papel
+
+
+def _acordo_do_chat(pk, user):
+    """Retorna o acordo se o usuário participa dele (ou é moderador)."""
+    from django.shortcuts import get_object_or_404
+
+    acordo = get_object_or_404(
+        AcordoServico.objects.select_related(
+            'candidatura__user__profile',
+            'candidatura__ad__author__profile',
+        ),
+        pk=pk,
+    )
+    contratante, freelancer = _partes_chat(acordo)
+    if user.is_staff or user.is_superuser:
+        return acordo
+    if user not in {contratante, freelancer}:
+        return None
+    return acordo
+
+
+class ChatListAPIView(APIView):
+    """Lista as conversas (acordos) do usuário logado, restritas às partes."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.is_staff or user.is_superuser:
+            acordos = AcordoServico.objects.all()
+        else:
+            acordos = AcordoServico.objects.filter(
+                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+            )
+        acordos = acordos.select_related(
+            'candidatura__user__profile',
+            'candidatura__ad__author__profile',
+        )
+        dados = ChatConversaSerializer(
+            acordos,
+            many=True,
+            context={'request': request},
+        ).data
+
+        def _chave_ordenacao(item):
+            ultima = item.get('ultima_mensagem')
+            if ultima and ultima.get('criado_em'):
+                return ultima['criado_em']
+            return item.get('data_confirmacao') or ''
+
+        dados.sort(key=_chave_ordenacao, reverse=True)
+        return Response(dados)
+
+
+class ChatDetailAPIView(APIView):
+    """Detalhe de uma conversa + histórico de mensagens (somente as partes)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        acordo = _acordo_do_chat(pk, request.user)
+        if acordo is None:
+            return Response(
+                {'error': 'Você não participa deste acordo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        request_user = request.user
+        contratante, freelancer = _partes_chat(acordo)
+        outra = freelancer if request_user == contratante else contratante
+        papel = 'freelancer' if outra == freelancer else 'contratante'
+        try:
+            mensagens = listar_mensagens(acordo.id)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({
+            'id': acordo.id,
+            'titulo_anuncio': acordo.titulo_anuncio,
+            'status_acordo': acordo.status_acordo,
+            'valor_acordado': acordo.valor_acordado,
+            'unidade_valor': acordo.unidade_valor,
+            'data_confirmacao': acordo.data_confirmacao,
+            'chat_ativo': chat_ativo(acordo),
+            'outra_parte': _info_usuario_com_papel(outra, papel, request),
+            'messages': mensagens,
+        })
+
+
+class ChatEnviarMensagemAPIView(APIView):
+    """Envia uma mensagem no chat do acordo (somente se o chat estiver ativo)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        acordo = _acordo_do_chat(pk, request.user)
+        if acordo is None:
+            return Response(
+                {'error': 'Você não participa deste acordo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not chat_ativo(acordo):
+            return Response(
+                {'error': 'Este chat foi encerrado. O acordo não está mais em andamento.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        texto = str(request.data.get('texto') or '').strip()
+        if not texto:
+            return Response(
+                {'error': 'A mensagem não pode estar vazia.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(texto) > 2000:
+            return Response(
+                {'error': 'A mensagem deve ter no máximo 2000 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            mensagem = enviar_mensagem(acordo, request.user, texto)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(mensagem, status=status.HTTP_201_CREATED)
+
+
+class ChatMarcarLidaAPIView(APIView):
+    """Marca as mensagens do acordo como lidas para o usuário logado."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        acordo = _acordo_do_chat(pk, request.user)
+        if acordo is None:
+            return Response(
+                {'error': 'Você não participa deste acordo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            marcar_lidas(acordo.id, request.user.id)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'ok': True})
+
+
+class ChatNaoLidasAPIView(APIView):
+    """Total de mensagens não lidas do usuário em todas as conversas."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.is_staff or user.is_superuser:
+            acordos = AcordoServico.objects.all()
+        else:
+            acordos = AcordoServico.objects.filter(
+                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+            )
+        try:
+            total = sum(nao_lidas(acordo.id, user.id) for acordo in acordos)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'total': total})

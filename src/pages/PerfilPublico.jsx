@@ -96,13 +96,11 @@ export default function PublicProfile() {
   }
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="card" style={{ padding: '2rem' }}>
+    <div className="profile-page">
+      <div className="card profile-card">
 
         {/* Banner */}
-        <div style={{
-          width: 'calc(100% + 4rem)',
-          margin: '-2rem -2rem 0 -2rem',
+        <div className="profile-banner" style={{
           aspectRatio: '4 / 1',
           background: user.profile?.banner ? `url(${user.profile.banner}) center/cover no-repeat` : '#e0e0e0',
           borderRadius: '12px 12px 0 0',
@@ -212,13 +210,13 @@ export default function PublicProfile() {
           </div>
         )}
 
-        <div style={{ marginBottom: '2.5rem' }}>
+        <section className="profile-section">
           <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
-          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{user.profile?.bio || 'Sem biografia.'}</p>
-        </div>
+          <p style={{ fontSize: '1.1rem', lineHeight: 1.8, overflowWrap: 'anywhere' }}>{user.profile?.bio || 'Sem biografia.'}</p>
+        </section>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', gap: '0.5rem' }}>
+        <div className="profile-tabs" role="tablist" aria-label="Informações do perfil">
           {[
             { key: 'skills', label: 'Habilidades e Especialidades' },
             { key: 'experiencia', label: `Experiência${user.profile?.experiencias?.length > 0 ? ` (${user.profile.experiencias.length})` : ''}` },
@@ -228,16 +226,15 @@ export default function PublicProfile() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              style={{
-                background: 'none', border: 'none', padding: '1rem 2rem', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 'bold',
-                color: activeTab === tab.key ? 'var(--text-color)' : 'gray',
-                borderBottom: activeTab === tab.key ? '3px solid var(--holo-salmon)' : '3px solid transparent',
-                whiteSpace: 'nowrap'
-              }}>
+              className={`profile-tab-option ${activeTab === tab.key ? 'selected' : ''}`}
+              role="tab"
+              aria-selected={activeTab === tab.key}>
               {tab.label}
             </button>
           ))}
         </div>
+
+        <div key={activeTab} className="profile-tab-content tab-content-animation">
 
         {activeTab === 'skills' && (
           <div>
@@ -405,6 +402,8 @@ export default function PublicProfile() {
             )}
           </div>
         )}
+
+        </div>
 
       </div>
 

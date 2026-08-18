@@ -1,13 +1,19 @@
 import { useParams, Link } from 'react-router-dom';
 import { Check, X, Tag } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function ManageAdApplications() {
   const { id } = useParams();
+  const { marcarLidas } = useNotificacoes();
   const [ad, setAd] = useState(null);
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    marcarLidas(['candidatura']);
+  }, [marcarLidas]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -95,6 +101,7 @@ export default function ManageAdApplications() {
   }
 
   const adStatus = ad.status_anuncio || 'Em aberto';
+  const isExpired = adStatus === 'Vencido';
 
   return (
     <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
@@ -113,6 +120,10 @@ export default function ManageAdApplications() {
          </div>
          <div className="badge"><Tag size={12} style={{ marginRight: '4px' }}/> {ad.category}</div>
       </div>
+
+      {isExpired && (
+        <p className="expired-ads-help">Este anúncio expirou. As candidaturas podem ser consultadas, mas não podem mais ser aprovadas ou recusadas.</p>
+      )}
       
       <h3 style={{ fontSize: '1.25rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
          Propostas Recebidas ({applications.length})
@@ -154,7 +165,7 @@ export default function ManageAdApplications() {
                <p style={{ margin: 0, fontStyle: 'italic', opacity: 0.9 }}>“{app.mensagem}”</p>
             </div>
 
-            {app.status === 'pendente' && (
+            {app.status === 'pendente' && !isExpired && (
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                  <button className="btn" style={{ flex: 1, background: '#1dd1a1', border: 'none' }} onClick={() => handleUpdateStatus(app.id, 'aprovada')}>
                    <Check size={18} /> Aprovar
@@ -162,7 +173,7 @@ export default function ManageAdApplications() {
                  <button className="btn btn-secondary" style={{ flex: 1, borderColor: '#ff6b6b', color: '#ff6b6b' }} onClick={() => handleUpdateStatus(app.id, 'recusada')}>
                    <X size={18} /> Recusar
                  </button>
-                 <Link to="/chat" className="btn btn-secondary" style={{ flex: 1 }}>
+                 <Link to={app.acordo_id ? `/chat/${app.acordo_id}` : '/chat'} className="btn btn-secondary" style={{ flex: 1 }}>
                    Conversar
                  </Link>
               </div>

@@ -6,6 +6,7 @@ from django.db.models import Avg, Count
 from django.utils import timezone
 from rest_framework import serializers
 from .models import UserProfile
+from .notificacoes import criar_notificacao
 
 class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
@@ -118,6 +119,15 @@ class UserSerializer(serializers.ModelSerializer):
             instance.profile.save(update_fields=['nome_completo'])
         return instance
 
+    def update(self, instance, validated_data):
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.last_name = validated_data.get('last_name', instance.last_name)
+        instance.save()
+        if hasattr(instance, 'profile'):
+            instance.profile.nome_completo = f"{instance.first_name} {instance.last_name}".strip() or instance.username
+            instance.profile.save(update_fields=['nome_completo'])
+        return instance
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField(write_only=True, required=False)
@@ -154,6 +164,30 @@ class AdSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('author', 'created_at')
 
+    def validate(self, attrs):
+        role = attrs.get('role', getattr(self.instance, 'role', None))
+        location_type = attrs.get('location_type', getattr(self.instance, 'location_type', None))
+        description = attrs.get('description', getattr(self.instance, 'description', '') or '')
+        if len(description) > 1000:
+            raise serializers.ValidationError({'description': 'A descrição deve ter no máximo 1000 caracteres.'})
+
+        if location_type == 'presencial':
+            cidade = attrs.get('cidade', getattr(self.instance, 'cidade', None))
+            if not cidade:
+                raise serializers.ValidationError({'cidade': 'A cidade é obrigatória para serviços presenciais.'})
+
+        if role == 'freelancer':
+            availability = attrs.get('availability', getattr(self.instance, 'availability', None))
+            if not isinstance(availability, dict):
+                raise serializers.ValidationError({'availability': 'Informe a disponibilidade por dia e período.'})
+            periodos_validos = {'manha', 'tarde', 'noite'}
+            if not any(
+                isinstance(periodos, list) and periodos_validos.intersection(periodos)
+                for periodos in availability.values()
+            ):
+                raise serializers.ValidationError({'availability': 'Selecione ao menos um período disponível.'})
+        return attrs
+
     def get_author_name(self, obj):
         name = obj.author.first_name
         return name if name else obj.author.username
@@ -163,10 +197,15 @@ class AdSerializer(serializers.ModelSerializer):
             return None
         if not hasattr(obj.author, 'profile'):
             return None
-        result = obj.author.profile.avaliacoes_recebidas.filter(
-            papel_avaliado='contratante',
-        ).aggregate(nota=Avg('nota_geral'))
-        return round(float(result['nota']), 1) if result['nota'] is not None else None
+        papel_avaliado = 'contratante' if obj.role in {'contractor', 'contratante'} else 'freelancer'
+        media = getattr(
+            obj,
+            '_media_contratante' if papel_avaliado == 'contratante' else '_media_freelancer',
+            None,
+        )
+        if media is None:
+            return None
+        return round(float(media), 1)
 
 from .models import Candidatura
 
@@ -186,6 +225,15 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         model = Candidatura
         fields = '__all__'
         read_only_fields = ('user', 'status', 'enviado_em', 'atualizado_em')
+
+    def get_fields(self):
+        fields = super().get_fields()
+        fields['acordo_id'] = serializers.SerializerMethodField()
+        return fields
+
+    def get_acordo_id(self, obj):
+        acordo = obj.acordos.first()
+        return acordo.id if acordo else None
 
     def get_applicant_name(self, obj):
         if obj.user:
@@ -227,9 +275,11 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         if obj.ad and obj.ad.author:
             name = obj.ad.author.first_name
             return name if name else obj.ad.author.username
-        return "Usuário Desconhecido"
+        return None
 
     def get_indisponivel(self, obj):
+        if obj.ad and obj.ad.status_anuncio == 'Vencido':
+            return True
         if obj.status == 'encerrada':
             return True
         if not obj.ad_id or obj.status == 'aprovada':
@@ -237,6 +287,8 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         return obj.ad.candidaturas.filter(status='aprovada').exclude(pk=obj.pk).exists()
 
     def get_motivo_indisponibilidade(self, obj):
+        if obj.ad and obj.ad.status_anuncio == 'Vencido':
+            return 'Anúncio expirado.'
         if self.get_indisponivel(obj):
             return 'O autor já aprovou outra candidatura para este anúncio.'
         return None
@@ -294,6 +346,7 @@ class SolicitacaoAlteracaoAcordoSerializer(serializers.ModelSerializer):
         if not obj.decidido_por:
             return None
         return obj.decidido_por.get_full_name() or obj.decidido_por.username
+
 
 class AcordoServicoSerializer(serializers.ModelSerializer):
     freelancer_id = serializers.SerializerMethodField()
@@ -365,9 +418,9 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             if solicitando:
-                if instance.status_acordo != 'Ativo':
+                if instance.status_acordo not in {'Ativo', 'Pendente Pagamento'}:
                     raise serializers.ValidationError(
-                        'Alterações só podem ser solicitadas em acordos em andamento.',
+                        'Alterações só podem ser solicitadas em acordos ativos ou pendentes de pagamento.',
                     )
                 if instance.tem_solicitacao or instance.solicitacoes_alteracao.filter(status='pendente').exists():
                     raise serializers.ValidationError(
@@ -399,6 +452,15 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                     conclusao_proposta=validated_data.get('proposta_conclusao_prevista'),
                 )
 
+                outra_parte = freelancer if user == contratante else contratante
+                criar_notificacao(
+                    usuario=outra_parte,
+                    tipo='acordo',
+                    titulo='Alteração de acordo solicitada',
+                    mensagem=f'{user.username} solicitou uma alteração no acordo "{instance.titulo_anuncio}".',
+                    link='/my-freelas',
+                )
+
             if aprovar or recusar:
                 if not instance.tem_solicitacao:
                     raise serializers.ValidationError(
@@ -410,6 +472,7 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                         'A solicitação precisa ser decidida pela outra parte.',
                     )
 
+                solicitacao = instance.solicitacoes_alteracao.filter(status='pendente').first()
                 if aprovar:
                     if instance.proposto_valor is not None:
                         instance.valor_acordado = instance.proposto_valor
@@ -437,8 +500,17 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
                     decidido_por=user,
                     decidido_em=timezone.now(),
                 )
+                if solicitacao and solicitacao.solicitante:
+                    criar_notificacao(
+                        usuario=solicitacao.solicitante,
+                        tipo='acordo',
+                        titulo='Alteração de acordo decidida',
+                        mensagem=f'Sua solicitação de alteração no acordo "{instance.titulo_anuncio}" foi {"aprovada" if aprovar else "recusada"}.',
+                        link='/my-freelas',
+                    )
 
             return super().update(instance, validated_data)
+
 
 class FotoPerfilSerializer(serializers.ModelSerializer):
     class Meta:
@@ -496,6 +568,14 @@ class ExperienciaSerializer(serializers.ModelSerializer):
 
 
 from .models import CartaoUsuario, Pagamento
+from .models import Notificacao
+
+class NotificacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notificacao
+        fields = ('id', 'tipo', 'titulo', 'mensagem', 'link', 'lida', 'criado_em')
+        read_only_fields = fields
+
 
 class PagamentoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -622,3 +702,83 @@ class AvaliacaoSerializer(serializers.ModelSerializer):
             papel_avaliado=papel_avaliado,
             nota_geral=nota,
         )
+
+
+from .chat import (
+    chat_ativo,
+    nao_lidas,
+    partes_do_acordo,
+    ultima_mensagem,
+)
+from .chat import ChatIndisponivel
+
+
+def _info_usuario(user, request):
+    if not user:
+        return None
+    profile = getattr(user, 'profile', None)
+    foto = None
+    if profile and profile.foto_perfil:
+        if request:
+            foto = request.build_absolute_uri(profile.foto_perfil.url)
+        else:
+            foto = profile.foto_perfil.url
+    return {
+        'id': user.id,
+        'nome': (
+            profile.nome_completo
+            if profile and profile.nome_completo
+            else (user.get_full_name() or user.username)
+        ),
+        'foto_perfil': foto,
+    }
+
+
+def _info_usuario_com_papel(user, papel, request):
+    info = _info_usuario(user, request)
+    if info:
+        info['papel'] = papel
+    return info
+
+
+class ChatConversaSerializer(serializers.ModelSerializer):
+    """Conversa de um acordo — restrita ao freelancer e ao contratante."""
+
+    chat_ativo = serializers.SerializerMethodField()
+    outra_parte = serializers.SerializerMethodField()
+    ultima_mensagem = serializers.SerializerMethodField()
+    nao_lidas = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AcordoServico
+        fields = (
+            'id', 'titulo_anuncio', 'status_acordo', 'valor_acordado',
+            'unidade_valor', 'data_confirmacao', 'chat_ativo',
+            'outra_parte', 'ultima_mensagem', 'nao_lidas',
+        )
+
+    def get_chat_ativo(self, obj):
+        return chat_ativo(obj)
+
+    def get_outra_parte(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        contratante, freelancer = partes_do_acordo(obj)
+        outra = freelancer if user == contratante else contratante
+        papel = 'freelancer' if outra == freelancer else 'contratante'
+        return _info_usuario_com_papel(outra, papel, request)
+
+    def get_ultima_mensagem(self, obj):
+        try:
+            return ultima_mensagem(obj.id)
+        except ChatIndisponivel:
+            return None
+
+    def get_nao_lidas(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return 0
+        try:
+            return nao_lidas(obj.id, request.user.id)
+        except ChatIndisponivel:
+            return 0

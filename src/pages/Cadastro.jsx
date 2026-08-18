@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
+import { useDialogo } from '../context/ContextoDialogo';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 48 48" style={{ marginRight: '8px' }}>
@@ -29,6 +30,7 @@ export default function Cadastro() {
 
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { alerta } = useDialogo();
 
   const checkPasswordStrength = (pwd) => {
     if (!pwd) return '';
@@ -112,7 +114,7 @@ export default function Cadastro() {
         body: JSON.stringify({ email: emailCadastrado })
       });
       setErrorMsg('');
-      alert('Código reenviado para o seu email!');
+      await alerta('Código reenviado para o seu email!', { titulo: 'Código enviado', variante: 'sucesso' });
     } catch (err) {
       setErrorMsg('Erro ao reenviar o código.');
     }
