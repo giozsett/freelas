@@ -25,9 +25,22 @@ class ChatIndisponivel(Exception):
     """Redis inacessível — o chat não pode ser usado no momento."""
 
 
+# Pool de conexões compartilhado: evita abrir uma nova conexão a cada operação,
+# o que era a principal causa de lentidão no chat (cada conexão nova a
+# "localhost" podia levar ~2s nesta máquina).
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        _pool = redis_lib.ConnectionPool.from_url(settings.REDIS_URL)
+    return _pool
+
+
 def get_client():
     try:
-        return redis_lib.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        return redis_lib.Redis(connection_pool=_get_pool(), decode_responses=True)
     except Exception:
         raise ChatIndisponivel()
 
@@ -57,6 +70,25 @@ def partes_do_acordo(acordo):
 def _chave(acordo_id, sufixo):
     return f'chat:{acordo_id}:{sufixo}'
 
+# Canal Pub/Sub onde os consumers WebSocket escutam novas mensagens do chat.
+def _canal_pubsub(acordo_id):
+    return f'chat:{acordo_id}:pubsub'
+
+
+def _notificar_websocket(r, acordo_id, mensagem):
+    """Publica a mensagem no canal Pub/Sub para entrega imediata via WebSocket."""
+    try:
+        r.publish(
+            _canal_pubsub(acordo_id),
+            json.dumps(
+                {'tipo': 'nova_mensagem', 'mensagem': mensagem},
+                ensure_ascii=False,
+            ),
+        )
+    except Exception:
+        # O chat continua funcionando sem o WebSocket (fallback para o polling).
+        pass
+
 
 def _nome_usuario(user):
     if not user:
@@ -85,6 +117,9 @@ def enviar_mensagem(acordo, remetente, texto):
     outra_parte = freelancer if remetente.id == contratante.id else contratante
     if outra_parte:
         _seguro(lambda: r.hincrby(_chave(acordo.id, 'unread'), str(outra_parte.id), 1))
+
+    # Publica a mensagem no canal Pub/Sub para entrega em tempo real
+    _notificar_websocket(r, acordo.id, mensagem)
 
     return mensagem
 
