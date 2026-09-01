@@ -43,6 +43,7 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',      #obrigatório pro allauth
+    'channels',
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
@@ -139,6 +141,17 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
+
+# Redis (NoSQL) — usado para armazenar as mensagens do chat.
+# Usa 127.0.0.1 (e não "localhost") porque o Redis sobe apenas em 127.0.0.1;
+# "localhost" pode tentar primeiro ::1 e atrasar cada conexão em ~2s.
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+
+# Django Channels — WebSockets do chat em tempo real.
+ASGI_APPLICATION = 'server.asgi.application'
+
+# Nota: o chat usa Redis Pub/Sub diretamente (consumer em core/consumers.py),
+# sem depender de channels-redis (incompatível com Python 3.14 neste setup).
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'

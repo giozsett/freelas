@@ -173,7 +173,7 @@ export default function ManageAdApplications() {
                  <button className="btn btn-secondary" style={{ flex: 1, borderColor: '#ff6b6b', color: '#ff6b6b' }} onClick={() => handleUpdateStatus(app.id, 'recusada')}>
                    <X size={18} /> Recusar
                  </button>
-                 <Link to="/chat" className="btn btn-secondary" style={{ flex: 1 }}>
+                 <Link to={app.acordo_id ? `/chat/${app.acordo_id}` : '/chat'} className="btn btn-secondary" style={{ flex: 1 }}>
                    Conversar
                  </Link>
               </div>
