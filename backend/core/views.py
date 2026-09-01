@@ -1,4 +1,3 @@
-import email
 from django.conf import settings
 from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
@@ -12,8 +11,6 @@ from .serializers import UserSerializer, RegisterSerializer
 from google.oauth2 import id_token
 import os
 from google.auth.transport import requests as google_requests
-from rest_framework.authtoken.models import Token
-from django.contrib.auth.models import User
 from .serializers import UserProfileSerializer, FotoPerfilSerializer
 from .models import UserProfile
 from .serializers import CandidaturaSerializer
@@ -96,52 +93,6 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
     def get_object(self):
         profile, created = UserProfile.objects.get_or_create(user=self.request.user)
         return profile
-
-
-class CertificadoListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = CertificadoSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
-
-    def get_queryset(self):
-        return Certificado.objects.filter(usuario__user=self.request.user).order_by('-criado_em')
-
-    def perform_create(self, serializer):
-        serializer.save(usuario=self.request.user.profile)
-
-
-class CertificadoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = CertificadoSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
-
-    def get_queryset(self):
-        return Certificado.objects.filter(usuario__user=self.request.user)
-
-
-class InstituicaoEnsinoListAPIView(generics.ListAPIView):
-    queryset = InstituicaoEnsino.objects.filter(verificado=True)
-    serializer_class = InstituicaoEnsinoSerializer
-    permission_classes = [permissions.AllowAny]
-
-
-class ExperienciaListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = ExperienciaSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Experiencia.objects.filter(usuario__user=self.request.user).order_by('-data_inicio')
-
-    def perform_create(self, serializer):
-        serializer.save(usuario=self.request.user.profile)
-
-
-class ExperienciaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = ExperienciaSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Experiencia.objects.filter(usuario__user=self.request.user)
 
 
 class CertificadoListCreateAPIView(generics.ListCreateAPIView):

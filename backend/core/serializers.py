@@ -119,15 +119,6 @@ class UserSerializer(serializers.ModelSerializer):
             instance.profile.save(update_fields=['nome_completo'])
         return instance
 
-    def update(self, instance, validated_data):
-        instance.first_name = validated_data.get('first_name', instance.first_name)
-        instance.last_name = validated_data.get('last_name', instance.last_name)
-        instance.save()
-        if hasattr(instance, 'profile'):
-            instance.profile.nome_completo = f"{instance.first_name} {instance.last_name}".strip() or instance.username
-            instance.profile.save(update_fields=['nome_completo'])
-        return instance
-
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField(write_only=True, required=False)

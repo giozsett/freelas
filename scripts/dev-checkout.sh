@@ -77,8 +77,8 @@ if ! command -v ngrok >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ ! -x "${BACKEND_DIR}/venv/bin/python" ]]; then
-    echo "O ambiente virtual não foi encontrado em backend/venv."
+if [[ ! -x "${BACKEND_DIR}/.venv/bin/python" ]]; then
+    echo "O ambiente virtual não foi encontrado em backend/.venv."
     exit 1
 fi
 
@@ -168,7 +168,7 @@ echo
 
 (
     cd "${BACKEND_DIR}"
-    exec "${BACKEND_DIR}/venv/bin/python" manage.py runserver "0.0.0.0:${BACKEND_PORT}"
+    exec "${BACKEND_DIR}/.venv/bin/python" manage.py runserver "0.0.0.0:${BACKEND_PORT}"
 ) &
 BACKEND_PID=$!
 

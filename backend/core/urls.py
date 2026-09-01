@@ -1,35 +1,23 @@
 from django.urls import path
-from .views import EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView, ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView, PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView, CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialLoginAPI, GoogleSocialRegisterAPI, VerificarCodigoAPI
-from .views import RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView, ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView, PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView, CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI, EnviarCodigoVerificacaoAPI, VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI
-from .views import AcordoServicoListCreateAPIView, AcordoServicoRetrieveUpdateAPIView
-from .views import FotoPerfilUploadAPIView, CertificadoListCreateAPIView, CertificadoRetrieveUpdateDestroyAPIView, InstituicaoEnsinoListAPIView, ExperienciaListCreateAPIView, ExperienciaRetrieveUpdateDestroyAPIView
 from .views import (
-    CriarPreferenciaAssinaturaAPI,
-    CriarPreferenciaAcordoAPI,
-    DecidirCancelamentoAcordoAPI,
-    MercadoPagoWebhookAPI,
-    MercadoPagoReturnAPI,
-    PagamentoHistoricoAPIView,
-    CartaoUsuarioListAPIView,
-    ConcluirAcordoAPI,
-    SolicitarCancelamentoAcordoAPI,
-    SolicitacaoAlteracaoAdminListAPIView,
-    SolicitacaoCancelamentoAdminListAPIView,
-    SimularPagamentoAcordoAPI,
-    AvaliacaoListCreateAPIView,
-    AvaliacoesPendentesAPIView,
-    DashboardAdminAPIView,
-    NotificacaoListAPIView,
-    NotificacaoNaoLidasAPIView,
-    NotificacaoMarcarLidaAPIView,
+    EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView,
+    ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView,
+    PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView,
+    CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI,
+    VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI,
+    AcordoServicoListCreateAPIView, AcordoServicoRetrieveUpdateAPIView,
+    FotoPerfilUploadAPIView, CertificadoListCreateAPIView, CertificadoRetrieveUpdateDestroyAPIView,
+    InstituicaoEnsinoListAPIView, ExperienciaListCreateAPIView, ExperienciaRetrieveUpdateDestroyAPIView,
+    CriarPreferenciaAssinaturaAPI, CriarPreferenciaAcordoAPI,
+    DecidirCancelamentoAcordoAPI, MercadoPagoWebhookAPI, MercadoPagoReturnAPI,
+    PagamentoHistoricoAPIView, CartaoUsuarioListAPIView, ConcluirAcordoAPI,
+    SolicitarCancelamentoAcordoAPI, SolicitacaoAlteracaoAdminListAPIView,
+    SolicitacaoCancelamentoAdminListAPIView, SimularPagamentoAcordoAPI,
+    AvaliacaoListCreateAPIView, AvaliacoesPendentesAPIView, DashboardAdminAPIView,
+    NotificacaoListAPIView, NotificacaoNaoLidasAPIView, NotificacaoMarcarLidaAPIView,
     NotificacaoMarcarLidasAPIView,
-)
-from .views import (
-    ChatListAPIView,
-    ChatDetailAPIView,
-    ChatEnviarMensagemAPIView,
-    ChatMarcarLidaAPIView,
-    ChatNaoLidasAPIView,
+    ChatListAPIView, ChatDetailAPIView, ChatEnviarMensagemAPIView,
+    ChatMarcarLidaAPIView, ChatNaoLidasAPIView,
 )
 
 urlpatterns = [
