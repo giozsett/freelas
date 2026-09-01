@@ -96,12 +96,13 @@ function Get-RedisPortable {
 $RedisLog = Join-Path $LogDir 'redis.log'
 $RedisProcess = $null
 if (-not (Test-TcpPort 6379)) {
-    $redisExe = Get-RedisPortable
-    Write-Host 'Iniciando o Redis (porta 6379) para o chat...'
-    $RedisProcess = Start-Process -FilePath $redisExe `
-        -ArgumentList @('--port', '6379', '--bind', '127.0.0.1', '--save', '""', '--appendonly', 'no', '--logfile', $RedisLog) `
-        -PassThru `
-        -NoNewWindow
+        $redisExe = Get-RedisPortable
+        $RedisDir = Join-Path $ProjectDir 'tools\redis'
+        Write-Host 'Iniciando o Redis (porta 6379) para o chat...'
+        $RedisProcess = Start-Process -FilePath $redisExe `
+            -ArgumentList @('--port', '6379', '--bind', '127.0.0.1', '--appendonly', 'yes', '--dir', $RedisDir, '--appendfilename', 'appendonly.aof', '--logfile', $RedisLog) `
+            -PassThru `
+            -NoNewWindow
     for ($i = 0; $i -lt 20; $i++) {
         if (Test-TcpPort 6379) { break }
         if ($RedisProcess.HasExited) {

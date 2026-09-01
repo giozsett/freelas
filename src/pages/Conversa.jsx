@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { Send, MessageSquare, Lock, HelpCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { Send, MessageSquare, Lock, HelpCircle, Loader2, ArrowLeft, Archive, MessagesSquare } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import ReportModal from '../components/ModalDenuncia';
 
 const API = 'http://localhost:8000';
+const WS_BASE = API.replace(/^http/, 'ws');
 
 const STATUS_CHIP = {
   'Pendente Pagamento': { label: 'Aguardando pagamento', tone: 'warning' },
@@ -120,11 +121,15 @@ export default function Conversa() {
   const [carregandoChat, setCarregandoChat] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
+  const [chatTab, setChatTab] = useState('em-andamento');
   const [modalDenuncia, setModalDenuncia] = useState(false);
+  const [wsId, setWsId] = useState(null);
 
   const selectedIdRef = useRef(null);
   const inicializadoRef = useRef(false);
   const fimRef = useRef(null);
+  const wsRef = useRef(null);
+  const enviandoRef = useRef(false);
 
   const authHeaders = useCallback(
     () => ({ Authorization: `Token ${token}` }),
@@ -148,6 +153,7 @@ export default function Conversa() {
   const abrirChat = useCallback(
     async (id) => {
       selectedIdRef.current = id;
+      setWsId(id);
       setCarregandoChat(true);
       setErro('');
       try {
@@ -159,6 +165,7 @@ export default function Conversa() {
         const dados = await res.json();
         setChat(dados);
         setMessages(dados.messages || []);
+        if (!dados.chat_ativo) setChatTab('finalizadas');
         fetch(`${API}/api/chat/${id}/ler/`, {
           method: 'POST',
           headers: authHeaders(),
@@ -185,10 +192,88 @@ export default function Conversa() {
     }
   }, [acordoId, abrirChat]);
 
+  const wsConectadoRef = useRef(false);
+
+  // WebSocket em tempo real: entrega imediata de novas mensagens.
+  useEffect(() => {
+    const idAtual = wsId;
+    if (!idAtual || !token) return undefined;
+
+    if (wsRef.current) wsRef.current.close();
+    wsRef.current = null;
+    wsConectadoRef.current = false;
+
+    let fechado = false;
+    let socket = null;
+    let retryTimer = null;
+
+    const abrir = () => {
+      if (fechado || !wsId) return;
+      try {
+        socket = new WebSocket(`${WS_BASE}/ws/chat/${wsId}/?token=${encodeURIComponent(token)}`);
+      } catch {
+        return;
+      }
+      socket.onopen = () => {
+        if (!fechado) {
+          wsConectadoRef.current = true;
+          // Marca como lido ao conectar e avisa o servidor.
+          fetch(`${API}/api/chat/${wsId}/ler/`, {
+            method: 'POST',
+            headers: authHeaders(),
+          }).catch(() => {});
+        }
+      };
+      socket.onmessage = (evt) => {
+        if (fechado) return;
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.tipo === 'nova_mensagem' && msg.mensagem) {
+            setMessages((prev) =>
+              prev.some((m) => m.id === msg.mensagem.id) ? prev : [...prev, msg.mensagem],
+            );
+            setChat((prev) => (prev ? { ...prev, chat_ativo: true } : prev));
+            carregarChats();
+          }
+        } catch {
+          // ignora mensagens inválidas
+        }
+      };
+      socket.onclose = () => {
+        wsConectadoRef.current = false;
+        if (!fechado) {
+          // Reconecta com backoff simples.
+          retryTimer = setTimeout(abrir, 5000);
+        }
+      };
+      socket.onerror = () => {
+        try {
+          socket?.close();
+        } catch {
+          /* noop */
+        }
+      };
+    };
+
+    abrir();
+    return () => {
+      fechado = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      try {
+        socket?.close();
+      } catch {
+        /* noop */
+      }
+      wsRef.current = null;
+      wsConectadoRef.current = false;
+    };
+  }, [token, authHeaders, carregarChats, wsId]);
+
   useEffect(() => {
     const intervalo = setInterval(() => {
       const idAtual = selectedIdRef.current;
-      if (idAtual && token) {
+      // Se o WebSocket estiver conectado, o fallback de mensagens fica mais raro.
+      if (idAtual && token && !wsConectadoRef.current) {
         fetch(`${API}/api/chat/${idAtual}/`, { headers: authHeaders() })
           .then((res) => (res.ok ? res.json() : null))
           .then((dados) => {
@@ -209,11 +294,12 @@ export default function Conversa() {
                   }
                 : prev,
             );
+            if (selectedIdRef.current && !dados.chat_ativo) setChatTab('finalizadas');
           })
           .catch(() => {});
       }
       carregarChats();
-    }, 3000);
+    }, wsConectadoRef.current ? 10000 : 3000);
     return () => clearInterval(intervalo);
   }, [token, authHeaders, carregarChats]);
 
@@ -224,7 +310,8 @@ export default function Conversa() {
   const enviar = async (e) => {
     e.preventDefault();
     const conteudo = texto.trim();
-    if (!conteudo || !chat?.chat_ativo || enviando) return;
+    if (!conteudo || !chat?.chat_ativo || enviando || enviandoRef.current) return;
+    enviandoRef.current = true;
     setEnviando(true);
     setErro('');
     try {
@@ -238,18 +325,23 @@ export default function Conversa() {
         setErro(dados.error || 'Não foi possível enviar a mensagem.');
         return;
       }
-      setMessages((prev) => [...prev, dados]);
+      setMessages((prev) => (prev.some((m) => m.id === dados.id) ? prev : [...prev, dados]));
       setTexto('');
       carregarChats();
     } catch {
       setErro('Erro de conexão. Tente novamente.');
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   };
 
   const chip = chat ? STATUS_CHIP[chat.status_acordo] || { label: chat.status_acordo, tone: 'done' } : null;
   const outraParte = chat?.outra_parte;
+
+  const chatsEmAndamento = chats.filter((c) => c.chat_ativo);
+  const chatsFinalizados = chats.filter((c) => !c.chat_ativo);
+  const chatsFiltrados = chatTab === 'em-andamento' ? chatsEmAndamento : chatsFinalizados;
 
   return (
     <div className={`chat-layout ${chat ? 'chat-selecionado' : ''}`}>
@@ -259,6 +351,31 @@ export default function Conversa() {
           <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Conversas</h2>
           <span className="badge">{chats.length}</span>
         </div>
+
+        {chats.length > 0 && (
+          <div className="chat-tabs" role="tablist" aria-label="Filtrar conversas por status">
+            <button
+              type="button"
+              className={`chat-tab ${chatTab === 'em-andamento' ? 'chat-tab--active' : ''}`}
+              onClick={() => setChatTab('em-andamento')}
+              title="Em andamento"
+              aria-label="Em andamento"
+            >
+              <MessagesSquare size={17} />
+              <span className="chat-tab__count">{chatsEmAndamento.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`chat-tab ${chatTab === 'finalizadas' ? 'chat-tab--active' : ''}`}
+              onClick={() => setChatTab('finalizadas')}
+              title="Finalizadas"
+              aria-label="Finalizadas"
+            >
+              <Archive size={17} />
+              <span className="chat-tab__count">{chatsFinalizados.length}</span>
+            </button>
+          </div>
+        )}
 
         {carregandoChats && chats.length === 0 ? (
           <div className="chat-empty-state">
@@ -277,9 +394,21 @@ export default function Conversa() {
               Navegar por anúncios
             </Link>
           </div>
+        ) : chatsFiltrados.length === 0 ? (
+          <div className="chat-empty-state">
+            <Archive size={36} style={{ color: 'var(--border-color)' }} />
+            <h3 style={{ fontSize: '0.95rem' }}>
+              {chatTab === 'em-andamento' ? 'Nenhuma conversa em andamento' : 'Nenhuma conversa finalizada'}
+            </h3>
+            <p style={{ fontSize: '0.85rem' }}>
+              {chatTab === 'em-andamento'
+                ? 'Suas conversas ativas aparecerão aqui.'
+                : 'Conversas de acordos concluídos ou cancelados aparecerão aqui.'}
+            </p>
+          </div>
         ) : (
           <div className="chat-contacts chat-contacts-scroll">
-            {chats.map((item) => {
+            {chatsFiltrados.map((item) => {
               const ativo = item.id === chat?.id;
               const chipItem = STATUS_CHIP[item.status_acordo] || { label: item.status_acordo, tone: 'done' };
               const ultima = item.ultima_mensagem;
@@ -349,7 +478,7 @@ export default function Conversa() {
             {/* Header do chat */}
             <div style={{ padding: '1rem 1.25rem', borderBottom: 'var(--border-width) solid var(--border-color)', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
-                onClick={() => { setChat(null); setMessages([]); navigate('/chat'); }}
+                onClick={() => { setChat(null); setMessages([]); selectedIdRef.current = null; setWsId(null); navigate('/chat'); }}
                 className="chat-back-btn"
                 title="Voltar para as conversas"
                 aria-label="Voltar para as conversas"

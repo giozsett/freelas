@@ -93,7 +93,7 @@ if redis-cli ping >/dev/null 2>&1; then
 else
     if command -v redis-server >/dev/null 2>&1; then
         echo "Iniciando o Redis (porta 6379) para o chat..."
-        redis-server --port 6379 --bind 127.0.0.1 --save "" --appendonly no --logfile "${REDIS_LOG}" &
+        redis-server --port 6379 --bind 127.0.0.1 --appendonly yes --dir "${PROJECT_DIR}/tools/redis" --appendfilename "appendonly.aof" --logfile "${REDIS_LOG}" &
         REDIS_PID=$!
         for _ in {1..20}; do
             if redis-cli ping >/dev/null 2>&1; then
