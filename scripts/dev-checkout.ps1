@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $ProjectDir = Split-Path -Parent $PSScriptRoot
 $BackendDir = Join-Path $ProjectDir 'backend'
 $EnvFile = Join-Path $BackendDir '.env'
-$PythonExe = Join-Path $BackendDir '.venv\Scripts\python.exe'
+$PythonExe = Join-Path $BackendDir 'venv\Scripts\python.exe'
 $LogDir = Join-Path $env:TEMP 'freelas-ngrok'
 $NgrokLog = Join-Path $LogDir 'ngrok.log'
 $NgrokErr = Join-Path $LogDir 'ngrok.err'
@@ -43,7 +43,8 @@ function Set-EnvValue {
     if (-not $updated) {
         $newLines += "$Key=$Value"
     }
-    Set-Content -Path $File -Value $newLines -Encoding utf8
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllLines($File, [string[]]$newLines, $utf8NoBom)
 }
 
 function Stop-ProcessTree {
@@ -56,6 +57,68 @@ function Stop-ProcessTree {
         Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
     } catch {
     }
+}
+
+function Test-TcpPort {
+    param([int]$Port)
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        try {
+            return $client.ConnectAsync('127.0.0.1', $Port).Wait(1500) -and $client.Connected
+        } finally {
+            $client.Close()
+        }
+    } catch {
+        return $false
+    }
+}
+
+function Get-RedisPortable {
+    $RedisDir = Join-Path $ProjectDir 'tools\redis'
+    $RedisExe = Join-Path $RedisDir 'redis-server.exe'
+    if (Test-Path $RedisExe) {
+        return $RedisExe
+    }
+    Write-Host 'Baixando Redis portatil (tporadowski/redis) para tools\redis...'
+    New-Item -ItemType Directory -Path $RedisDir -Force | Out-Null
+    $ZipPath = Join-Path $env:TEMP 'redis-x64-freelas.zip'
+    try {
+        Invoke-WebRequest -Uri 'https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip' -OutFile $ZipPath -UseBasicParsing
+    } catch {
+        Write-Host 'Falha ao baixar o Redis. Baixe manualmente e extraia em tools\redis.' -ForegroundColor Red
+        exit 1
+    }
+    Expand-Archive -Path $ZipPath -DestinationPath $RedisDir -Force
+    Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
+    return $RedisExe
+}
+
+$RedisLog = Join-Path $LogDir 'redis.log'
+$RedisProcess = $null
+if (-not (Test-TcpPort 6379)) {
+        $redisExe = Get-RedisPortable
+        $RedisDir = Join-Path $ProjectDir 'tools\redis'
+        Write-Host 'Iniciando o Redis (porta 6379) para o chat...'
+        $RedisProcess = Start-Process -FilePath $redisExe `
+            -ArgumentList @('--port', '6379', '--bind', '127.0.0.1', '--appendonly', 'yes', '--dir', $RedisDir, '--appendfilename', 'appendonly.aof', '--logfile', $RedisLog) `
+            -PassThru `
+            -NoNewWindow
+    for ($i = 0; $i -lt 20; $i++) {
+        if (Test-TcpPort 6379) { break }
+        if ($RedisProcess.HasExited) {
+            Write-Host 'O Redis encerrou inesperadamente:' -ForegroundColor Red
+            Get-Content $RedisLog -Tail 20
+            exit 1
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not (Test-TcpPort 6379)) {
+        Write-Host 'Nao foi possivel iniciar o Redis na porta 6379.' -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Redis rodando em redis://127.0.0.1:6379 (log: $RedisLog)" -ForegroundColor Green
+} else {
+    Write-Host 'Redis ja esta rodando na porta 6379.' -ForegroundColor Green
 }
 
 if (-not (Get-Command ngrok -ErrorAction SilentlyContinue)) {
@@ -81,7 +144,7 @@ Write-Host 'Iniciando o tunel HTTPS do ngrok...'
 $env:NGROK_AUTHTOKEN = $ngrokAuthToken
 
 $ngrokProcess = Start-Process -FilePath 'ngrok' `
-    -ArgumentList @('http', "$BackendPort", '--log=stdout') `
+    -ArgumentList @('http', "$BackendPort", "--authtoken=$ngrokAuthToken", '--log=stdout') `
     -PassThru `
     -NoNewWindow `
     -RedirectStandardOutput $NgrokLog `
@@ -140,18 +203,22 @@ $frontendProcess = Start-Process -FilePath $npmCmd `
     -RedirectStandardOutput $FrontendLog `
     -RedirectStandardError $FrontendErr
 
-Write-Host 'Backend, frontend e tunel iniciados. Pressione Ctrl+C para encerrar todos.' -ForegroundColor Cyan
+Write-Host 'Backend, frontend, Redis e tunel iniciados. Pressione Ctrl+C para encerrar todos.' -ForegroundColor Cyan
 Write-Host ''
 Write-Host 'Logs:'
 Write-Host "  Backend : $BackendLog"
 Write-Host "  Frontend: $FrontendLog"
+Write-Host "  Redis   : $RedisLog"
 Write-Host "  Ngrok   : $NgrokLog"
 
 try {
     $processes = @($ngrokProcess, $backendProcess, $frontendProcess)
+    if ($RedisProcess) {
+        $processes += $RedisProcess
+    }
     while ($true) {
         $running = @($processes | Where-Object { $_ -and -not $_.HasExited })
-        if ($running.Count -lt 3) {
+        if ($running.Count -lt $processes.Count) {
             break
         }
         Start-Sleep -Seconds 1

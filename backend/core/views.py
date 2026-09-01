@@ -251,11 +251,26 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
+        from django.db.models import Q, Avg
+
         Ad.atualizar_vencidos()
-        queryset = Ad.objects.exclude(deletado=True).order_by('-created_at')
+        queryset = (
+            Ad.objects.exclude(deletado=True)
+            .select_related('author', 'author__profile')
+            .annotate(
+                _media_freelancer=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='freelancer'),
+                ),
+                _media_contratante=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
+                ),
+            )
+            .order_by('-created_at')
+        )
         all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
         if not all_ads:
-            from django.db.models import Q
             # Only show ads that are open (status is NULL, empty, 'Em aberto', or 'Ativo')
             queryset = queryset.filter(Q(status_anuncio__isnull=True) | Q(status_anuncio='') | Q(status_anuncio='Em aberto') | Q(status_anuncio='Ativo'))
         return queryset
@@ -267,8 +282,23 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdSerializer
 
     def get_queryset(self):
+        from django.db.models import Q, Avg
+
         Ad.atualizar_vencidos()
-        return Ad.objects.exclude(deletado=True)
+        return (
+            Ad.objects.exclude(deletado=True)
+            .select_related('author', 'author__profile')
+            .annotate(
+                _media_freelancer=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='freelancer'),
+                ),
+                _media_contratante=Avg(
+                    'author__profile__avaliacoes_recebidas__nota_geral',
+                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
+                ),
+            )
+        )
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -1908,3 +1938,188 @@ def _distribuicao_planos():
         if not any(p['nome'] == nome for p in planos):
             planos.append({'nome': nome, 'total': 0})
     return planos
+
+
+### chat entre freelancer e contratante (mensagens no Redis) ###
+from django.db.models import Q as _Q
+from .chat import (
+    chat_ativo,
+    enviar_mensagem,
+    listar_mensagens,
+    marcar_lidas,
+    nao_lidas,
+    partes_do_acordo as _partes_chat,
+)
+from .chat import ChatIndisponivel
+from .serializers import ChatConversaSerializer, _info_usuario_com_papel
+
+
+def _acordo_do_chat(pk, user):
+    """Retorna o acordo se o usuário participa dele (ou é moderador)."""
+    from django.shortcuts import get_object_or_404
+
+    acordo = get_object_or_404(
+        AcordoServico.objects.select_related(
+            'candidatura__user__profile',
+            'candidatura__ad__author__profile',
+        ),
+        pk=pk,
+    )
+    contratante, freelancer = _partes_chat(acordo)
+    if user.is_staff or user.is_superuser:
+        return acordo
+    if user not in {contratante, freelancer}:
+        return None
+    return acordo
+
+
+class ChatListAPIView(APIView):
+    """Lista as conversas (acordos) do usuário logado, restritas às partes."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.is_staff or user.is_superuser:
+            acordos = AcordoServico.objects.all()
+        else:
+            acordos = AcordoServico.objects.filter(
+                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+            )
+        acordos = acordos.select_related(
+            'candidatura__user__profile',
+            'candidatura__ad__author__profile',
+        )
+        dados = ChatConversaSerializer(
+            acordos,
+            many=True,
+            context={'request': request},
+        ).data
+
+        def _chave_ordenacao(item):
+            ultima = item.get('ultima_mensagem')
+            if ultima and ultima.get('criado_em'):
+                return ultima['criado_em']
+            return item.get('data_confirmacao') or ''
+
+        dados.sort(key=_chave_ordenacao, reverse=True)
+        return Response(dados)
+
+
+class ChatDetailAPIView(APIView):
+    """Detalhe de uma conversa + histórico de mensagens (somente as partes)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        acordo = _acordo_do_chat(pk, request.user)
+        if acordo is None:
+            return Response(
+                {'error': 'Você não participa deste acordo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        request_user = request.user
+        contratante, freelancer = _partes_chat(acordo)
+        outra = freelancer if request_user == contratante else contratante
+        papel = 'freelancer' if outra == freelancer else 'contratante'
+        try:
+            mensagens = listar_mensagens(acordo.id)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({
+            'id': acordo.id,
+            'titulo_anuncio': acordo.titulo_anuncio,
+            'status_acordo': acordo.status_acordo,
+            'valor_acordado': acordo.valor_acordado,
+            'unidade_valor': acordo.unidade_valor,
+            'data_confirmacao': acordo.data_confirmacao,
+            'chat_ativo': chat_ativo(acordo),
+            'outra_parte': _info_usuario_com_papel(outra, papel, request),
+            'messages': mensagens,
+        })
+
+
+class ChatEnviarMensagemAPIView(APIView):
+    """Envia uma mensagem no chat do acordo (somente se o chat estiver ativo)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        acordo = _acordo_do_chat(pk, request.user)
+        if acordo is None:
+            return Response(
+                {'error': 'Você não participa deste acordo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not chat_ativo(acordo):
+            return Response(
+                {'error': 'Este chat foi encerrado. O acordo não está mais em andamento.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        texto = str(request.data.get('texto') or '').strip()
+        if not texto:
+            return Response(
+                {'error': 'A mensagem não pode estar vazia.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(texto) > 2000:
+            return Response(
+                {'error': 'A mensagem deve ter no máximo 2000 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            mensagem = enviar_mensagem(acordo, request.user, texto)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(mensagem, status=status.HTTP_201_CREATED)
+
+
+class ChatMarcarLidaAPIView(APIView):
+    """Marca as mensagens do acordo como lidas para o usuário logado."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        acordo = _acordo_do_chat(pk, request.user)
+        if acordo is None:
+            return Response(
+                {'error': 'Você não participa deste acordo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            marcar_lidas(acordo.id, request.user.id)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'ok': True})
+
+
+class ChatNaoLidasAPIView(APIView):
+    """Total de mensagens não lidas do usuário em todas as conversas."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.is_staff or user.is_superuser:
+            acordos = AcordoServico.objects.all()
+        else:
+            acordos = AcordoServico.objects.filter(
+                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+            )
+        try:
+            total = sum(nao_lidas(acordo.id, user.id) for acordo in acordos)
+        except ChatIndisponivel:
+            return Response(
+                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'total': total})

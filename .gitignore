@@ -28,6 +28,9 @@ venv/
 .venv/
 env/
 
+# Redis portátil para Windows (binário local, baixado pelo dev script)
+tools/redis/
+
 # Python / Django
 __pycache__/
 *.py[cod]
@@ -45,3 +48,4 @@ Testes.md
 roteiro.txt
 roteiro2.txt
 Implementation.md
+supabase-migration

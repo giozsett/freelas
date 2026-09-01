@@ -198,10 +198,14 @@ class AdSerializer(serializers.ModelSerializer):
         if not hasattr(obj.author, 'profile'):
             return None
         papel_avaliado = 'contratante' if obj.role in {'contractor', 'contratante'} else 'freelancer'
-        result = obj.author.profile.avaliacoes_recebidas.filter(
-            papel_avaliado=papel_avaliado,
-        ).aggregate(nota=Avg('nota_geral'))
-        return round(float(result['nota']), 1) if result['nota'] is not None else None
+        media = getattr(
+            obj,
+            '_media_contratante' if papel_avaliado == 'contratante' else '_media_freelancer',
+            None,
+        )
+        if media is None:
+            return None
+        return round(float(media), 1)
 
 from .models import Candidatura
 
@@ -221,6 +225,15 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         model = Candidatura
         fields = '__all__'
         read_only_fields = ('user', 'status', 'enviado_em', 'atualizado_em')
+
+    def get_fields(self):
+        fields = super().get_fields()
+        fields['acordo_id'] = serializers.SerializerMethodField()
+        return fields
+
+    def get_acordo_id(self, obj):
+        acordo = obj.acordos.first()
+        return acordo.id if acordo else None
 
     def get_applicant_name(self, obj):
         if obj.user:
@@ -689,3 +702,83 @@ class AvaliacaoSerializer(serializers.ModelSerializer):
             papel_avaliado=papel_avaliado,
             nota_geral=nota,
         )
+
+
+from .chat import (
+    chat_ativo,
+    nao_lidas,
+    partes_do_acordo,
+    ultima_mensagem,
+)
+from .chat import ChatIndisponivel
+
+
+def _info_usuario(user, request):
+    if not user:
+        return None
+    profile = getattr(user, 'profile', None)
+    foto = None
+    if profile and profile.foto_perfil:
+        if request:
+            foto = request.build_absolute_uri(profile.foto_perfil.url)
+        else:
+            foto = profile.foto_perfil.url
+    return {
+        'id': user.id,
+        'nome': (
+            profile.nome_completo
+            if profile and profile.nome_completo
+            else (user.get_full_name() or user.username)
+        ),
+        'foto_perfil': foto,
+    }
+
+
+def _info_usuario_com_papel(user, papel, request):
+    info = _info_usuario(user, request)
+    if info:
+        info['papel'] = papel
+    return info
+
+
+class ChatConversaSerializer(serializers.ModelSerializer):
+    """Conversa de um acordo — restrita ao freelancer e ao contratante."""
+
+    chat_ativo = serializers.SerializerMethodField()
+    outra_parte = serializers.SerializerMethodField()
+    ultima_mensagem = serializers.SerializerMethodField()
+    nao_lidas = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AcordoServico
+        fields = (
+            'id', 'titulo_anuncio', 'status_acordo', 'valor_acordado',
+            'unidade_valor', 'data_confirmacao', 'chat_ativo',
+            'outra_parte', 'ultima_mensagem', 'nao_lidas',
+        )
+
+    def get_chat_ativo(self, obj):
+        return chat_ativo(obj)
+
+    def get_outra_parte(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        contratante, freelancer = partes_do_acordo(obj)
+        outra = freelancer if user == contratante else contratante
+        papel = 'freelancer' if outra == freelancer else 'contratante'
+        return _info_usuario_com_papel(outra, papel, request)
+
+    def get_ultima_mensagem(self, obj):
+        try:
+            return ultima_mensagem(obj.id)
+        except ChatIndisponivel:
+            return None
+
+    def get_nao_lidas(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return 0
+        try:
+            return nao_lidas(obj.id, request.user.id)
+        except ChatIndisponivel:
+            return 0

@@ -5,10 +5,12 @@ set -Eeuo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="${PROJECT_DIR}/backend"
 BACKEND_ENV="${BACKEND_DIR}/.env"
-BACKEND_PORT="${BACKEND_PORT:-8000}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"=
+
 NGROK_API="http://127.0.0.1:4040/api/tunnels"
 NGROK_LOG="$(mktemp /tmp/freelas-ngrok.XXXXXX.log)"
 NGROK_PID=""
+REDIS_PID=""
 BACKEND_PID=""
 FRONTEND_PID=""
 
@@ -16,13 +18,13 @@ cleanup() {
     local exit_code=$?
     trap - EXIT INT TERM
 
-    for pid in "${FRONTEND_PID}" "${BACKEND_PID}" "${NGROK_PID}"; do
+    for pid in "${FRONTEND_PID}" "${BACKEND_PID}" "${NGROK_PID}" "${REDIS_PID}"; do
         if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
             kill "${pid}" 2>/dev/null || true
         fi
     done
 
-    rm -f "${NGROK_LOG}"
+    rm -f "${NGROK_LOG}" "${REDIS_LOG}"
     exit "${exit_code}"
 }
 
@@ -70,13 +72,43 @@ trap cleanup EXIT INT TERM
 
 if ! command -v ngrok >/dev/null 2>&1; then
     echo "ngrok não foi encontrado."
-    echo "Instale-o uma vez seguindo https://ngrok.com/download/linux"
+    echo "Instale-o seguindo https://ngrok.com/download"
     exit 1
 fi
 
-if [[ ! -x "${BACKEND_DIR}/venv/bin/python" ]]; then
+if [[ -x "${BACKEND_DIR}/venv/bin/python" ]]; then
+    PYTHON_BIN="${BACKEND_DIR}/venv/bin/python"
+elif [[ -x "${BACKEND_DIR}/venv/Scripts/python" ]]; then
+    PYTHON_BIN="${BACKEND_DIR}/venv/Scripts/python"
+elif [[ -f "${BACKEND_DIR}/venv/Scripts/python.exe" ]]; then
+    PYTHON_BIN="${BACKEND_DIR}/venv/Scripts/python.exe"
+else
     echo "O ambiente virtual não foi encontrado em backend/venv."
     exit 1
+fi
+
+# Redis — usado para armazenar as mensagens do chat
+if redis-cli ping >/dev/null 2>&1; then
+    echo "Redis já está rodando em redis://127.0.0.1:6379."
+else
+    if command -v redis-server >/dev/null 2>&1; then
+        echo "Iniciando o Redis (porta 6379) para o chat..."
+        redis-server --port 6379 --bind 127.0.0.1 --appendonly yes --dir "${PROJECT_DIR}/tools/redis" --appendfilename "appendonly.aof" --logfile "${REDIS_LOG}" &
+        REDIS_PID=$!
+        for _ in {1..20}; do
+            if redis-cli ping >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.5
+        done
+        if ! redis-cli ping >/dev/null 2>&1; then
+            echo "Não foi possível iniciar o Redis na porta 6379."
+            exit 1
+        fi
+        echo "Redis rodando em redis://127.0.0.1:6379 (log: ${REDIS_LOG})"
+    else
+        echo "ATENÇÃO: redis-server não encontrado. O chat não funcionará sem o Redis."
+    fi
 fi
 
 NGROK_AUTHTOKEN="$(read_env_value "NGROK_AUTHTOKEN" "${BACKEND_ENV}")"
@@ -87,21 +119,50 @@ if [[ -z "${NGROK_AUTHTOKEN}" ]]; then
 fi
 export NGROK_AUTHTOKEN
 
-echo "Iniciando o túnel HTTPS do ngrok..."
-ngrok http "${BACKEND_PORT}" --log=stdout > "${NGROK_LOG}" 2>&1 &
-NGROK_PID=$!
+cleanup_stale_ngrok() {
+    taskkill //F //IM ngrok.exe 2>/dev/null || true
+    sleep 1
 
-PUBLIC_URL=""
-for _ in {1..40}; do
-    if ! kill -0 "${NGROK_PID}" 2>/dev/null; then
-        echo "O ngrok encerrou antes de criar o túnel:"
-        tail -20 "${NGROK_LOG}"
-        exit 1
+    if curl -fsS http://127.0.0.1:4040/api/tunnels >/dev/null 2>&1; then
+        curl -fsS http://127.0.0.1:4040/api/tunnels 2>/dev/null |
+        python -c '
+import json, sys, urllib.request
+
+try:
+    data = json.load(sys.stdin)
+    for t in data.get("tunnels", []):
+        name = t.get("name", "")
+        if name:
+            req = urllib.request.Request(
+                "http://127.0.0.1:4040/api/tunnels/" + name,
+                method="DELETE"
+            )
+            try:
+                urllib.request.urlopen(req)
+            except Exception:
+                pass
+except Exception:
+    pass
+' || true
+        sleep 2
     fi
+}
 
-    PUBLIC_URL="$(
-        curl -fsS "${NGROK_API}" 2>/dev/null |
-        python3 -c '
+start_ngrok_tunnel() {
+    rm -f "${NGROK_LOG}"
+    ngrok http "${BACKEND_PORT}" --log=stdout > "${NGROK_LOG}" 2>&1 &
+    NGROK_PID=$!
+
+    PUBLIC_URL=""
+    for _ in {1..40}; do
+        if ! kill -0 "${NGROK_PID}" 2>/dev/null; then
+            echo "${NGROK_LOG}"
+            return 1
+        fi
+
+        PUBLIC_URL="$(
+            curl -fsS "${NGROK_API}" 2>/dev/null |
+            python -c '
 import json
 import sys
 
@@ -115,19 +176,62 @@ try:
 except (StopIteration, KeyError, TypeError, ValueError):
     pass
 ' || true
-    )"
+        )"
 
-    if [[ "${PUBLIC_URL}" == https://* ]]; then
+        if [[ "${PUBLIC_URL}" == https://* ]]; then
+            echo "${PUBLIC_URL}"
+            return 0
+        fi
+
+        sleep 0.5
+    done
+
+    echo "${NGROK_LOG}"
+    return 1
+}
+
+cleanup_stale_ngrok
+
+MAX_RETRIES=5
+PUBLIC_URL=""
+NGROK_LOG_CONTENT=""
+for attempt in $(seq 1 ${MAX_RETRIES}); do
+    echo "Iniciando o túnel HTTPS do ngrok (tentativa ${attempt}/${MAX_RETRIES})..."
+    NGROK_LOG_CONTENT="$(start_ngrok_tunnel)" && {
+        if [[ "${NGROK_LOG_CONTENT}" == https://* ]]; then
+            PUBLIC_URL="${NGROK_LOG_CONTENT}"
+        fi
         break
-    fi
+    }
+    FAIL_LOG="${NGROK_LOG_CONTENT}"
 
-    sleep 0.5
+    if grep -q "ERR_NGROK_334" "${FAIL_LOG}" 2>/dev/null; then
+        echo "Túnel ngrok ainda ativo no servidor cloud."
+        echo "Encerrando processos locais e aguardando expiração..."
+        cleanup_stale_ngrok
+        if [[ ${attempt} -eq ${MAX_RETRIES} ]]; then
+            echo
+            echo "O túnel ngrok anterior não expirou automaticamente."
+            echo "Para resolver agora:"
+            echo "  1. Acesse https://dashboard.ngrok.com/endpoints"
+            echo "  2. Clique em 'Stop' no endpoint ativo"
+            echo "  3. Pressione Enter para tentar novamente"
+            read -r -p "   > "
+            cleanup_stale_ngrok
+            MAX_RETRIES=$((MAX_RETRIES + 3))
+        fi
+        sleep 5
+    else
+        echo "O ngrok encerrou antes de criar o túnel:"
+        tail -20 "${FAIL_LOG}"
+        exit 1
+    fi
 done
 
 if [[ "${PUBLIC_URL}" != https://* ]]; then
-    echo "Não foi possível obter a URL pública do ngrok."
+    echo "Não foi possível obter a URL pública do ngrok após ${MAX_RETRIES} tentativas."
     echo "Últimas mensagens:"
-    tail -20 "${NGROK_LOG}"
+    tail -20 "${NGROK_LOG_CONTENT}"
     exit 1
 fi
 
@@ -141,7 +245,7 @@ echo
 
 (
     cd "${BACKEND_DIR}"
-    exec "${BACKEND_DIR}/venv/bin/python" manage.py runserver "0.0.0.0:${BACKEND_PORT}"
+    exec "${PYTHON_BIN}" manage.py runserver "0.0.0.0:${BACKEND_PORT}"
 ) &
 BACKEND_PID=$!
 
@@ -151,6 +255,10 @@ BACKEND_PID=$!
 ) &
 FRONTEND_PID=$!
 
-echo "Backend, frontend e túnel iniciados. Pressione Ctrl+C para encerrar todos."
+echo "Backend, frontend, Redis e túnel iniciados. Pressione Ctrl+C para encerrar todos."
 
-wait -n "${NGROK_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"
+if [[ -n "${REDIS_PID}" ]]; then
+    wait -n "${NGROK_PID}" "${BACKEND_PID}" "${FRONTEND_PID}" "${REDIS_PID}"
+else
+    wait -n "${NGROK_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"
+fi
