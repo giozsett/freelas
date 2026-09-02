@@ -94,6 +94,53 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
         profile, created = UserProfile.objects.get_or_create(user=self.request.user)
         return profile
 
+    def update(self, request, *args, **kwargs):
+        profile = self.get_object()
+        foto_file = request.FILES.get('foto_perfil')
+        if foto_file in (None, ''):
+            if request.data.get('foto_perfil') is None:
+                self._deletar_imagem_antiga(profile.foto_perfil)
+                profile.foto_perfil = None
+                profile.save(update_fields=['foto_perfil', 'atualizado_em'])
+                return Response({'foto_perfil': None}, status=status.HTTP_200_OK)
+            return Response({'error': 'Nenhum arquivo de imagem enviado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if foto_file.size > 2 * 1024 * 1024:
+            return Response({'error': 'A foto de perfil não pode exceder 2 MB.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        url = self._subir_cloudinary(foto_file, 'fotos_perfil')
+        if not url:
+            return Response({'error': 'Não foi possível enviar a imagem.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        self._deletar_imagem_antiga(profile.foto_perfil)
+        profile.foto_perfil = url
+        profile.save(update_fields=['foto_perfil', 'atualizado_em'])
+        return Response({'foto_perfil': url}, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _subir_cloudinary(arquivo, pasta):
+        import cloudinary.uploader
+        try:
+            resposta = cloudinary.uploader.upload(
+                arquivo,
+                folder=pasta,
+                resource_type='image',
+            )
+            return resposta.get('secure_url') or resposta.get('url')
+        except Exception:
+            return None
+
+    @staticmethod
+    def _deletar_imagem_antiga(url):
+        if not url or 'res.cloudinary.com' not in url:
+            return
+        import cloudinary.uploader
+        try:
+            public_id = url.split('/image/upload/')[-1].split('?')[0]
+            cloudinary.uploader.destroy(public_id, resource_type='image', invalidate=True)
+        except Exception:
+            pass
+
 
 class CertificadoListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CertificadoSerializer

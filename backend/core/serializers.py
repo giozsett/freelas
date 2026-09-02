@@ -11,11 +11,15 @@ from .notificacoes import criar_notificacao
 class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
     experiencias = serializers.SerializerMethodField()
+    banner = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
         fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias')
         read_only_fields = ('foto_perfil', 'subscription_plan')
+
+    def get_banner(self, obj):
+        return obj.banner
 
     def get_certificados(self, obj):
         certificados = obj.certificados.filter(exibir_perfil=True)
@@ -26,6 +30,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return ExperienciaSerializer(experiencias, many=True, context=self.context).data
 
     def update(self, instance, validated_data):
+        # Banner: se vier como arquivo (multipart), envia ao Cloudinary e guarda a URL
+        banner_val = self.initial_data.get('banner', None)
+        if banner_val and hasattr(banner_val, 'size'):
+            import cloudinary.uploader
+            if banner_val.size > 2 * 1024 * 1024:
+                raise serializers.ValidationError({'banner': 'O banner não pode exceder 2 MB.'})
+            try:
+                resposta = cloudinary.uploader.upload(
+                    banner_val,
+                    folder='banners',
+                    resource_type='image',
+                )
+                instance.banner = resposta.get('secure_url') or resposta.get('url')
+            except Exception:
+                raise serializers.ValidationError({'banner': 'Não foi possível enviar a imagem do banner.'})
+            instance.save(update_fields=['banner', 'atualizado_em'])
+        elif 'banner' in self.initial_data and banner_val in (None, ''):
+            instance.banner = None
+            instance.save(update_fields=['banner', 'atualizado_em'])
+
         for field in ['disponivel', 'email_visivel', 'telefone_visivel']:
             if field in self.initial_data:
                 value = self.initial_data[field]
@@ -46,20 +70,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         request = self.context.get('request')
-        if instance.foto_perfil:
-            if request:
-                ret['foto_perfil'] = request.build_absolute_uri(instance.foto_perfil.url)
-            else:
-                ret['foto_perfil'] = instance.foto_perfil.url
-        else:
-            ret['foto_perfil'] = None
-        if instance.banner:
-            if request:
-                ret['banner'] = request.build_absolute_uri(instance.banner.url)
-            else:
-                ret['banner'] = instance.banner.url
-        else:
-            ret['banner'] = None
         if instance.curriculo:
             if request:
                 ret['curriculo'] = request.build_absolute_uri(instance.curriculo.url)
@@ -710,10 +720,7 @@ def _info_usuario(user, request):
     profile = getattr(user, 'profile', None)
     foto = None
     if profile and profile.foto_perfil:
-        if request:
-            foto = request.build_absolute_uri(profile.foto_perfil.url)
-        else:
-            foto = profile.foto_perfil.url
+        foto = profile.foto_perfil
     return {
         'id': user.id,
         'nome': (

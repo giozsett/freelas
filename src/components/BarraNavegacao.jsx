@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, MessageSquare } from 'lucide-react';
+import { Moon, Sun, MessageSquare, Bell } from 'lucide-react';
 import { useTheme } from '../context/ContextoTema';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
@@ -8,12 +8,13 @@ import { useNotificacoes } from '../context/ContextoNotificacao';
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
-  const { user, token, logout } = useAuth();
+  const { user, logout } = useAuth();
   const { role, toggleRole } = useRole();
-  const { naoLidas, porTipo, marcarLidas } = useNotificacoes();
+  const { naoLidas, porTipo, notificacoes, chatNaoLidas, carregarLista, marcarLidas } = useNotificacoes();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [chatNaoLidas, setChatNaoLidas] = useState(0);
+  const [notificacoesOpen, setNotificacoesOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const notificacoesRef = useRef(null);
   const navigate = useNavigate();
 
   const initial = user
@@ -21,32 +22,12 @@ export default function Navbar() {
     : '?';
 
   useEffect(() => {
-    if (!token) return;
-    let ativo = true;
-    const buscar = () => {
-      fetch('http://localhost:8000/api/chat/nao-lidas/', {
-        headers: { Authorization: `Token ${token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((dados) => {
-          if (ativo && dados && typeof dados.total === 'number') {
-            setChatNaoLidas(dados.total);
-          }
-        })
-        .catch(() => {});
-    };
-    buscar();
-    const intervalo = setInterval(buscar, 8000);
-    return () => {
-      ativo = false;
-      clearInterval(intervalo);
-    };
-  }, [token]);
-
-  useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
+      }
+      if (notificacoesRef.current && !notificacoesRef.current.contains(event.target)) {
+        setNotificacoesOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -98,6 +79,57 @@ export default function Navbar() {
                 <span className="notification-dot chat-unread-dot">{chatNaoLidas > 99 ? '99+' : chatNaoLidas}</span>
               )}
             </Link>
+
+            {/* Notification Bell */}
+            <div className="dropdown" ref={notificacoesRef}>
+              <button
+                onClick={() => {
+                  const abrir = !notificacoesOpen;
+                  setNotificacoesOpen(abrir);
+                  if (abrir) carregarLista();
+                }}
+                title="Notificações"
+                aria-label="Notificações"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)', display: 'flex', alignItems: 'center', position: 'relative', padding: '0.1rem' }}
+              >
+                <Bell size={24} />
+                {naoLidas > 0 && (
+                  <span className="notification-dot chat-unread-dot">{naoLidas > 99 ? '99+' : naoLidas}</span>
+                )}
+              </button>
+              <div className="dropdown-content notif-content" style={{ display: notificacoesOpen ? 'block' : 'none', right: 0, left: 'auto', width: 320, maxHeight: 360, overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.9rem', borderBottom: 'var(--border-width) solid var(--border-color)' }}>
+                  <strong>Notificações</strong>
+                  {naoLidas > 0 && (
+                    <button
+                      onClick={() => marcarLidas()}
+                      className="notif-marcar-lidas"
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: '0.8rem' }}
+                    >
+                      Marcar todas como lidas
+                    </button>
+                  )}
+                </div>
+                {notificacoes.length === 0 ? (
+                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    Nenhuma notificação
+                  </div>
+                ) : (
+                  notificacoes.map((n) => (
+                    <Link
+                      key={n.id}
+                      to={n.link || '#'}
+                      onClick={() => { setNotificacoesOpen(false); marcarLidas([n.tipo]); }}
+                      className="notif-item"
+                      style={{ display: 'flex', gap: '0.6rem', padding: '0.6rem 0.9rem', textDecoration: 'none', color: 'var(--text-color)', borderBottom: 'var(--border-width) solid var(--border-color)', background: n.lida ? 'transparent' : 'var(--bg-color)' }}
+                    >
+                      <span style={{ flex: 1, fontSize: '0.88rem' }}>{n.mensagem}</span>
+                      {!n.lida && <span className="notification-dot" style={{ position: 'static', alignSelf: 'center', flexShrink: 0 }}></span>}
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
 
             {/* Profile Dropdown */}
             <div className="dropdown" ref={dropdownRef}>

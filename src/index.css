@@ -581,6 +581,24 @@ input:checked + .slider-switch .switch-text.contra {
   justify-content: center;
 }
 
+/* Notification Bell Dropdown */
+.notif-content {
+  right: 0;
+  left: auto;
+  width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.notif-item {
+  transition: background-color 0.15s ease;
+}
+.notif-item:hover {
+  background-color: var(--bg-color) !important;
+}
+.notif-marcar-lidas:hover {
+  text-decoration: underline;
+}
+
 ul { list-style-type: none; }
 
 /* Custom Date Input Styling */
