@@ -11,21 +11,33 @@ export const NotificacaoProvider = ({ children }) => {
   const [naoLidas, setNaoLidas] = useState(0);
   const [porTipo, setPorTipo] = useState({});
   const [notificacoes, setNotificacoes] = useState([]);
+  const [chatNaoLidas, setChatNaoLidas] = useState(0);
 
   const carregar = useCallback(async () => {
     if (!token) {
       setNaoLidas(0);
       setPorTipo({});
+      setChatNaoLidas(0);
       return;
     }
     try {
-      const res = await fetch(`${API}/api/notificacoes/nao-lidas/`, {
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setNaoLidas(data.count || 0);
-      setPorTipo(data.tipos || {});
+      const [resNotif, resChat] = await Promise.all([
+        fetch(`${API}/api/notificacoes/nao-lidas/`, {
+          headers: { Authorization: `Token ${token}` },
+        }),
+        fetch(`${API}/api/chat/nao-lidas/`, {
+          headers: { Authorization: `Token ${token}` },
+        }),
+      ]);
+      if (resNotif.ok) {
+        const data = await resNotif.json();
+        setNaoLidas(data.count || 0);
+        setPorTipo(data.tipos || {});
+      }
+      if (resChat.ok) {
+        const data = await resChat.json();
+        if (typeof data.total === 'number') setChatNaoLidas(data.total);
+      }
     } catch {
       // servidor offline: mantém o estado atual
     }
@@ -46,7 +58,7 @@ export const NotificacaoProvider = ({ children }) => {
 
   useEffect(() => {
     carregar();
-    const id = setInterval(carregar, 10000);
+    const id = setInterval(carregar, 8000);
     return () => clearInterval(id);
   }, [carregar]);
 
@@ -86,6 +98,7 @@ export const NotificacaoProvider = ({ children }) => {
         naoLidas,
         porTipo,
         notificacoes,
+        chatNaoLidas,
         carregar,
         carregarLista,
         marcarLidas,

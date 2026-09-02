@@ -22,9 +22,5 @@ python-dotenv==1.2.2
 redis==6.4.0
 requests==2.34.2
 sqlparse==0.5.5
-tzdata==2026.3
+tzdata==2026.2
 urllib3==2.7.0
-channels==4.3.2
-daphne==4.2.3
-cloudinary==1.46.2
-six==1.17.0

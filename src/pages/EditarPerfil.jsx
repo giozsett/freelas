@@ -177,6 +177,11 @@ export default function EditProfile() {
   const handleFotoChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alerta('A foto de perfil deve ter no máximo 2 MB.', { titulo: 'Arquivo muito grande', variante: 'perigo' });
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       setCropImage(ev.target.result);
@@ -561,6 +566,11 @@ export default function EditProfile() {
               onChange={(e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+                if (file.size > 2 * 1024 * 1024) {
+                  alerta('O banner deve ter no máximo 2 MB.', { titulo: 'Arquivo muito grande', variante: 'perigo' });
+                  e.target.value = '';
+                  return;
+                }
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                   setCropImage(ev.target.result);

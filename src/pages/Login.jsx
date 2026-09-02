@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
@@ -15,6 +16,7 @@ const GoogleIcon = () => (
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -82,9 +84,24 @@ export default function Login() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <label style={{ fontWeight: '500' }}>Senha</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary, #333)',
+                    cursor: 'pointer',
+                    padding: '0',
+                    fontSize: '0.8rem',
+                    [':focus']: { outline: 'none' }
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 className="input"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
