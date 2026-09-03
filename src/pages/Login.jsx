@@ -44,11 +44,16 @@ export default function Login() {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     setErrorMsg('');
+    const idToken = credentialResponse?.credential;
+    if (!idToken) {
+      setErrorMsg('Não foi possível obter o login do Google. Tente novamente.');
+      return;
+    }
     try {
       const response = await fetch('http://localhost:8000/api/auth/google/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_token: credentialResponse.credential }),
+        body: JSON.stringify({ id_token: idToken }),
       });
       const data = await response.json();
       if (response.ok) {
