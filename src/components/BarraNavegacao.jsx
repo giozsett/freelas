@@ -139,9 +139,9 @@ export default function Navbar() {
                 title="Opções de Perfil"
               >
                 {user?.profile?.foto_perfil ? (
-                  <img src={user.profile.foto_perfil} alt="Foto" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={user.profile.foto_perfil} alt="Foto" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)' }} />
                 ) : (
-                  <span style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--holo-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: '700', color: 'var(--primary)', textTransform: 'uppercase' }}>
+                  <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--holo-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.05rem', fontWeight: '700', color: 'var(--primary)', textTransform: 'uppercase' }}>
                     {initial}
                   </span>
                 )}
