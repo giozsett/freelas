@@ -1,9 +1,12 @@
 """Chat entre freelancer e contratante restrito ao acordo de serviço.
 
-As mensagens são armazenadas no Redis (NoSQL), com a seguinte estrutura:
+As mensagens são a fonte de verdade no Postgres (tabela `mensagens_chat`),
+então continuam disponíveis mesmo se o Redis reiniciar ou ficar fora do ar.
 
-    chat:{acordo_id}:messages   -> LIST de mensagens (JSON), ordem cronológica
-    chat:{acordo_id}:unread     -> HASH {user_id: quantidade de não lidas}
+O Redis Pub/Sub é usado só para empurrar a mensagem nova em tempo real pros
+WebSockets já conectados — é um "sininho": se ele falhar, quem estiver com o
+chat aberto simplesmente não recebe a atualização instantânea (o polling do
+frontend cobre esse caso), mas nenhuma mensagem é perdida.
 
 O chat "nasce" automaticamente quando a candidatura é aprovada (o modelo já
 cria o AcordoServico com status "Pendente Pagamento") e fica somente leitura
@@ -11,18 +14,18 @@ quando o acordo é concluído ou cancelado.
 """
 
 import json
-import uuid
 
 import redis as redis_lib
 from django.conf import settings
-from django.utils import timezone
 
 # Status em que as duas partes podem trocar mensagens
 STATUS_CHAT_ATIVO = {'Pendente Pagamento', 'Ativo'}
 
 
 class ChatIndisponivel(Exception):
-    """Redis inacessível — o chat não pode ser usado no momento."""
+    """Mantida por compatibilidade — não é mais levantada pelas operações
+    de mensagens (que agora usam o Postgres), só existe caso algum chamador
+    externo ainda a capture."""
 
 
 # Pool de conexões compartilhado: evita abrir uma nova conexão a cada operação,
@@ -39,18 +42,7 @@ def _get_pool():
 
 
 def get_client():
-    try:
-        return redis_lib.Redis(connection_pool=_get_pool(), decode_responses=True)
-    except Exception:
-        raise ChatIndisponivel()
-
-
-def _seguro(fn):
-    """Executa a operação no Redis e converte falhas de conexão em erro amigável."""
-    try:
-        return fn()
-    except redis_lib.RedisError:
-        raise ChatIndisponivel()
+    return redis_lib.Redis(connection_pool=_get_pool(), decode_responses=True)
 
 
 def chat_ativo(acordo):
@@ -67,17 +59,20 @@ def partes_do_acordo(acordo):
     return contratante, freelancer
 
 
-def _chave(acordo_id, sufixo):
-    return f'chat:{acordo_id}:{sufixo}'
-
 # Canal Pub/Sub onde os consumers WebSocket escutam novas mensagens do chat.
 def _canal_pubsub(acordo_id):
     return f'chat:{acordo_id}:pubsub'
 
 
-def _notificar_websocket(r, acordo_id, mensagem):
-    """Publica a mensagem no canal Pub/Sub para entrega imediata via WebSocket."""
+def _notificar_websocket(acordo_id, mensagem):
+    """Publica a mensagem no canal Pub/Sub para entrega imediata via WebSocket.
+
+    Best-effort: se o Redis estiver fora do ar, a mensagem já está salva no
+    Postgres — quem estiver com o chat aberto só não recebe a atualização
+    instantânea (o polling do frontend cobre esse caso).
+    """
     try:
+        r = get_client()
         r.publish(
             _canal_pubsub(acordo_id),
             json.dumps(
@@ -86,7 +81,6 @@ def _notificar_websocket(r, acordo_id, mensagem):
             ),
         )
     except Exception:
-        # O chat continua funcionando sem o WebSocket (fallback para o polling).
         pass
 
 
@@ -99,57 +93,70 @@ def _nome_usuario(user):
     return user.get_full_name() or user.username
 
 
-def enviar_mensagem(acordo, remetente, texto):
-    mensagem = {
-        'id': uuid.uuid4().hex,
-        'acordo_id': acordo.id,
-        'remetente_id': remetente.id,
-        'remetente_nome': _nome_usuario(remetente),
-        'texto': texto,
-        'criado_em': timezone.now().isoformat(),
+def _serializar_mensagem(msg):
+    return {
+        'id': msg.id,
+        'acordo_id': msg.acordo_id,
+        'remetente_id': msg.remetente_id,
+        'remetente_nome': _nome_usuario(msg.remetente),
+        'texto': msg.texto,
+        'criado_em': msg.criado_em.isoformat(),
     }
-    r = get_client()
-    chave_mensagens = _chave(acordo.id, 'messages')
-    _seguro(lambda: r.rpush(chave_mensagens, json.dumps(mensagem, ensure_ascii=False)))
 
-    # Incrementa o contador de não lidas da outra parte
-    contratante, freelancer = partes_do_acordo(acordo)
-    outra_parte = freelancer if remetente.id == contratante.id else contratante
-    if outra_parte:
-        _seguro(lambda: r.hincrby(_chave(acordo.id, 'unread'), str(outra_parte.id), 1))
 
-    # Publica a mensagem no canal Pub/Sub para entrega em tempo real
-    _notificar_websocket(r, acordo.id, mensagem)
+def enviar_mensagem(acordo, remetente, texto):
+    from .models import MensagemChat
 
+    msg = MensagemChat.objects.create(acordo=acordo, remetente=remetente, texto=texto)
+    mensagem = _serializar_mensagem(msg)
+    _notificar_websocket(acordo.id, mensagem)
     return mensagem
 
 
 def listar_mensagens(acordo_id):
-    r = get_client()
-    registros = _seguro(lambda: r.lrange(_chave(acordo_id, 'messages'), 0, -1))
-    return [json.loads(item) for item in registros]
+    from .models import MensagemChat
+
+    qs = MensagemChat.objects.filter(acordo_id=acordo_id).select_related('remetente__profile')
+    return [_serializar_mensagem(m) for m in qs]
 
 
 def ultima_mensagem(acordo_id):
-    r = get_client()
-    registros = _seguro(lambda: r.lrange(_chave(acordo_id, 'messages'), -1, -1))
-    if not registros:
-        return None
-    try:
-        return json.loads(registros[0])
-    except (json.JSONDecodeError, TypeError):
-        return None
+    from .models import MensagemChat
+
+    msg = (
+        MensagemChat.objects.filter(acordo_id=acordo_id)
+        .select_related('remetente__profile')
+        .order_by('-criado_em')
+        .first()
+    )
+    return _serializar_mensagem(msg) if msg else None
 
 
 def nao_lidas(acordo_id, user_id):
-    r = get_client()
-    valor = _seguro(lambda: r.hget(_chave(acordo_id, 'unread'), str(user_id)))
-    try:
-        return int(valor) if valor is not None else 0
-    except (TypeError, ValueError):
-        return 0
+    from .models import MensagemChat
+
+    return (
+        MensagemChat.objects.filter(acordo_id=acordo_id, lida=False)
+        .exclude(remetente_id=user_id)
+        .count()
+    )
+
+
+def total_nao_lidas(acordo_ids, user_id):
+    """Total de mensagens não lidas do usuário somando várias conversas de
+    uma vez (evita uma query por acordo)."""
+    from .models import MensagemChat
+
+    return (
+        MensagemChat.objects.filter(acordo_id__in=list(acordo_ids), lida=False)
+        .exclude(remetente_id=user_id)
+        .count()
+    )
 
 
 def marcar_lidas(acordo_id, user_id):
-    r = get_client()
-    _seguro(lambda: r.hdel(_chave(acordo_id, 'unread'), str(user_id)))
+    from .models import MensagemChat
+
+    MensagemChat.objects.filter(acordo_id=acordo_id, lida=False).exclude(
+        remetente_id=user_id
+    ).update(lida=True)

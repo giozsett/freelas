@@ -1938,17 +1938,16 @@ def _distribuicao_planos():
     return planos
 
 
-### chat entre freelancer e contratante (mensagens no Redis) ###
+### chat entre freelancer e contratante (mensagens no Postgres) ###
 from django.db.models import Q as _Q
 from .chat import (
     chat_ativo,
     enviar_mensagem,
     listar_mensagens,
     marcar_lidas,
-    nao_lidas,
+    total_nao_lidas,
     partes_do_acordo as _partes_chat,
 )
-from .chat import ChatIndisponivel
 from .serializers import ChatConversaSerializer, _info_usuario_com_papel
 
 
@@ -2020,13 +2019,7 @@ class ChatDetailAPIView(APIView):
         contratante, freelancer = _partes_chat(acordo)
         outra = freelancer if request_user == contratante else contratante
         papel = 'freelancer' if outra == freelancer else 'contratante'
-        try:
-            mensagens = listar_mensagens(acordo.id)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        mensagens = listar_mensagens(acordo.id)
         return Response({
             'id': acordo.id,
             'titulo_anuncio': acordo.titulo_anuncio,
@@ -2068,13 +2061,7 @@ class ChatEnviarMensagemAPIView(APIView):
                 {'error': 'A mensagem deve ter no máximo 2000 caracteres.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        try:
-            mensagem = enviar_mensagem(acordo, request.user, texto)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        mensagem = enviar_mensagem(acordo, request.user, texto)
         return Response(mensagem, status=status.HTTP_201_CREATED)
 
 
@@ -2090,13 +2077,7 @@ class ChatMarcarLidaAPIView(APIView):
                 {'error': 'Você não participa deste acordo.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        try:
-            marcar_lidas(acordo.id, request.user.id)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        marcar_lidas(acordo.id, request.user.id)
         return Response({'ok': True})
 
 
@@ -2113,11 +2094,5 @@ class ChatNaoLidasAPIView(APIView):
             acordos = AcordoServico.objects.filter(
                 _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
             )
-        try:
-            total = sum(nao_lidas(acordo.id, user.id) for acordo in acordos)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        total = total_nao_lidas(acordos.values_list('id', flat=True), user.id)
         return Response({'total': total})
