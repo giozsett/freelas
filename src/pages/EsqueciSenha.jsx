@@ -102,7 +102,7 @@ export default function EsqueciSenha() {
   if (etapa === 'email') {
     return (
       <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-        <div className="card">
+        <div className="card fade-in">
           <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Esqueci minha senha</h1>
           <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: '1.5rem', fontSize: '0.9rem' }}>
             Digite o email da sua conta e enviaremos um código de verificação.
@@ -119,7 +119,7 @@ export default function EsqueciSenha() {
                 placeholder="exemplo@email.com"
               />
             </div>
-            {errorMsg && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid #ff6b6b', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
               Enviar código
             </button>
@@ -133,7 +133,7 @@ export default function EsqueciSenha() {
   if (etapa === 'codigo') {
     return (
       <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-        <div className="card">
+        <div className="card fade-in">
           <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Verifique seu email</h1>
           <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: '1.5rem', fontSize: '0.9rem' }}>
             Enviamos um código de 6 dígitos para <strong>{email}</strong>. Ele expira em 10 minutos.
@@ -152,8 +152,8 @@ export default function EsqueciSenha() {
                 style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
               />
             </div>
-            {errorMsg && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid #ff6b6b', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
-            {successMsg && <div style={{ color: '#1dd1a1', background: 'rgba(29,209,161,0.1)', border: '1px solid #1dd1a1', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{successMsg}</div>}
+            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+            {successMsg && <div className="form-error" style={{ color: 'var(--success-color)', background: 'var(--success-soft)', border: '1px solid var(--success-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{successMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
               Verificar código
             </button>
@@ -172,7 +172,7 @@ export default function EsqueciSenha() {
   // ── Etapa 3: Nova senha ──
   return (
     <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-      <div className="card">
+      <div className="card fade-in">
         <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Nova senha</h1>
         <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: '1.5rem', fontSize: '0.9rem' }}>
           Digite sua nova senha abaixo.
@@ -205,20 +205,20 @@ export default function EsqueciSenha() {
             <div style={{ marginTop: '0.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
                 <span>Força da senha:</span>
-                <span style={{ fontWeight: 'bold', color: passwordStrength === 'Forte' ? '#1dd1a1' : passwordStrength === 'Média' ? '#feca57' : '#ff6b6b' }}>
+                <span style={{ fontWeight: 'bold', color: passwordStrength === 'Forte' ? 'var(--success-color)' : passwordStrength === 'Média' ? 'var(--warning-color)' : 'var(--danger-color)' }}>
                   {passwordStrength}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '4px', height: '6px' }}>
-                <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength ? (passwordStrength === 'Fraca' ? '#ff6b6b' : passwordStrength === 'Média' ? '#feca57' : '#1dd1a1') : 'var(--border-color)' }}></div>
-                <div style={{ flex: 1, borderRadius: '3px', background: (passwordStrength === 'Média' || passwordStrength === 'Forte') ? (passwordStrength === 'Média' ? '#feca57' : '#1dd1a1') : 'var(--border-color)' }}></div>
-                <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength === 'Forte' ? '#1dd1a1' : 'var(--border-color)' }}></div>
+                <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength ? (passwordStrength === 'Fraca' ? 'var(--danger-color)' : passwordStrength === 'Média' ? 'var(--warning-color)' : 'var(--success-color)') : 'var(--border-color)' }}></div>
+                <div style={{ flex: 1, borderRadius: '3px', background: (passwordStrength === 'Média' || passwordStrength === 'Forte') ? (passwordStrength === 'Média' ? 'var(--warning-color)' : 'var(--success-color)') : 'var(--border-color)' }}></div>
+                <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength === 'Forte' ? 'var(--success-color)' : 'var(--border-color)' }}></div>
               </div>
             </div>
           )}
 
-          {errorMsg && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid #ff6b6b', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
-          {successMsg && <div style={{ color: '#1dd1a1', background: 'rgba(29,209,161,0.1)', border: '1px solid #1dd1a1', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{successMsg}</div>}
+          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+          {successMsg && <div className="form-error" style={{ color: 'var(--success-color)', background: 'var(--success-soft)', border: '1px solid var(--success-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{successMsg}</div>}
 
           <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
             Redefinir senha

@@ -15,7 +15,7 @@ export default function Plans() {
       id: 'free',
       name: 'Gratuito',
       price: 'R$ 0/mês',
-      ads: 2,
+      ads: 3,
       color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
@@ -89,7 +89,7 @@ export default function Plans() {
         <p style={{ fontSize: '1.2rem', opacity: 0.8 }}>Escolha o plano ideal para alavancar sua carreira ou negócio.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         {plans.map((plan) => (
           <div key={plan.id} className="card card-hover" style={{
             background: plan.color,
@@ -97,7 +97,7 @@ export default function Plans() {
             position: 'relative', textAlign: 'center'
           }}>
             {plan.badge && (
-              <div className="badge" style={{ position: 'absolute', top: '-12px', right: '20px', background: 'var(--text-color)', color: 'var(--bg-color) !important', border: 'none' }}>
+              <div className="badge plan-badge-glow" style={{ position: 'absolute', top: '-12px', right: '20px', background: 'var(--text-color)', color: 'var(--bg-color) !important', border: 'none' }}>
                 {plan.badge}
               </div>
             )}
@@ -142,7 +142,11 @@ export default function Plans() {
                 cursor: 'pointer'
               }}
             >
-              {loadingPlan === plan.id ? 'Carregando...' : `Assinar ${plan.name}`}
+              {loadingPlan === plan.id ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="btn-spinner" /> Carregando...
+                </span>
+              ) : `Assinar ${plan.name}`}
             </button>
           </div>
         ))}

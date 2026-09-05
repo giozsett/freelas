@@ -129,11 +129,20 @@ export default function MinhasAvaliacoes() {
   };
 
   if (isLoading) {
-    return <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando avaliações...</div>;
+    return (
+      <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem' }}>
+        <div className="skeleton" style={{ height: '2.4rem', width: '50%', marginBottom: '2rem' }} />
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="card" style={{ height: '8rem', marginBottom: '1.5rem' }}>
+            <div className="skeleton" style={{ height: '100%' }} />
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
-    <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem' }}>
+    <div className="fade-in" style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
         <ClipboardCheck size={34} color="var(--primary)" />
         <h1 style={{ margin: 0, fontSize: '2.4rem' }}>Minhas Avaliações</h1>
@@ -149,9 +158,10 @@ export default function MinhasAvaliacoes() {
             padding: '0.9rem 1rem',
             borderRadius: '8px',
             marginBottom: '1rem',
-            border: `1px solid ${message.type === 'error' ? '#ff4757' : '#2ed573'}`,
-            background: message.type === 'error' ? 'rgba(255,71,87,0.08)' : 'rgba(46,213,115,0.08)',
+            border: `1px solid ${message.type === 'error' ? 'var(--danger-color)' : 'var(--success-color)'}`,
+            background: message.type === 'error' ? 'var(--danger-soft)' : 'var(--success-soft)',
           }}
+          className="form-error"
         >
           {message.text}
         </div>
@@ -180,7 +190,7 @@ export default function MinhasAvaliacoes() {
       </div>
 
       {activeTab === 'pending' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {pendingReviews.length ? pendingReviews.map(pending => {
             const form = getForm(pending.acordo_id);
             return (
@@ -210,7 +220,8 @@ export default function MinhasAvaliacoes() {
                               aria-checked={form.criterios[criterion.chave] === score}
                               aria-label={`${score} estrelas`}
                               onClick={() => setScore(pending.acordo_id, criterion.chave, score)}
-                              style={{ border: 0, padding: '0.15rem', background: 'transparent', cursor: 'pointer', color: '#f1c40f' }}
+                              className="rating-star"
+                              style={{ border: 0, padding: '0.15rem', background: 'transparent', cursor: 'pointer', color: 'var(--warning-color)' }}
                             >
                               <Star size={27} fill={selected ? 'currentColor' : 'transparent'} />
                             </button>
@@ -247,15 +258,15 @@ export default function MinhasAvaliacoes() {
               </div>
             );
           }) : (
-            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-              <CheckCircle size={46} color="#2ed573" />
-              <h2 style={{ marginBottom: '0.5rem' }}>Nenhuma avaliação pendente</h2>
-              <p style={{ opacity: 0.7, margin: 0 }}>Quando um acordo for concluído, a avaliação aparecerá aqui.</p>
+            <div className="empty-state">
+              <div className="empty-state__icon"><CheckCircle size={28} /></div>
+              <h3>Nenhuma avaliação pendente</h3>
+              <p>Quando um acordo for concluído, a avaliação aparecerá aqui.</p>
             </div>
           )}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {sentReviews.length ? sentReviews.map(review => (
             <div key={review.id} className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
@@ -266,7 +277,7 @@ export default function MinhasAvaliacoes() {
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 'bold', fontSize: '1.15rem' }}>
-                  <Star size={22} fill="#f1c40f" color="#f1c40f" /> {Number(review.nota_geral).toFixed(1)}
+                  <Star size={22} fill="var(--warning-color)" color="var(--warning-color)" /> {Number(review.nota_geral).toFixed(1)}
                 </div>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', margin: '1rem 0' }}>
@@ -280,8 +291,10 @@ export default function MinhasAvaliacoes() {
               </div>
             </div>
           )) : (
-            <div className="card" style={{ textAlign: 'center', padding: '3rem', opacity: 0.75 }}>
-              Você ainda não enviou avaliações.
+            <div className="empty-state">
+              <div className="empty-state__icon"><MessageCircle size={28} /></div>
+              <h3>Nenhuma avaliação enviada</h3>
+              <p>Você ainda não enviou avaliações.</p>
             </div>
           )}
         </div>

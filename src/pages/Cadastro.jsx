@@ -152,7 +152,7 @@ export default function Cadastro() {
   if (etapa === 'verificacao') {
     return (
       <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-        <div className="card">
+        <div className="card fade-in">
           <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Verifique seu email</h1>
           <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: '1.5rem', fontSize: '0.9rem' }}>
             Enviamos um código de 6 dígitos para <strong>{emailCadastrado}</strong>. Ele expira em 10 minutos.
@@ -171,7 +171,7 @@ export default function Cadastro() {
                 style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
               />
             </div>
-            {errorMsg && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid #ff6b6b', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
               Verificar
             </button>
@@ -191,7 +191,7 @@ export default function Cadastro() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <div style={{ maxWidth: '500px', margin: '4rem auto' }}>
-        <div className="card">
+        <div className="card fade-in">
           <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Crie sua conta</h1>
 
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
@@ -205,7 +205,7 @@ export default function Cadastro() {
             />
           </div>
 
-          {errorMsg && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid #ff6b6b', borderRadius: '4px', padding: '0.8rem', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
 
           <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
             <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
@@ -236,14 +236,14 @@ export default function Cadastro() {
               <div style={{ marginTop: '0.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
                   <span>Força da senha:</span>
-                  <span style={{ fontWeight: 'bold', color: passwordStrength === 'Forte' ? '#1dd1a1' : passwordStrength === 'Média' ? '#feca57' : '#ff6b6b' }}>
+                  <span style={{ fontWeight: 'bold', color: passwordStrength === 'Forte' ? 'var(--success-color)' : passwordStrength === 'Média' ? 'var(--warning-color)' : 'var(--danger-color)' }}>
                     {passwordStrength}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px', height: '6px' }}>
-                  <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength ? (passwordStrength === 'Fraca' ? '#ff6b6b' : passwordStrength === 'Média' ? '#feca57' : '#1dd1a1') : 'var(--border-color)' }}></div>
-                  <div style={{ flex: 1, borderRadius: '3px', background: (passwordStrength === 'Média' || passwordStrength === 'Forte') ? (passwordStrength === 'Média' ? '#feca57' : '#1dd1a1') : 'var(--border-color)' }}></div>
-                  <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength === 'Forte' ? '#1dd1a1' : 'var(--border-color)' }}></div>
+                  <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength ? (passwordStrength === 'Fraca' ? 'var(--danger-color)' : passwordStrength === 'Média' ? 'var(--warning-color)' : 'var(--success-color)') : 'var(--border-color)' }}></div>
+                  <div style={{ flex: 1, borderRadius: '3px', background: (passwordStrength === 'Média' || passwordStrength === 'Forte') ? (passwordStrength === 'Média' ? 'var(--warning-color)' : 'var(--success-color)') : 'var(--border-color)' }}></div>
+                  <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength === 'Forte' ? 'var(--success-color)' : 'var(--border-color)' }}></div>
                 </div>
                 <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem', lineHeight: '1.4' }}>
                   Forte: Mínimo 1 letra maiúscula, 1 número e 1 caractere especial.<br />

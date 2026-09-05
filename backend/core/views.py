@@ -244,6 +244,48 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
         return Response(self.get_serializer(report).data)
 
 
+# Limite de anúncios que cada plano de assinatura pode publicar por mês.
+# None = sem limite (plano Platinum).
+LIMITE_ANUNCIOS_MENSAL = {
+    'Gratuito': 3,
+    'Gold': 10,
+    'Platinum': None,
+}
+
+MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO = (
+    'Você já atingiu seu limite de postagem de anúncios esse mês, '
+    'atualize seu plano para postar mais anúncios.'
+)
+
+
+def _status_limite_anuncios(user):
+    profile = getattr(user, 'profile', None)
+    plano = (profile.subscription_plan if profile else None) or 'Gratuito'
+    limite = LIMITE_ANUNCIOS_MENSAL.get(plano, LIMITE_ANUNCIOS_MENSAL['Gratuito'])
+
+    usados = 0
+    if limite is not None:
+        inicio_mes = _mes_inicio(timezone.now())
+        usados = Ad.objects.exclude(deletado=True).filter(
+            author=user,
+            created_at__gte=inicio_mes,
+        ).count()
+
+    return {
+        'plano': plano,
+        'limite': limite,
+        'usados': usados,
+        'atingiu_limite': limite is not None and usados >= limite,
+    }
+
+
+class AdLimiteMensalAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response(_status_limite_anuncios(request.user))
+
+
 class AdListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = AdSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -274,7 +316,13 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        from rest_framework.exceptions import ValidationError
+
+        user = self.request.user
+        if _status_limite_anuncios(user)['atingiu_limite']:
+            raise ValidationError(MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO)
+
+        serializer.save(author=user)
 
 class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdSerializer
