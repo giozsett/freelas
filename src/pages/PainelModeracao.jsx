@@ -20,12 +20,12 @@ const PAGE_SIZE = 10;
 
 const statusStyle = (status) => {
   if (status === 'aprovada' || status === 'procedente') {
-    return { color: '#1f9d62', background: 'rgba(46, 213, 115, 0.14)' };
+    return { color: 'var(--success-color)', background: 'var(--success-soft)' };
   }
   if (status === 'recusada' || status === 'improcedente') {
-    return { color: '#ff4757', background: 'rgba(255, 71, 87, 0.12)' };
+    return { color: 'var(--danger-color)', background: 'var(--danger-soft)' };
   }
-  return { color: '#9a7200', background: 'rgba(255, 193, 7, 0.16)' };
+  return { color: 'var(--warning-color)', background: 'var(--warning-soft)' };
 };
 
 const formatDate = (value) => (
@@ -115,7 +115,7 @@ function ReportTable({
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="stagger">
             {loading ? (
               <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center' }}>Carregando denúncias...</td></tr>
             ) : rows.length === 0 ? (
@@ -177,7 +177,7 @@ function ReportRows({ report, isExpanded, onToggle, onDecision }) {
                   <button type="button" className="btn btn-secondary" onClick={() => onDecision(report, 'improcedente')}>
                     <XCircle size={16} /> Recusar denúncia
                   </button>
-                  <button type="button" className="btn" onClick={() => onDecision(report, 'procedente')} style={{ background: '#2ed573', color: '#17351f' }}>
+                  <button type="button" className="btn" onClick={() => onDecision(report, 'procedente')} style={{ background: 'var(--success-color)', color: 'var(--success-contrast)' }}>
                     <CheckCircle size={16} /> Aprovar denúncia
                   </button>
                 </div>
@@ -216,7 +216,7 @@ function RequestTable({
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="stagger">
             {loading ? (
               <tr><td colSpan="6" style={{ padding: '2rem', textAlign: 'center' }}>Carregando registros...</td></tr>
             ) : rows.length === 0 ? (
@@ -331,7 +331,7 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
                   <button type="button" className="btn btn-secondary" onClick={() => onDecision(item, 'recusar')}>
                     <XCircle size={16} /> Recusar
                   </button>
-                  <button type="button" className="btn" onClick={() => onDecision(item, 'aprovar')} style={{ background: '#2ed573', color: '#17351f' }}>
+                  <button type="button" className="btn" onClick={() => onDecision(item, 'aprovar')} style={{ background: 'var(--success-color)', color: 'var(--success-contrast)' }}>
                     <CheckCircle size={16} /> Aprovar cancelamento
                   </button>
                 </div>
@@ -562,7 +562,7 @@ export default function ModerationPanel() {
       </div>
 
       {error && (
-        <div style={{ color: '#ff4757', background: 'rgba(255,71,87,.1)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
+        <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
           {error}
         </div>
       )}

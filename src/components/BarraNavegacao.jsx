@@ -16,6 +16,28 @@ export default function Navbar() {
   const dropdownRef = useRef(null);
   const notificacoesRef = useRef(null);
   const navigate = useNavigate();
+  const [pulseChat, setPulseChat] = useState(false);
+  const [pulseNotif, setPulseNotif] = useState(false);
+  const prevChatNaoLidas = useRef(chatNaoLidas);
+  const prevNaoLidas = useRef(naoLidas);
+
+  useEffect(() => {
+    if (prevChatNaoLidas.current === 0 && chatNaoLidas > 0) {
+      setPulseChat(true);
+      const timer = setTimeout(() => setPulseChat(false), 400);
+      return () => clearTimeout(timer);
+    }
+    prevChatNaoLidas.current = chatNaoLidas;
+  }, [chatNaoLidas]);
+
+  useEffect(() => {
+    if (prevNaoLidas.current === 0 && naoLidas > 0) {
+      setPulseNotif(true);
+      const timer = setTimeout(() => setPulseNotif(false), 400);
+      return () => clearTimeout(timer);
+    }
+    prevNaoLidas.current = naoLidas;
+  }, [naoLidas]);
 
   const initial = user
     ? (`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || '?').charAt(0).toUpperCase()
@@ -76,7 +98,7 @@ export default function Navbar() {
             <Link to="/chat" title="Mensagens" aria-label="Mensagens" style={{ color: 'var(--text-color)', display: 'flex', alignItems: 'center', position: 'relative' }}>
               <MessageSquare size={24} />
               {chatNaoLidas > 0 && (
-                <span className="notification-dot chat-unread-dot">{chatNaoLidas > 99 ? '99+' : chatNaoLidas}</span>
+                <span className={`notification-dot chat-unread-dot${pulseChat ? ' chat-unread-dot--pulse' : ''}`}>{chatNaoLidas > 99 ? '99+' : chatNaoLidas}</span>
               )}
             </Link>
 
@@ -94,10 +116,10 @@ export default function Navbar() {
               >
                 <Bell size={24} />
                 {naoLidas > 0 && (
-                  <span className="notification-dot chat-unread-dot">{naoLidas > 99 ? '99+' : naoLidas}</span>
+                  <span className={`notification-dot chat-unread-dot${pulseNotif ? ' chat-unread-dot--pulse' : ''}`}>{naoLidas > 99 ? '99+' : naoLidas}</span>
                 )}
               </button>
-              <div className="dropdown-content notif-content" style={{ display: notificacoesOpen ? 'block' : 'none', right: 0, left: 'auto', width: 320, maxHeight: 360, overflowY: 'auto' }}>
+              <div className="dropdown-content notif-content" hidden={!notificacoesOpen} style={{ right: 0, left: 'auto', width: 320, maxHeight: 360, overflowY: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.9rem', borderBottom: 'var(--border-width) solid var(--border-color)' }}>
                   <strong>Notificações</strong>
                   {naoLidas > 0 && (
@@ -147,7 +169,7 @@ export default function Navbar() {
                 )}
                 {naoLidas > 0 && <div className="notification-dot"></div>}
               </div>
-              <div className="dropdown-content" style={{ display: dropdownOpen ? 'block' : 'none' }}>
+              <div className="dropdown-content" hidden={!dropdownOpen}>
                 <Link to="/profile" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Meu Perfil</Link>
                 <Link to="/my-ads" className="dropdown-item" onClick={() => { setDropdownOpen(false); marcarLidas(['candidatura']); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   Meus Anúncios

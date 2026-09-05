@@ -11,6 +11,7 @@ import {
 export default function Home() {
   const { role } = useRole();
   const [ads, setAds] = useState([]);
+  const [adsLoading, setAdsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
@@ -53,10 +54,12 @@ export default function Home() {
         } else {
           setAds([]);
         }
+        setAdsLoading(false);
       })
       .catch(err => {
         console.error('Error fetching ads:', err);
         setAds([]);
+        setAdsLoading(false);
       });
   }, []);
 
@@ -172,20 +175,33 @@ export default function Home() {
       </aside>
 
       {/* Main Content */}
-      <main>
+      <main className="fade-in">
         <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', color: 'var(--primary)' }}>
           {role === 'freelancer' ? 'Vagas de Contratantes' : 'Serviços Freelancers'}
         </h2>
 
-        <div className="ads-grid">
-          {filteredAds.map(ad => <AdCard key={ad.id} ad={{...ad, price: `R$ ${ad.price}` }} />)}
-          {filteredAds.length === 0 && (
-            <div className="card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem' }}>
-              <h3 style={{ marginBottom: '1rem' }}>Ops! Nenhum anúncio encontrado.</h3>
-              <p>Tente ajustar seus filtros ou mude de aba.</p>
-            </div>
-          )}
-        </div>
+        {adsLoading ? (
+          <div className="ads-grid">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="card ad-card">
+                <div className="skeleton skeleton-text" style={{ width: '70%', height: '1.2rem' }} />
+                <div className="skeleton skeleton-text" style={{ width: '45%' }} />
+                <div className="skeleton skeleton-text" style={{ width: '90%' }} />
+                <div className="skeleton" style={{ height: '2rem', width: '40%', marginTop: 'auto' }} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="ads-grid stagger" key={`${categoryFilter}-${skillFilter}-${locationTypeFilter}-${estadoFilter}-${cidadeFilter}-${searchQuery}-${minPriceFilter}-${maxPriceFilter}`}>
+            {filteredAds.map(ad => <AdCard key={ad.id} ad={{...ad, price: `R$ ${ad.price}` }} />)}
+            {filteredAds.length === 0 && (
+              <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                <h3>Ops! Nenhum anúncio encontrado.</h3>
+                <p>Tente ajustar seus filtros ou mude de aba.</p>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

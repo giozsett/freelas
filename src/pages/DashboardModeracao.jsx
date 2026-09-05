@@ -21,7 +21,7 @@ const CORES = {
   roxoSuave: '#C4B5FD',
   azul: '#8CD6FF',
   dourado: '#F5B301',
-  verde: '#2ed573',
+  verde: 'var(--success-color)',
 };
 
 const formatBRL = (value) => Number(value || 0).toLocaleString('pt-BR', {
@@ -46,8 +46,8 @@ function VariacaoBadge({ value }) {
         gap: '0.3rem',
         fontSize: '0.85rem',
         fontWeight: 700,
-        color: up ? CORES.verde : '#ff4757',
-        background: up ? 'rgba(46,213,115,0.12)' : 'rgba(255,71,87,0.1)',
+        color: up ? CORES.verde : 'var(--danger-color)',
+        background: up ? 'var(--success-soft)' : 'var(--danger-soft)',
         borderRadius: '999px',
         padding: '0.2rem 0.6rem',
       }}
@@ -383,7 +383,7 @@ export default function DashboardModeracao() {
 
   if (error) {
     return (
-      <div style={{ color: '#ff4757', background: 'rgba(255,71,87,.1)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
+      <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
         {error}
       </div>
     );
@@ -453,7 +453,7 @@ export default function DashboardModeracao() {
         />
         <KpiCard
           icon={Flag}
-          color="#ff4757"
+          color="var(--danger-color)"
           bg="linear-gradient(135deg, #9B5D63 0%, #6F3F49 100%)"
           dark
           title="Denúncias"
@@ -505,7 +505,7 @@ export default function DashboardModeracao() {
                 { label: 'Total', value: data.denuncias.total, color: CORES.roxo },
                 { label: 'Pendentes', value: data.denuncias.pendentes, color: CORES.dourado },
                 { label: 'Procedentes', value: data.denuncias.procedentes, color: CORES.verde },
-                { label: 'Improcedentes', value: data.denuncias.improcedentes, color: '#ff4757' },
+                { label: 'Improcedentes', value: data.denuncias.improcedentes, color: 'var(--danger-color)' },
               ]}
             />
             <SecaoCard
@@ -514,7 +514,7 @@ export default function DashboardModeracao() {
                 { label: 'Total', value: data.cancelamentos.total, color: CORES.roxo },
                 { label: 'Pendentes', value: data.cancelamentos.pendentes, color: CORES.dourado },
                 { label: 'Aprovados', value: data.cancelamentos.aprovados, color: CORES.verde },
-                { label: 'Recusados', value: data.cancelamentos.recusados, color: '#ff4757' },
+                { label: 'Recusados', value: data.cancelamentos.recusados, color: 'var(--danger-color)' },
               ]}
             />
             <SecaoCard
@@ -523,7 +523,7 @@ export default function DashboardModeracao() {
                 { label: 'Total', value: data.alteracoes.total, color: CORES.roxo },
                 { label: 'Pendentes', value: data.alteracoes.pendentes, color: CORES.dourado },
                 { label: 'Aprovadas', value: data.alteracoes.aprovadas, color: CORES.verde },
-                { label: 'Recusadas', value: data.alteracoes.recusadas, color: '#ff4757' },
+                { label: 'Recusadas', value: data.alteracoes.recusadas, color: 'var(--danger-color)' },
               ]}
             />
           </div>
@@ -547,7 +547,7 @@ export default function DashboardModeracao() {
                 { label: 'Ativos', value: data.acordos.ativos, color: CORES.verde },
                 { label: 'Pendentes de pagamento', value: data.acordos.pendentes_pagamento, color: CORES.dourado },
                 { label: 'Concluídos', value: data.acordos.concluidos, color: CORES.azul },
-                { label: 'Cancelados', value: data.acordos.cancelados, color: '#ff4757' },
+                { label: 'Cancelados', value: data.acordos.cancelados, color: 'var(--danger-color)' },
               ]}
             />
             <SecaoCard
@@ -555,7 +555,7 @@ export default function DashboardModeracao() {
               itens={[
                 { label: 'Candidaturas', value: data.candidaturas, color: CORES.roxoSuave },
                 { label: 'Avaliações', value: data.avaliacoes, color: CORES.salmao },
-                { label: 'Cancelamentos de planos (mês)', value: data.geral.cancelamentos_planos.mes_atual, color: '#ff4757' },
+                { label: 'Cancelamentos de planos (mês)', value: data.geral.cancelamentos_planos.mes_atual, color: 'var(--danger-color)' },
               ]}
             />
           </div>

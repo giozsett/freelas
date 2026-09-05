@@ -41,7 +41,7 @@ export default function ModeratorLogin() {
 
   return (
     <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-      <div className="card" style={{ borderTop: '4px solid var(--holo-purple-real)' }}>
+      <div className="card fade-in" style={{ borderTop: '4px solid var(--holo-purple-real)' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <ShieldCheck size={48} color="var(--holo-purple-real)" style={{ marginBottom: '1rem' }} />
           <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Acesso Restrito</h1>
@@ -49,7 +49,7 @@ export default function ModeratorLogin() {
         </div>
 
         {error && (
-          <div style={{ color: '#ff4757', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          <div className="form-error" style={{ color: 'var(--danger-color)', marginBottom: '1rem', fontSize: '0.9rem' }}>
             {error}
           </div>
         )}

@@ -25,20 +25,10 @@ export default function ModalCrop({ open, image, aspect, cropShape, onConfirm, o
   if (!open) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 9999,
-      background: 'rgba(0,0,0,0.8)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1rem'
-    }}>
-      <div style={{
-        background: 'var(--surface-color)',
-        borderRadius: '16px',
+    <div className="mf-modal-backdrop" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.8)' }}>
+      <div className="mf-modal" style={{
+        padding: 0,
+        borderTop: '1px solid var(--border-color)',
         width: '100%',
         maxWidth: '600px',
         display: 'flex',

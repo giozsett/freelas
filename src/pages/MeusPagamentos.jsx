@@ -127,23 +127,27 @@ export default function MyPayments() {
       )}
 
       {errorMessage && (
-        <div role="alert" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem', borderRadius: '8px', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.08)' }}>
+        <div role="alert" className="form-error" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem', borderRadius: '8px', border: '1px solid var(--danger-color)', background: 'var(--danger-soft)' }}>
           {errorMessage}
         </div>
       )}
 
       {isLoading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', opacity: 0.8 }}>Carregando dados...</div>
-      ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <div className="card" style={{ height: '6rem' }}><div className="skeleton" style={{ height: '100%' }} /></div>
+          <div className="card" style={{ height: '5rem' }}><div className="skeleton" style={{ height: '100%' }} /></div>
+          <div className="card" style={{ height: '12rem' }}><div className="skeleton" style={{ height: '100%' }} /></div>
+        </div>
+      ) : (
+        <div className="fade-in stagger" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <div className="card card-hover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', opacity: 0.8 }}>Plano de Assinatura Atual</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '2rem', fontWeight: 'bold' }}>
                 {subscriptionPlan.toLowerCase().includes('gold') ? (
-                  <Star color="#ffc107" fill="#ffc107" size={32} />
+                  <Star color="var(--warning-color)" fill="var(--warning-color)" size={32} />
                 ) : subscriptionPlan.toLowerCase().includes('plat') ? (
-                  <Gem color="#7C3AED" fill="#7C3AED" size={32} />
+                  <Gem color="var(--holo-purple-real)" fill="var(--holo-purple-real)" size={32} />
                 ) : (
                   <Zap color="var(--text-color)" size={32} />
                 )}
@@ -190,7 +194,7 @@ export default function MyPayments() {
             </div>
 
             {activeSection === 'history' ? (
-              <div role="tabpanel">
+              <div role="tabpanel" className="tab-content-animation">
                 <h2 style={{ fontSize: '1.35rem', marginBottom: '1rem' }}>Histórico de Transações</h2>
                 {history.length > 0 ? (
                   <div style={{ overflowX: 'auto' }}>
@@ -204,7 +208,7 @@ export default function MyPayments() {
                           <th style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>Status</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="stagger">
                         {history.map((payment) => (
                           <tr key={payment.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                             <td style={{ padding: '1rem 0.5rem', fontSize: '0.9rem' }}>
@@ -220,7 +224,7 @@ export default function MyPayments() {
                               {formatCurrency(payment.valor)}
                             </td>
                             <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-                              <span className="badge" style={{ background: 'rgba(46, 213, 115, 0.15)', color: '#1f9d55', border: 'none' }}>
+                              <span className="badge" style={{ background: 'var(--success-soft)', color: 'var(--success-color)', border: 'none' }}>
                                 Aprovado
                               </span>
                             </td>
@@ -236,7 +240,7 @@ export default function MyPayments() {
                 )}
               </div>
             ) : (
-              <div role="tabpanel">
+              <div role="tabpanel" className="tab-content-animation">
                 <h2 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Meus cartões</h2>
                 <p style={{ marginTop: 0, marginBottom: '1rem', opacity: 0.7, fontSize: '0.9rem' }}>
                   Cartões identificados em pagamentos aprovados pelo Mercado Pago.
@@ -253,7 +257,7 @@ export default function MyPayments() {
                           <th style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>Status</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="stagger">
                         {cards.map((card) => (
                           <tr key={card.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                             <td style={{ padding: '1rem 0.5rem', fontWeight: 'bold' }}>{formatBrand(card.bandeira)}</td>
@@ -265,7 +269,7 @@ export default function MyPayments() {
                                 : '—'}
                             </td>
                             <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-                              <span className="badge" style={{ background: 'rgba(46, 213, 115, 0.15)', color: '#1f9d55', border: 'none' }}>
+                              <span className="badge" style={{ background: 'var(--success-soft)', color: 'var(--success-color)', border: 'none' }}>
                                 Ativo
                               </span>
                             </td>

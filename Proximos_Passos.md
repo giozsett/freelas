@@ -1,0 +1,6 @@
+# Etapas que devem ser implementadas a seguir no projeto
+    - Ajustes na interface da dash, pois o círculo do gráfico em pizza está achatado.
+    - Trocar a API de pagamento pelo Stripe.
+    - Na página "meus freelas" onde aparece o nome do usuário, deve ser possível clicar no nome dele para acessar o perfil. O nome deve ser um link como já ocorre na visalização do anúncio.
+    
+    - Melhorias na página de visualização do anúncio. O chat entre freelancer e contratante só existe quando a candidatura é aprovada e o freela/acordo é criado. Portanto não faz sentido o botão 'Tirar dúvidas' que leva para o chat estar nesta página, ele deve ser removido dela. O visual dessa página parece muito amador, ajuste a visualização do anúncio para ter uma aparência mais profissional, respeitando as paletas de cores dos modos claro e escuro e da versão de freelancer e contratante. Para o layout, utilize commoo insparação a barra de filtros de anúncio na página inicial e o perfil de usuário. Faça com que apareça uma 'prévia' do perfil do autor logo na página de visualização do anúncio. A página deve conter animações sutis assim como já ocorre nas páginas de perfil, 'meus anúncios', 'minhas candidaturas' e 'meus freelas'. 

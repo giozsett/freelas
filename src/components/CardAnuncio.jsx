@@ -6,7 +6,7 @@ export default function AdCard({ ad }) {
   return (
     <div className="card card-hover ad-card">
       <div className="ad-card-heading">
-        <h3>{ad.title}</h3>
+        <h3 className="ad-card-title">{ad.title}</h3>
         <div className="ad-card-rating">
           <Star size={18} fill="currentColor" /> {ad.rating}
         </div>

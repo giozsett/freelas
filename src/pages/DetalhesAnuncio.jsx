@@ -3,10 +3,12 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { User, MapPin, Wifi, Tag, MessageSquare, Star, ShieldCheck, X, AlertTriangle } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useDialogo } from '../context/ContextoDialogo';
 
 export default function AdDetails() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { alerta } = useDialogo();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -76,7 +78,7 @@ export default function AdDetails() {
   const handleSendProposal = (e) => {
     e.preventDefault();
     if (!user) {
-      console.log("Você precisa estar logado para se candidatar.");
+      alerta('Você precisa estar logado para se candidatar.', { titulo: 'Login necessário', variante: 'perigo' });
       return;
     }
     const token = localStorage.getItem('token');
@@ -136,7 +138,17 @@ export default function AdDetails() {
   };
 
   if (isLoading) {
-    return <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando anúncio...</div>;
+    return (
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div className="card">
+          <div className="skeleton" style={{ height: '1.6rem', width: '40%', marginBottom: '1rem' }} />
+          <div className="skeleton" style={{ height: '2.2rem', width: '75%', marginBottom: '1.5rem' }} />
+          <div className="skeleton" style={{ height: '1rem', width: '55%', marginBottom: '2rem' }} />
+          <div className="skeleton" style={{ height: '5rem', width: '100%', marginBottom: '1.5rem' }} />
+          <div className="skeleton" style={{ height: '8rem', width: '100%' }} />
+        </div>
+      </div>
+    );
   }
 
   if (!ad) {
@@ -151,11 +163,11 @@ export default function AdDetails() {
     : "Este usuário é muito bem avaliado por entregar os serviços no prazo estabelecido.";
 
   // Determine reputation color based on score
-  const repColor = ad.reputationScore > 80 ? '#1dd1a1' : ad.reputationScore > 50 ? '#feca57' : '#ff6b6b';
+  const repColor = ad.reputationScore > 80 ? 'var(--success-color)' : ad.reputationScore > 50 ? 'var(--warning-color)' : 'var(--danger-color)';
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="card">
+      <div className="card fade-in">
         {isExpired && (
           <p className="expired-ads-help">Este anúncio expirou e não está mais disponível para novas candidaturas.</p>
         )}
@@ -174,18 +186,9 @@ export default function AdDetails() {
             <h1 style={{ fontSize: '2rem', margin: '0 0 1.5rem 0', lineHeight: '1.2', wordBreak: 'break-word' }}>{ad.title}</h1>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', opacity: 0.9, marginBottom: '1.5rem' }}>
-              <Link 
-                to={`/user/${ad.author_id}`} 
-                style={{ 
-                  display: 'flex', alignItems: 'center', gap: '0.4rem', 
-                  textDecoration: 'none', color: 'var(--primary)', 
-                  fontWeight: '600', padding: '0.3rem 0.8rem', 
-                  background: 'var(--secondary)', borderRadius: '6px',
-                  transition: 'all 0.2s ease',
-                  border: '1px solid transparent'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
+              <Link
+                to={`/user/${ad.author_id}`}
+                className="author-chip"
               >
                 <User size={18} /> {ad.author}
               </Link>
@@ -223,18 +226,12 @@ export default function AdDetails() {
                </div>
             </div>
 
-            <button 
+            <button
               onClick={() => setIsReportModalOpen(true)}
-              style={{ 
-                background: 'rgba(255, 71, 87, 0.1)', border: 'none', borderRadius: '8px', 
-                cursor: 'pointer', padding: '0.75rem', display: 'flex', alignItems: 'center', 
-                justifyContent: 'center', transition: 'all 0.2s ease', height: 'fit-content'
-              }}
+              className="report-btn"
               title="Denunciar Anúncio"
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 71, 87, 0.2)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 71, 87, 0.1)'; e.currentTarget.style.transform = 'scale(1)'; }}
             >
-              <AlertTriangle size={24} color="#ff4757" />
+              <AlertTriangle size={24} color="var(--danger-color)" />
             </button>
           </div>
         </div>
@@ -253,11 +250,11 @@ export default function AdDetails() {
                   setIsDeleteModalOpen(true);
                 }} 
                 className="btn btn-secondary" 
-                style={{ 
-                  padding: '0.5rem 1rem', 
-                  fontSize: '0.9rem', 
-                  borderColor: ad.status_anuncio === 'Finalizado' ? 'var(--border-color)' : '#ff4757', 
-                  color: ad.status_anuncio === 'Finalizado' ? '#888' : '#ff4757',
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.9rem',
+                  borderColor: ad.status_anuncio === 'Finalizado' ? 'var(--border-color)' : 'var(--danger-color)',
+                  color: ad.status_anuncio === 'Finalizado' ? 'var(--text-secondary)' : 'var(--danger-color)',
                   background: 'transparent',
                   cursor: ad.status_anuncio === 'Finalizado' ? 'not-allowed' : 'pointer'
                 }}
@@ -268,7 +265,7 @@ export default function AdDetails() {
               </button>
             </div>
             {ad.status_anuncio === 'Finalizado' && (
-              <p style={{ fontSize: '0.8rem', color: '#ff4757', marginTop: '0.75rem', margin: '0.75rem 0 0 0' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--danger-color)', marginTop: '0.75rem', margin: '0.75rem 0 0 0' }}>
                 * Este anúncio já foi finalizado e não pode ser excluído.
               </p>
             )}
@@ -283,8 +280,11 @@ export default function AdDetails() {
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ flex: 1, height: '10px', background: 'linear-gradient(90deg, #ff6b6b 0%, #feca57 50%, #1dd1a1 100%)', borderRadius: '5px', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: '-4px', left: `${ad.reputationScore}%`, transform: 'translateX(-50%)', width: '18px', height: '18px', background: 'var(--surface-color)', border: `3px solid ${repColor}`, borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></div>
+              <div style={{ flex: 1, height: '10px', background: 'linear-gradient(90deg, var(--danger-color) 0%, var(--warning-color) 50%, var(--success-color) 100%)', borderRadius: '5px', position: 'relative' }}>
+                  <div
+                    className="reputation-marker"
+                    style={{ '--reputation-target': `${ad.reputationScore}%`, position: 'absolute', top: '-4px', left: `${ad.reputationScore}%`, transform: 'translateX(-50%)', width: '18px', height: '18px', background: 'var(--surface-color)', border: `3px solid ${repColor}`, borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                  ></div>
               </div>
               <span style={{ fontWeight: 'bold', color: repColor, minWidth: '85px', textAlign: 'right' }}>Excelente</span>
           </div>
@@ -310,7 +310,7 @@ export default function AdDetails() {
         </div>
 
         {successMessage && (
-          <div style={{ padding: '1rem', background: 'var(--accent)', color: '#fff', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center', fontWeight: 'bold' }}>
+          <div className="form-error" style={{ padding: '1rem', background: 'var(--accent)', color: '#fff', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center', fontWeight: 'bold' }}>
             {successMessage}
           </div>
         )}
@@ -335,13 +335,8 @@ export default function AdDetails() {
 
       {/* Proposal Modal */}
       {isModalOpen && (
-        <div style={{ 
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', 
-            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-            padding: '1rem' 
-        }}>
-           <div className="card" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+        <div className="mf-modal-backdrop">
+           <div className="mf-modal" style={{ width: '100%', maxWidth: '500px' }}>
               <button 
                 onClick={() => setIsModalOpen(false)} 
                 style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
@@ -398,13 +393,8 @@ export default function AdDetails() {
       />
 
       {isDeleteModalOpen && (
-        <div style={{ 
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', 
-            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-            padding: '1rem' 
-        }}>
-           <div className="card" style={{ width: '100%', maxWidth: '450px', position: 'relative' }}>
+        <div className="mf-modal-backdrop">
+           <div className="mf-modal" style={{ width: '100%', maxWidth: '450px' }}>
               <button 
                 onClick={() => setIsDeleteModalOpen(false)} 
                 style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
@@ -413,10 +403,10 @@ export default function AdDetails() {
               </button>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                  <AlertTriangle size={24} color="#ff4757" />
-                  <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#ff4757' }}>Excluir Anúncio</h2>
+                  <AlertTriangle size={24} color="var(--danger-color)" />
+                  <h2 style={{ fontSize: '1.25rem', margin: 0, color: 'var(--danger-color)' }}>Excluir Anúncio</h2>
               </div>
-              
+
               <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.5' }}>
                 Tem certeza que deseja excluir o anúncio <strong>&quot;{ad.title}&quot;</strong>?
                 <br /><br />
@@ -424,7 +414,7 @@ export default function AdDetails() {
               </p>
 
               {deleteError && (
-                <p style={{ color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '1rem' }}>
                   {deleteError}
                 </p>
               )}
@@ -433,7 +423,7 @@ export default function AdDetails() {
                  <button type="button" className="btn btn-secondary" style={{ flex: 1, textTransform: 'uppercase', fontSize: '0.85rem', border: '1px solid var(--border-color)', background: 'transparent' }} onClick={() => setIsDeleteModalOpen(false)}>
                    CANCELAR
                  </button>
-                 <button type="button" className="btn" style={{ flex: 1, background: '#ff4757', color: '#FFFFFF', border: 'none', textTransform: 'uppercase', fontSize: '0.85rem' }} onClick={handleDeleteAd}>
+                 <button type="button" className="btn" style={{ flex: 1, background: 'var(--danger-color)', color: '#FFFFFF', border: 'none', textTransform: 'uppercase', fontSize: '0.85rem' }} onClick={handleDeleteAd}>
                     EXCLUIR ANÚNCIO
                  </button>
               </div>
