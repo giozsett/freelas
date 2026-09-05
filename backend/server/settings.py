@@ -102,7 +102,11 @@ WSGI_APPLICATION = 'server.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
-        conn_max_age=600,
+        # 0 fecha a conexão após cada request: evita esgotar o limite de
+        # conexões simultâneas do pooler do Supabase quando várias threads
+        # abrem conexões próprias (visto em produção como
+        # "FATAL: max clients reached in session mode").
+        conn_max_age=0,
         conn_health_checks=True,
     )
 }
