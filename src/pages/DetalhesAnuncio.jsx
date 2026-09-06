@@ -1,9 +1,49 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { User, MapPin, Wifi, Tag, MessageSquare, Star, ShieldCheck, X, AlertTriangle } from 'lucide-react';
+import {
+  MapPin, Wifi, Tag, Tags, Star, ShieldCheck, X, AlertTriangle,
+  Flag, Calendar, CalendarClock, CalendarDays, Clock, Inbox, CheckCircle2,
+  Briefcase, HandCoins, FileText, LineChart,
+} from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import { DIAS_SEMANA, PERIODOS, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
+
+// Comentários padrão de reputação (estilo iFood/Mercado Livre) por faixa de
+// nota — o cálculo da nota em si ainda é mockado (ver reputationScore
+// abaixo) até a reputação de usuário ser implementada de verdade.
+function reputacaoInfo(score) {
+  if (score > 80) {
+    return {
+      color: 'var(--success-color)',
+      label: 'Excelente',
+      tags: [
+        { tone: 'positivo', text: 'Entrega no prazo combinado' },
+        { tone: 'positivo', text: 'Boa comunicação durante o serviço' },
+        { tone: 'positivo', text: 'Recomendado por outros usuários' },
+      ],
+    };
+  }
+  if (score > 50) {
+    return {
+      color: 'var(--warning-color)',
+      label: 'Regular',
+      tags: [
+        { tone: 'positivo', text: 'Boa comunicação durante o serviço' },
+        { tone: 'alerta', text: 'Já reagendou compromissos algumas vezes' },
+      ],
+    };
+  }
+  return {
+    color: 'var(--danger-color)',
+    label: 'Baixa',
+    tags: [
+      { tone: 'alerta', text: 'Cancela acordos com frequência' },
+      { tone: 'alerta', text: 'Demora para responder mensagens' },
+    ],
+  };
+}
 
 export default function AdDetails() {
   const { id } = useParams();
@@ -18,6 +58,7 @@ export default function AdDetails() {
   const [proposalText, setProposalText] = useState('');
   const [hasApplied, setHasApplied] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [applicationsCount, setApplicationsCount] = useState(null);
 
   const [ad, setAd] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,6 +105,9 @@ export default function AdDetails() {
           price: data.price,
           price_unit: data.price_unit,
           description: data.description,
+          createdAt: data.created_at,
+          deadline: data.deadline || null,
+          availability: normalizarDisponibilidade(data.availability),
           reputationScore: 92 // Maintained mock as requested
         });
         setIsLoading(false);
@@ -74,6 +118,19 @@ export default function AdDetails() {
         setIsLoading(false);
       });
   }, [id]);
+
+  // Resumo do anunciante (Visualizações/Candidaturas/Dias no ar) só faz
+  // sentido carregar para quem publicou o anúncio.
+  useEffect(() => {
+    if (!user || !ad || user.id !== ad.author_id) return;
+    const token = localStorage.getItem('token');
+    fetch(`http://localhost:8000/api/candidaturas/?ad_id=${ad.id}`, {
+      headers: { 'Authorization': `Token ${token}` }
+    })
+      .then(res => (res.ok ? res.json() : []))
+      .then(data => setApplicationsCount(Array.isArray(data) ? data.length : 0))
+      .catch(err => console.error(err));
+  }, [user, ad]);
 
   const handleSendProposal = (e) => {
     e.preventDefault();
@@ -139,7 +196,7 @@ export default function AdDetails() {
 
   if (isLoading) {
     return (
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <div className="card">
           <div className="skeleton" style={{ height: '1.6rem', width: '40%', marginBottom: '1rem' }} />
           <div className="skeleton" style={{ height: '2.2rem', width: '75%', marginBottom: '1.5rem' }} />
@@ -156,196 +213,244 @@ export default function AdDetails() {
   }
 
   const isExpired = ad.status_anuncio === 'Vencido';
-
-  // Determine reputation traits based on ad type
-  const reputationLabel = ad.type === 'contractor' 
-    ? "Este contratante é conhecido por responder rapidamente e efetuar pagamentos em dia."
-    : "Este usuário é muito bem avaliado por entregar os serviços no prazo estabelecido.";
-
-  // Determine reputation color based on score
-  const repColor = ad.reputationScore > 80 ? 'var(--success-color)' : ad.reputationScore > 50 ? 'var(--warning-color)' : 'var(--danger-color)';
+  const isFreelancerAd = ad.type === 'freelancer';
+  const isAuthor = user && user.id === ad.author_id;
+  const initial = (ad.author || '?').charAt(0).toUpperCase();
+  const rep = reputacaoInfo(ad.reputationScore);
+  const diasNoAr = ad.createdAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(ad.createdAt)) / 86400000))
+    : null;
+  const diasRestantesPrazo = ad.deadline
+    ? Math.ceil((new Date(`${ad.deadline}T00:00:00`) - new Date()) / 86400000)
+    : null;
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="card fade-in">
-        {isExpired && (
-          <p className="expired-ads-help">Este anúncio expirou e não está mais disponível para novas candidaturas.</p>
-        )}
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1.5rem', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '250px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-              <span className={ad.type === 'freelancer' ? 'badge salmon' : 'badge purple'}>
-                {ad.type === 'freelancer' ? 'Anúncio de Freelancer' : 'Anúncio de Contratante'}
-              </span>
-              <span className="badge" style={{ background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-color) !important' }}>
-                {ad.locationType === 'remoto' ? 'Vaga Remota' : 'Vaga Presencial'}
-              </span>
-            </div>
+    <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      {isExpired && (
+        <p className="expired-ads-help">Este anúncio expirou e não está mais disponível para novas candidaturas.</p>
+      )}
 
-            <h1 style={{ fontSize: '2rem', margin: '0 0 1.5rem 0', lineHeight: '1.2', wordBreak: 'break-word' }}>{ad.title}</h1>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', opacity: 0.9, marginBottom: '1.5rem' }}>
-              <Link
-                to={`/user/${ad.author_id}`}
-                className="author-chip"
-              >
-                <User size={18} /> {ad.author}
-              </Link>
-              <span className="ad-detail-rating" title={`Avaliação do anunciante como ${ad.type === 'contractor' ? 'contratante' : 'freelancer'}`}>
-                <Star size={18} fill={ad.rating !== null ? 'currentColor' : 'none'} /> {ad.rating ?? '—'}
-              </span>
-              <span className="ad-detail-location">
-                {ad.locationType === 'remoto' ? <Wifi size={18} /> : <MapPin size={18} />}
-                <span>
-                  <strong>
-                    {ad.locationType === 'remoto'
-                      ? 'Serviço remoto'
-                      : ([ad.city, ad.state].filter(Boolean).join(' - ') || 'Localização não informada')}
-                  </strong>
-                  {ad.locationType !== 'remoto' && (ad.address || ad.addressNumber) && (
-                    <small>{[ad.address, ad.addressNumber].filter(Boolean).join(', ')}</small>
-                  )}
-                </span>
-              </span>
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexShrink: 0 }}>
-            <div style={{ background: 'var(--bg-color)', padding: '1rem 1.5rem', borderRadius: '8px', border: 'var(--border-width) solid var(--border-color)', textAlign: 'center', minWidth: '150px' }}>
-               <div style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  {ad.type === 'freelancer' ? 'A partir de' : 'Orçamento'}
-               </div>
-               <div style={{ fontSize: '1.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '0.2rem' }}>
-                 <span>R$ {ad.price}</span>
-                 {ad.price_unit && ad.price_unit !== 'total' && (
-                   <span style={{ fontSize: '1.1rem', fontWeight: 'normal', opacity: 0.8 }}>
-                     {ad.price_unit}
-                   </span>
-                 )}
-               </div>
-            </div>
+      {successMessage && (
+        <div className="form-error" style={{ padding: '1rem', background: 'var(--accent)', color: '#fff', borderRadius: '8px', marginBottom: '1.5rem', textAlign: 'center', fontWeight: 'bold' }}>
+          {successMessage}
+        </div>
+      )}
 
-            <button
-              onClick={() => setIsReportModalOpen(true)}
-              className="report-btn"
-              title="Denunciar Anúncio"
-            >
-              <AlertTriangle size={24} color="var(--danger-color)" />
-            </button>
-          </div>
+      <div className="ad-hero fade-in">
+        <div className="ad-hero__chips">
+          <span className={`ad-chip ad-type-chip ${ad.type}`}>
+            {isFreelancerAd ? <Briefcase size={14} /> : <HandCoins size={14} />}
+            {isFreelancerAd ? 'Anúncio de Freelancer' : 'Anúncio de Contratante'}
+          </span>
+          <span className="ad-chip">
+            {ad.locationType === 'remoto' ? <Wifi size={14} /> : <MapPin size={14} />}
+            {ad.locationType === 'remoto' ? 'Vaga Remota' : 'Vaga Presencial'}
+          </span>
+          <span className="ad-chip"><Tag size={14} /> {ad.category}</span>
         </div>
 
-        {/* Painel do Anunciante (Simulação para usuário que postou o anúncio) */}
-        {user && user.id === ad.author_id && (
-          <div style={{ background: 'var(--surface-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem', marginTop: '1rem', borderLeft: '4px solid var(--holo-purple-real)' }}>
-            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Área do Anunciante</h3>
-            <p style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.5rem' }}>Você publicou este anúncio. Acompanhe quem se interessou e gerencie sua publicação.</p>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-              <Link to={`/my-ads/manage/${ad.id}`} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>Visualizar Candidaturas</Link>
-              <Link to={`/edit-ad/${ad.id}`} className="btn btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', border: '1px solid var(--border-color)' }}>Editar Anúncio</Link>
-              <button 
-                onClick={() => {
-                  setDeleteError('');
-                  setIsDeleteModalOpen(true);
-                }} 
-                className="btn btn-secondary" 
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  borderColor: ad.status_anuncio === 'Finalizado' ? 'var(--border-color)' : 'var(--danger-color)',
-                  color: ad.status_anuncio === 'Finalizado' ? 'var(--text-secondary)' : 'var(--danger-color)',
-                  background: 'transparent',
-                  cursor: ad.status_anuncio === 'Finalizado' ? 'not-allowed' : 'pointer'
-                }}
-                disabled={ad.status_anuncio === 'Finalizado'}
-                title={ad.status_anuncio === 'Finalizado' ? "Anúncios finalizados não podem ser excluídos" : ""}
-              >
-                Excluir Anúncio
-              </button>
+        <h1>{ad.title}</h1>
+
+        <div className="ad-author-row">
+          <div className="ad-avatar">{initial}</div>
+          <div className="ad-author-row__info">
+            <Link to={`/user/${ad.author_id}`} className="ad-author-row__name">{ad.author}</Link>
+
+            <div className="ad-meta-row">
+              {ad.rating !== null ? (
+                <span className="ad-meta-item rating">
+                  <Star size={15} fill="currentColor" /> {ad.rating}
+                  <span className="muted">como {isFreelancerAd ? 'freelancer' : 'contratante'}</span>
+                </span>
+              ) : (
+                <span className="ad-meta-item">
+                  <Star size={15} /> Sem avaliações como {isFreelancerAd ? 'freelancer' : 'contratante'} ainda
+                </span>
+              )}
+              <span className="ad-meta-item">
+                <Calendar size={14} /> Publicado em {ad.createdAt ? new Date(ad.createdAt).toLocaleDateString() : '—'}
+              </span>
+              <span className="ad-meta-item">
+                {ad.locationType === 'remoto' ? <Wifi size={14} /> : <MapPin size={14} />}
+                {ad.locationType === 'remoto' ? 'Serviço remoto' : ([ad.city, ad.state].filter(Boolean).join(' - ') || 'Localização não informada')}
+              </span>
             </div>
-            {ad.status_anuncio === 'Finalizado' && (
-              <p style={{ fontSize: '0.8rem', color: 'var(--danger-color)', marginTop: '0.75rem', margin: '0.75rem 0 0 0' }}>
-                * Este anúncio já foi finalizado e não pode ser excluído.
-              </p>
+
+            {ad.locationType !== 'remoto' && (ad.address || ad.addressNumber) && (
+              <div className="ad-address-line">
+                <MapPin size={13} /> {[ad.address, ad.addressNumber].filter(Boolean).join(', ')}
+              </div>
             )}
           </div>
-        )}
+          <button onClick={() => setIsReportModalOpen(true)} className="icon-btn-ghost" title="Denunciar Anúncio">
+            <Flag size={18} />
+          </button>
+        </div>
+      </div>
 
-        {/* Reputação Bar */}
-        <div style={{ background: 'var(--bg-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '2rem', marginTop: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            <ShieldCheck size={20} color={repColor} />
-            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Termômetro de Reputação</h3>
+      <div className="ad-layout">
+        <div className="ad-main">
+
+          <div className="ad-panel">
+            <h2 className="ad-panel__heading"><span className="icon-badge"><FileText size={18} /></span>Descrição</h2>
+            <p className="body-text">{ad.description}</p>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ flex: 1, height: '10px', background: 'linear-gradient(90deg, var(--danger-color) 0%, var(--warning-color) 50%, var(--success-color) 100%)', borderRadius: '5px', position: 'relative' }}>
-                  <div
-                    className="reputation-marker"
-                    style={{ '--reputation-target': `${ad.reputationScore}%`, position: 'absolute', top: '-4px', left: `${ad.reputationScore}%`, transform: 'translateX(-50%)', width: '18px', height: '18px', background: 'var(--surface-color)', border: `3px solid ${repColor}`, borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
-                  ></div>
+
+          <div className="ad-panel">
+            <h2 className="ad-panel__heading"><span className="icon-badge"><Tags size={18} /></span>Habilidades</h2>
+            <div className="chips">
+              {ad.skills.map(skill => (
+                <span key={skill} className="badge" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color) !important' }}>{skill}</span>
+              ))}
+            </div>
+          </div>
+
+          {!isFreelancerAd ? (
+            <div className="ad-panel">
+              <h2 className="ad-panel__heading"><span className="icon-badge warning"><CalendarClock size={18} /></span>Prazo</h2>
+              {ad.deadline ? (
+                <span className="deadline-chip">
+                  <Clock size={16} />
+                  Até {new Date(`${ad.deadline}T00:00:00`).toLocaleDateString()}
+                  <span style={{ opacity: 0.8, fontWeight: 500 }}>
+                    ({diasRestantesPrazo >= 0 ? `${diasRestantesPrazo} dias restantes` : 'prazo encerrado'})
+                  </span>
+                </span>
+              ) : (
+                <p style={{ opacity: 0.7, margin: 0 }}>Nenhum prazo informado.</p>
+              )}
+            </div>
+          ) : (
+            <div className="ad-panel">
+              <h2 className="ad-panel__heading"><span className="icon-badge"><CalendarDays size={18} /></span>Disponibilidade do freelancer</h2>
+              <div className="availability-view availability-grid">
+                {DIAS_SEMANA.map(([dia, label]) => (
+                  <div key={dia} className="availability-day">
+                    <strong>{label}</strong>
+                    <div className="availability-periods">
+                      {PERIODOS.map(([periodo, periodoLabel]) => (
+                        <span key={periodo} className={`availability-option${ad.availability[dia]?.includes(periodo) ? ' selected' : ''}`}>
+                          {periodoLabel}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <span style={{ fontWeight: 'bold', color: repColor, minWidth: '85px', textAlign: 'right' }}>Excelente</span>
-          </div>
-          <p style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.75rem', lineHeight: '1.4' }}>
-            {reputationLabel}
-          </p>
+            </div>
+          )}
+
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-           <span className="badge" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color) !important' }}>
-             <Tag size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> {ad.category}
-           </span>
-           {ad.skills.map(skill => (
-             <span key={skill} className="badge" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color) !important' }}>{skill}</span>
-           ))}
-        </div>
+        <aside className="ad-sidebar">
+          {isAuthor ? (
+            <div className="ad-sidebar-card ad-sidebar-card--accent">
+              <div className="ad-panel__heading" style={{ marginBottom: '0.75rem' }}>
+                <span className="icon-badge sm"><LineChart size={17} /></span>
+                <span style={{ fontSize: '1rem' }}>Área do Anunciante</span>
+              </div>
+              <p style={{ fontSize: '0.85rem', opacity: 0.75, margin: '0 0 0.25rem', lineHeight: 1.5 }}>
+                Acompanhe quem se interessou e gerencie sua publicação.
+              </p>
+              <div className="stat-grid">
+                <div className="stat-tile">
+                  <span className="icon-badge sm"><Inbox size={16} /></span>
+                  <div>
+                    <div className="stat-tile__value">{applicationsCount ?? '—'}</div>
+                    <div className="stat-tile__label">Candidaturas</div>
+                  </div>
+                </div>
+                <div className="stat-tile">
+                  <span className="icon-badge sm"><Clock size={16} /></span>
+                  <div>
+                    <div className="stat-tile__value">{diasNoAr !== null ? `${diasNoAr} dias` : '—'}</div>
+                    <div className="stat-tile__label">No ar</div>
+                  </div>
+                </div>
+              </div>
+              <div className="ad-sidebar-actions">
+                <Link to={`/my-ads/manage/${ad.id}`} className="btn">Visualizar Candidaturas</Link>
+                <Link to={`/edit-ad/${ad.id}`} className="btn btn-secondary" style={{ border: '1px solid var(--border-color)' }}>Editar Anúncio</Link>
+                <button
+                  onClick={() => { setDeleteError(''); setIsDeleteModalOpen(true); }}
+                  className="btn btn-secondary"
+                  style={{
+                    borderColor: ad.status_anuncio === 'Finalizado' ? 'var(--border-color)' : 'var(--danger-color)',
+                    color: ad.status_anuncio === 'Finalizado' ? 'var(--text-secondary)' : 'var(--danger-color)',
+                    background: 'transparent',
+                    cursor: ad.status_anuncio === 'Finalizado' ? 'not-allowed' : 'pointer',
+                  }}
+                  disabled={ad.status_anuncio === 'Finalizado'}
+                  title={ad.status_anuncio === 'Finalizado' ? 'Anúncios finalizados não podem ser excluídos' : ''}
+                >
+                  Excluir Anúncio
+                </button>
+              </div>
+              {ad.status_anuncio === 'Finalizado' && (
+                <p style={{ fontSize: '0.8rem', color: 'var(--danger-color)', marginTop: '0.75rem' }}>
+                  * Este anúncio já foi finalizado e não pode ser excluído.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="ad-sidebar-card ad-sidebar-card--accent">
+              <div className="ad-price">
+                <div className="ad-price__label">{isFreelancerAd ? 'A partir de' : 'Orçamento'}</div>
+                <div className="ad-price__value">
+                  R$ {ad.price}
+                  {ad.price_unit && ad.price_unit !== 'total' && <small>{ad.price_unit}</small>}
+                </div>
+              </div>
+              <button
+                className="ad-cta"
+                onClick={() => !hasApplied && !isExpired && setIsModalOpen(true)}
+                disabled={hasApplied || isExpired}
+              >
+                <Star size={18} fill="currentColor" />
+                {isExpired ? 'Anúncio expirado' : hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
+              </button>
+            </div>
+          )}
 
-        <div style={{ marginBottom: '3rem' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Descrição</h2>
-          <div style={{ whiteSpace: 'pre-line', fontSize: '1.1rem', lineHeight: '1.8', opacity: 0.9 }}>
-            {ad.description}
+          <div className="ad-sidebar-card">
+            <div className="ad-panel__heading">
+              <span className="icon-badge sm" style={{ color: rep.color, background: `color-mix(in srgb, ${rep.color} 16%, transparent)` }}>
+                <ShieldCheck size={17} />
+              </span>
+              <span style={{ fontSize: '1rem' }}>Reputação</span>
+            </div>
+            <div className="rep-score-row">
+              <div className="rep-score-track">
+                <div className="rep-score-marker" style={{ left: `${ad.reputationScore}%`, border: `3px solid ${rep.color}` }} />
+              </div>
+              <span className="rep-score-label" style={{ color: rep.color }}>{rep.label}</span>
+            </div>
+            <p className="rep-note">Cálculo a implementar — comentários abaixo resumem o histórico do usuário.</p>
+            <div className="reputation-tags">
+              {rep.tags.map(tag => (
+                <span key={tag.text} className={`reputation-tag ${tag.tone}`}>
+                  {tag.tone === 'positivo' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                  {tag.text}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-
-        {successMessage && (
-          <div className="form-error" style={{ padding: '1rem', background: 'var(--accent)', color: '#fff', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center', fontWeight: 'bold' }}>
-            {successMessage}
-          </div>
-        )}
-
-        {(!user || user.id !== ad.author_id) && (
-          <div style={{ display: 'flex', gap: '1rem', borderTop: 'var(--border-width) solid var(--border-color)', paddingTop: '2rem', flexWrap: 'wrap' }}>
-             <button 
-               className={hasApplied || isExpired ? "btn btn-secondary" : "btn"}
-               style={{ flex: 2, padding: '1rem', fontSize: '1.2rem', minWidth: '200px' }}
-               onClick={() => !hasApplied && !isExpired && setIsModalOpen(true)}
-               disabled={hasApplied || isExpired}
-             >
-               <Star size={20} fill="currentColor" /> {isExpired ? 'Anúncio expirado' : hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
-             </button>
-             <Link to="/chat" className="btn btn-secondary" style={{ flex: 1, padding: '1rem', minWidth: '150px' }}>
-               <MessageSquare size={20} /> Tirar Dúvidas
-             </Link>
-          </div>
-        )}
-
+        </aside>
       </div>
 
       {/* Proposal Modal */}
       {isModalOpen && (
         <div className="mf-modal-backdrop">
            <div className="mf-modal" style={{ width: '100%', maxWidth: '500px' }}>
-              <button 
-                onClick={() => setIsModalOpen(false)} 
+              <button
+                onClick={() => setIsModalOpen(false)}
                 style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
               >
                 <X size={24} />
               </button>
-              
+
               <h2 style={{ fontSize: '1.8rem', marginBottom: '1.5rem', paddingRight: '2rem' }}>Enviar Proposta</h2>
-              
+
               <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem' }}>
                 Apresente-se ao autor do anúncio e descreva por que você é a escolha certa. Se desejar, faça uma contra-proposta de valor.
               </p>
@@ -353,20 +458,20 @@ export default function AdDetails() {
               <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                  <div>
                     <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor da Proposta (R$)</label>
-                    <input 
-                      type="text" 
-                      className="input" 
+                    <input
+                      type="text"
+                      className="input"
                       placeholder={`Valor original: R$ ${ad.price}`}
                       value={proposalPrice}
                       onChange={(e) => setProposalPrice(e.target.value)}
                       required
                     />
                  </div>
-                 
+
                  <div>
                     <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Sua Mensagem de Apresentação</label>
-                    <textarea 
-                      className="input" 
+                    <textarea
+                      className="input"
                       rows="6"
                       placeholder="Olá! Vi o seu anúncio e tenho certeza que posso ajudar com..."
                       value={proposalText}
@@ -384,24 +489,24 @@ export default function AdDetails() {
         </div>
       )}
 
-      <ReportModal 
-        isOpen={isReportModalOpen} 
-        onClose={() => setIsReportModalOpen(false)} 
-        targetId={ad.id} 
-        targetName={ad.title} 
-        type="ad" 
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        targetId={ad.id}
+        targetName={ad.title}
+        type="ad"
       />
 
       {isDeleteModalOpen && (
         <div className="mf-modal-backdrop">
            <div className="mf-modal" style={{ width: '100%', maxWidth: '450px' }}>
-              <button 
-                onClick={() => setIsDeleteModalOpen(false)} 
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
                 style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
               >
                 <X size={24} />
               </button>
-              
+
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
                   <AlertTriangle size={24} color="var(--danger-color)" />
                   <h2 style={{ fontSize: '1.25rem', margin: 0, color: 'var(--danger-color)' }}>Excluir Anúncio</h2>
