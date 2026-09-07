@@ -137,6 +137,9 @@ class Report(models.Model):
     type = models.CharField(max_length=20, choices=REPORT_TYPES, null=True, blank=True)
     target_id = models.CharField(max_length=50, null=True, blank=True)
     target_name = models.CharField(max_length=200, null=True, blank=True)
+    reporter = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='denuncias_enviadas'
+    )
     
     category = models.CharField(max_length=100, null=True, blank=True)
     comment = models.TextField(null=True, blank=True)

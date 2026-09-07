@@ -15,9 +15,13 @@ export default function ReportModal({ isOpen, onClose, targetId, targetName, typ
     }
     
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:8000/api/reports/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Token ${token}` } : {}),
+        },
         body: JSON.stringify({
           type: type,
           target_id: String(targetId),

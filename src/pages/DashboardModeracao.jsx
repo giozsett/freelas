@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useState } from 'react';
 import {
+  CalendarRange,
   CreditCard,
   Flag,
   Gem,
@@ -34,6 +35,21 @@ const formatVariacao = (value) => {
   const signal = value > 0 ? '+' : '';
   return `${signal}${value}%`;
 };
+
+const formatDateBR = (iso) => {
+  if (!iso) return '';
+  const [ano, mes, dia] = iso.split('-');
+  return `${dia}/${mes}/${ano}`;
+};
+
+const PRESETS_PERIODO = [
+  { chave: 'mes_atual', label: 'Mês atual' },
+  { chave: '7d', label: '7 dias' },
+  { chave: '30d', label: '30 dias' },
+  { chave: '90d', label: '90 dias' },
+  { chave: 'ano', label: '12 meses' },
+  { chave: 'custom', label: 'Personalizado' },
+];
 
 function VariacaoBadge({ value }) {
   if (value === null || value === undefined) return null;
@@ -98,8 +114,8 @@ function KpiCard({ icon: Icon, color, bg, title, value, item, rodape, dark }) {
         <div style={{ fontSize: '2.2rem', fontWeight: 800, lineHeight: 1 }}>{value}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.85rem', opacity: 0.75 }}>
-            Mês atual <strong>{item?.mes_atual ?? 0}</strong> · Mês anterior{' '}
-            <strong>{item?.mes_anterior ?? 0}</strong>
+            Período atual <strong>{item?.atual ?? 0}</strong> · Anterior{' '}
+            <strong>{item?.anterior ?? 0}</strong>
           </span>
           <VariacaoBadge value={item?.variacao} />
         </div>
@@ -152,109 +168,87 @@ function BarraComparativa({ data }) {
 
 function DonutPlanos({ planos }) {
   const total = planos.reduce((soma, p) => soma + p.total, 0);
-  const [tooltip, setTooltip] = useState(null);
+  const [ativo, setAtivo] = useState(null);
   const fundo = (item) => {
     if (item.nome === 'Gold') return CORES.dourado;
     if (item.nome === 'Platinum') return CORES.roxo;
     return CORES.azul;
   };
 
-  const raio = 70;
-  const espessura = 26;
+  // raio/espessura em coordenadas do viewBox — o SVG escala via width:100% +
+  // aspect-ratio:1/1, então o círculo nunca "achata", em qualquer largura.
+  const raio = 62;
+  const espessura = 22;
   const circ = 2 * Math.PI * raio;
 
   let acumulado = 0;
-  const segmentos = planos.map((p) => {
-    const inicio = total ? (acumulado / total) * 360 : 0;
-    acumulado += p.total;
-    const fim = total ? (acumulado / total) * 360 : 0;
-    return {
-      ...p,
-      conic: `${fundo(p)} ${inicio}deg ${fim}deg`,
-      offset: (inicio / 360) * circ,
-      len: total ? ((fim - inicio) / 360) * circ : 0,
-    };
-  });
+  const arcos = planos
+    .filter((p) => p.total > 0)
+    .map((p) => {
+      const offset = (acumulado / total) * circ;
+      const comprimento = (p.total / total) * circ;
+      acumulado += p.total;
+      return { ...p, offset, comprimento };
+    });
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: '160px', height: '160px', minWidth: '160px', flex: '0 0 160px', aspectRatio: '1 / 1' }}>
-        <div
-          style={{
-            width: '160px',
-            height: '160px',
-            borderRadius: '50%',
-            background: total ? `conic-gradient(${segmentos.map((s) => s.conic).join(', ')})` : 'rgba(0,0,0,0.08)',
-          }}
-        />
-        <svg style={{ position: 'absolute', inset: 0 }} width="160" height="160" viewBox="0 0 160 160">
-          <g transform="rotate(-90 80 80)">
-            {segmentos.filter((s) => s.total > 0).map((s) => (
+      <div style={{ position: 'relative', width: '100%', maxWidth: '150px', aspectRatio: '1 / 1', flex: '0 1 150px' }}>
+        <svg viewBox="0 0 150 150" style={{ width: '100%', height: '100%', display: 'block' }}>
+          <g transform="rotate(-90 75 75)">
+            <circle cx="75" cy="75" r={raio} fill="none" stroke="var(--bg-color)" strokeWidth={espessura} />
+            {arcos.map((a) => (
               <circle
-                key={s.nome}
-                cx="80"
-                cy="80"
+                key={a.nome}
+                cx="75"
+                cy="75"
                 r={raio}
                 fill="none"
-                stroke={fundo(s)}
-                strokeWidth={tooltip?.nome === s.nome ? espessura + 5 : espessura}
-                strokeDasharray={`${s.len + 0.5} ${circ - s.len}`}
-                strokeDashoffset={-s.offset}
-                style={{ cursor: 'pointer', transition: 'stroke-width 0.15s' }}
-                onMouseMove={(e) => {
-                  const svgRect = e.currentTarget.ownerSVGElement.getBoundingClientRect();
-                  setTooltip({
-                    x: e.clientX - svgRect.left,
-                    y: e.clientY - svgRect.top,
-                    nome: s.nome,
-                    pct: ((s.total / total) * 100).toFixed(0),
-                  });
-                }}
-                onMouseLeave={() => setTooltip(null)}
+                stroke={fundo(a)}
+                strokeWidth={ativo === a.nome ? espessura + 5 : espessura}
+                strokeDasharray={`${Math.max(a.comprimento - 1, 0)} ${circ}`}
+                strokeDashoffset={-a.offset}
+                style={{ cursor: 'pointer', transition: 'stroke-width 0.15s ease' }}
+                onMouseEnter={() => setAtivo(a.nome)}
+                onMouseLeave={() => setAtivo(null)}
               />
             ))}
           </g>
         </svg>
         <div style={{
           position: 'absolute',
-          inset: '23px',
-          borderRadius: '50%',
-          background: 'var(--surface-color)',
+          inset: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'column',
           pointerEvents: 'none',
         }}>
-          <strong style={{ fontSize: '1.6rem', lineHeight: 1 }}>{total}</strong>
-          <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>assinantes</span>
+          <strong style={{ fontSize: '1.5rem', lineHeight: 1 }}>
+            {ativo ? planos.find((p) => p.nome === ativo)?.total : total}
+          </strong>
+          <span style={{ fontSize: '0.72rem', opacity: 0.7, textAlign: 'center' }}>
+            {ativo || 'assinantes'}
+          </span>
         </div>
-        {tooltip && (
-          <div style={{
-            position: 'absolute',
-            left: tooltip.x,
-            top: tooltip.y,
-            transform: 'translate(-50%, -130%)',
-            background: '#1a1a1a',
-            color: '#fff',
-            padding: '6px 10px',
-            borderRadius: '8px',
-            fontSize: '0.8rem',
-            whiteSpace: 'nowrap',
-            zIndex: 10,
-            pointerEvents: 'none',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-          }}>
-            <strong>{tooltip.nome}</strong> · {tooltip.pct}%
-          </div>
-        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', minWidth: '160px' }}>
         {planos.map((p) => (
-          <div key={p.nome} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem' }}>
-            <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: fundo(p) }} />
+          <div
+            key={p.nome}
+            onMouseEnter={() => setAtivo(p.nome)}
+            onMouseLeave={() => setAtivo(null)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', cursor: 'pointer',
+              opacity: ativo && ativo !== p.nome ? 0.45 : 1, transition: 'opacity 0.15s ease',
+            }}
+          >
+            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: fundo(p), flexShrink: 0 }} />
             <span style={{ flex: 1 }}>{p.nome}</span>
             <strong>{p.total}</strong>
+            <span style={{ fontSize: '0.78rem', opacity: 0.6, minWidth: '32px', textAlign: 'right' }}>
+              {total ? Math.round((p.total / total) * 100) : 0}%
+            </span>
           </div>
         ))}
       </div>
@@ -264,8 +258,8 @@ function DonutPlanos({ planos }) {
 
 function BarraReceita({ receita }) {
   const itens = [
-    { label: 'Assinaturas', atual: receita.assinatura.mes_atual, anterior: receita.assinatura.mes_anterior },
-    { label: 'Serviços freelancer', atual: receita.acordo.mes_atual, anterior: receita.acordo.mes_anterior },
+    { label: 'Assinaturas', atual: receita.assinatura.atual, anterior: receita.assinatura.anterior },
+    { label: 'Serviços freelancer', atual: receita.acordo.atual, anterior: receita.acordo.anterior },
   ];
   const max = Math.max(1, ...itens.flatMap((i) => [Number(i.atual), Number(i.anterior)]));
 
@@ -279,7 +273,7 @@ function BarraReceita({ receita }) {
               <strong style={{ color: CORES.salmao }}>{formatBRL(item.atual)}</strong>
               {' · '}
               <span style={{ color: CORES.roxoSuave }}>{formatBRL(item.anterior)}</span>
-              {' (mês anterior)'}
+              {' (período anterior)'}
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -344,17 +338,94 @@ function CardTitulo({ icon: Icon, children, acao }) {
   );
 }
 
+function SeletorPeriodo({ periodo, mostrarCustom, customInicio, customFim, onPreset, onCustomInicio, onCustomFim, onAplicarCustom }) {
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.2rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 700, opacity: 0.85 }}>
+        <CalendarRange size={17} color={CORES.roxo} />
+        Período de comparação
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {PRESETS_PERIODO.map((p) => {
+          const selecionado = p.chave === 'custom' ? mostrarCustom : (periodo === p.chave && !mostrarCustom);
+          return (
+            <button
+              key={p.chave}
+              type="button"
+              onClick={() => onPreset(p.chave)}
+              style={{
+                appearance: 'none', cursor: 'pointer', font: 'inherit', fontSize: '0.85rem', fontWeight: 600,
+                padding: '0.45rem 0.95rem', borderRadius: '999px',
+                border: `1px solid ${selecionado ? 'var(--primary)' : 'var(--border-color)'}`,
+                background: selecionado ? 'var(--secondary)' : 'var(--bg-color)',
+                color: selecionado ? 'var(--primary)' : 'var(--text-color)',
+                transition: 'border-color 0.15s ease, background 0.15s ease, color 0.15s ease',
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {mostrarCustom && (
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', paddingTop: '0.25rem' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem', opacity: 0.8 }}>
+            De
+            <input
+              type="date"
+              className="input"
+              value={customInicio}
+              max={customFim || undefined}
+              onChange={(e) => onCustomInicio(e.target.value)}
+              style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem', opacity: 0.8 }}>
+            Até
+            <input
+              type="date"
+              className="input"
+              value={customFim}
+              min={customInicio || undefined}
+              onChange={(e) => onCustomFim(e.target.value)}
+              style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn"
+            disabled={!customInicio || !customFim}
+            onClick={onAplicarCustom}
+            style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
+          >
+            Aplicar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardModeracao() {
   const { token } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filtro, setFiltro] = useState({ periodo: 'mes_atual', dataInicio: '', dataFim: '' });
+  const [mostrarCustom, setMostrarCustom] = useState(false);
+  const [customInicio, setCustomInicio] = useState('');
+  const [customFim, setCustomFim] = useState('');
 
   const carregar = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API}/api/admin/dashboard/`, {
+      const params = new URLSearchParams({ periodo: filtro.periodo });
+      if (filtro.periodo === 'custom') {
+        params.set('data_inicio', filtro.dataInicio);
+        params.set('data_fim', filtro.dataFim);
+      }
+      const response = await fetch(`${API}/api/admin/dashboard/?${params}`, {
         headers: { Authorization: `Token ${token}` },
       });
       const json = await response.json().catch(() => ({}));
@@ -367,24 +438,57 @@ export default function DashboardModeracao() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, filtro]);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
 
+  const selecionarPreset = (chave) => {
+    if (chave === 'custom') {
+      setMostrarCustom(true);
+      return;
+    }
+    setMostrarCustom(false);
+    setFiltro({ periodo: chave, dataInicio: '', dataFim: '' });
+  };
+
+  const aplicarCustom = () => {
+    if (!customInicio || !customFim) return;
+    setFiltro({ periodo: 'custom', dataInicio: customInicio, dataFim: customFim });
+  };
+
+  const seletor = (
+    <SeletorPeriodo
+      periodo={filtro.periodo}
+      mostrarCustom={mostrarCustom}
+      customInicio={customInicio}
+      customFim={customFim}
+      onPreset={selecionarPreset}
+      onCustomInicio={setCustomInicio}
+      onCustomFim={setCustomFim}
+      onAplicarCustom={aplicarCustom}
+    />
+  );
+
   if (loading) {
     return (
-      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-        Carregando dados do dashboard...
+      <div>
+        {seletor}
+        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+          Carregando dados do dashboard...
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
-        {error}
+      <div>
+        {seletor}
+        <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', borderRadius: '8px', padding: '0.8rem', marginBottom: '1rem' }}>
+          {error}
+        </div>
       </div>
     );
   }
@@ -392,11 +496,11 @@ export default function DashboardModeracao() {
   if (!data) return null;
 
   const comparativo = [
-    { label: 'Novos usuários', atual: data.geral.usuarios.mes_atual, anterior: data.geral.usuarios.mes_anterior },
-    { label: 'Freelancers', atual: data.geral.freelancers.mes_atual, anterior: data.geral.freelancers.mes_anterior },
-    { label: 'Contratantes', atual: data.geral.contratantes.mes_atual, anterior: data.geral.contratantes.mes_anterior },
-    { label: 'Denúncias', atual: data.geral.denuncias.mes_atual, anterior: data.geral.denuncias.mes_anterior },
-    { label: 'Cancelamentos de planos', atual: data.geral.cancelamentos_planos.mes_atual, anterior: data.geral.cancelamentos_planos.mes_anterior },
+    { label: 'Novos usuários', atual: data.geral.usuarios.atual, anterior: data.geral.usuarios.anterior },
+    { label: 'Freelancers', atual: data.geral.freelancers.atual, anterior: data.geral.freelancers.anterior },
+    { label: 'Contratantes', atual: data.geral.contratantes.atual, anterior: data.geral.contratantes.anterior },
+    { label: 'Denúncias', atual: data.geral.denuncias.atual, anterior: data.geral.denuncias.anterior },
+    { label: 'Cancelamentos de planos', atual: data.geral.cancelamentos_planos.atual, anterior: data.geral.cancelamentos_planos.anterior },
   ];
 
   const grid = (min = '280px') => ({
@@ -412,7 +516,7 @@ export default function DashboardModeracao() {
         <div>
           <h2 style={{ margin: 0 }}>Visão geral</h2>
           <p style={{ margin: '0.35rem 0 0', opacity: 0.7, fontSize: '0.9rem' }}>
-            Comparação do mês atual com o mês anterior em toda a plataforma.
+            {data.periodo.label} (<strong>{formatDateBR(data.periodo.inicio)}</strong> a <strong>{formatDateBR(data.periodo.fim)}</strong>) comparado ao período equivalente anterior.
           </p>
         </div>
         <button
@@ -426,11 +530,13 @@ export default function DashboardModeracao() {
         </button>
       </div>
 
+      {seletor}
+
       <div style={grid()}>
         <KpiCard
           icon={Users}
           color={CORES.azul}
-          bg="linear-gradient(135deg, #39758F 0%, #294E68 100%)"
+          bg="linear-gradient(135deg, #4E86A0 0%, #3A6A80 100%)"
           dark
           title="Usuários"
           value={data.geral.usuarios.total}
@@ -439,22 +545,22 @@ export default function DashboardModeracao() {
         <KpiCard
           icon={UserPlus}
           color={CORES.roxo}
-          bg="linear-gradient(135deg, #665A86 0%, #4C4268 100%)"
+          bg="linear-gradient(135deg, #7B6F97 0%, #665C82 100%)"
           dark
           title="Freelas"
           value={data.geral.freelas.total}
           item={data.geral.freelas}
           rodape={
             <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
-              <strong style={{ color: '#9be8c0' }}>{data.geral.freelas.fecharam_acordo_mes}</strong>{' '}
-              pessoa(s) fecharam acordo no mês
+              <strong style={{ color: '#9be8c0' }}>{data.geral.freelas.fecharam_acordo_periodo}</strong>{' '}
+              pessoa(s) fecharam acordo no período
             </div>
           }
         />
         <KpiCard
           icon={Flag}
           color="var(--danger-color)"
-          bg="linear-gradient(135deg, #9B5D63 0%, #6F3F49 100%)"
+          bg="linear-gradient(135deg, #A97178 0%, #8C5D63 100%)"
           dark
           title="Denúncias"
           value={data.denuncias.total}
@@ -465,7 +571,7 @@ export default function DashboardModeracao() {
       <div style={grid()}>
         <div className="card" style={{ gridColumn: 'span 2' }}>
           <CardTitulo icon={Package}>
-            Mês atual × mês anterior
+            Período atual × anterior
             <span style={{ fontSize: '0.8rem', opacity: 0.7, fontWeight: 500 }}>
               <span style={{ color: CORES.salmao }}>■ atual</span> <span style={{ color: CORES.roxo }}>■ anterior</span>
             </span>
@@ -480,7 +586,7 @@ export default function DashboardModeracao() {
             marginTop: '1rem',
             padding: '0.8rem',
             borderRadius: '8px',
-            background: 'var(--holo-gradient-gold)',
+            background: 'linear-gradient(135deg, #E8C171 0%, #D1A24C 100%)',
             color: '#1a1a1a',
             textAlign: 'center',
             fontWeight: 700,
@@ -555,7 +661,7 @@ export default function DashboardModeracao() {
               itens={[
                 { label: 'Candidaturas', value: data.candidaturas, color: CORES.roxoSuave },
                 { label: 'Avaliações', value: data.avaliacoes, color: CORES.salmao },
-                { label: 'Cancelamentos de planos (mês)', value: data.geral.cancelamentos_planos.mes_atual, color: 'var(--danger-color)' },
+                { label: 'Cancelamentos de planos (período)', value: data.geral.cancelamentos_planos.atual, color: 'var(--danger-color)' },
               ]}
             />
           </div>

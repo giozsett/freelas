@@ -166,6 +166,7 @@ function ReportRows({ report, isExpanded, onToggle, onDecision }) {
                 <div><strong>Categoria:</strong><br />{report.category || 'Não informada'}</div>
                 <div><strong>Tipo do alvo:</strong><br />{typeLabel}</div>
                 <div><strong>ID do alvo:</strong><br />{report.target_id || '—'}</div>
+                <div><strong>Denunciado por:</strong><br />{report.reporter_name || 'Anônimo'}</div>
               </div>
               <div style={{ marginTop: '1rem' }}>
                 <strong>Descrição da denúncia:</strong>

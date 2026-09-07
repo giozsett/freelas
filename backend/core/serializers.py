@@ -150,9 +150,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 from .models import Report
 
 class ReportSerializer(serializers.ModelSerializer):
+    reporter_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Report
         fields = '__all__'
+        read_only_fields = ('reporter',)
+
+    def get_reporter_name(self, obj):
+        if not obj.reporter:
+            return None
+        return obj.reporter.first_name or obj.reporter.username
 
 from .models import Ad
 
