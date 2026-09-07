@@ -5,7 +5,7 @@ set -Eeuo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="${PROJECT_DIR}/backend"
 BACKEND_ENV="${BACKEND_DIR}/.env"
-BACKEND_PORT="${BACKEND_PORT:-8000}"=
+BACKEND_PORT="${BACKEND_PORT:-8000}"
 
 NGROK_API="http://127.0.0.1:4040/api/tunnels"
 NGROK_LOG="$(mktemp /tmp/freelas-ngrok.XXXXXX.log)"
@@ -76,14 +76,20 @@ if ! command -v ngrok >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -x "${BACKEND_DIR}/venv/bin/python" ]]; then
+if [[ -x "${BACKEND_DIR}/.venv/bin/python" ]]; then
+    PYTHON_BIN="${BACKEND_DIR}/.venv/bin/python"
+elif [[ -x "${BACKEND_DIR}/.venv/Scripts/python" ]]; then
+    PYTHON_BIN="${BACKEND_DIR}/.venv/Scripts/python"
+elif [[ -f "${BACKEND_DIR}/.venv/Scripts/python.exe" ]]; then
+    PYTHON_BIN="${BACKEND_DIR}/.venv/Scripts/python.exe"
+elif [[ -x "${BACKEND_DIR}/venv/bin/python" ]]; then
     PYTHON_BIN="${BACKEND_DIR}/venv/bin/python"
 elif [[ -x "${BACKEND_DIR}/venv/Scripts/python" ]]; then
     PYTHON_BIN="${BACKEND_DIR}/venv/Scripts/python"
 elif [[ -f "${BACKEND_DIR}/venv/Scripts/python.exe" ]]; then
     PYTHON_BIN="${BACKEND_DIR}/venv/Scripts/python.exe"
 else
-    echo "O ambiente virtual não foi encontrado em backend/venv."
+    echo "O ambiente virtual não foi encontrado em backend/.venv ou backend/venv."
     exit 1
 fi
 

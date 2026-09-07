@@ -7,7 +7,10 @@ $ErrorActionPreference = 'Stop'
 $ProjectDir = Split-Path -Parent $PSScriptRoot
 $BackendDir = Join-Path $ProjectDir 'backend'
 $EnvFile = Join-Path $BackendDir '.env'
-$PythonExe = Join-Path $BackendDir 'venv\Scripts\python.exe'
+$PythonExe = Join-Path $BackendDir '.venv\Scripts\python.exe'
+if (-not (Test-Path $PythonExe)) {
+    $PythonExe = Join-Path $BackendDir 'venv\Scripts\python.exe'
+}
 $LogDir = Join-Path $env:TEMP 'freelas-ngrok'
 $NgrokLog = Join-Path $LogDir 'ngrok.log'
 $NgrokErr = Join-Path $LogDir 'ngrok.err'
@@ -100,9 +103,10 @@ if (-not (Test-TcpPort 6379)) {
         $RedisDir = Join-Path $ProjectDir 'tools\redis'
         Write-Host 'Iniciando o Redis (porta 6379) para o chat...'
         $RedisProcess = Start-Process -FilePath $redisExe `
-            -ArgumentList @('--port', '6379', '--bind', '127.0.0.1', '--appendonly', 'yes', '--dir', $RedisDir, '--appendfilename', 'appendonly.aof', '--logfile', $RedisLog) `
-            -PassThru `
-            -NoNewWindow
+            -ArgumentList @('--port', '6379', '--bind', '127.0.0.1', '--appendonly', 'yes', '--appendfilename', 'appendonly.aof') `
+            -WorkingDirectory $RedisDir `
+            -NoNewWindow `
+            -PassThru
     for ($i = 0; $i -lt 20; $i++) {
         if (Test-TcpPort 6379) { break }
         if ($RedisProcess.HasExited) {
@@ -121,11 +125,19 @@ if (-not (Test-TcpPort 6379)) {
     Write-Host 'Redis ja esta rodando na porta 6379.' -ForegroundColor Green
 }
 
-if (-not (Get-Command ngrok -ErrorAction SilentlyContinue)) {
+$ngrokCmd = Get-Command ngrok -ErrorAction SilentlyContinue
+if (-not $ngrokCmd) {
+    $winAppsNgrok = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\ngrok.exe'
+    if (Test-Path $winAppsNgrok) {
+        $ngrokCmd = $winAppsNgrok
+    }
+}
+if (-not $ngrokCmd) {
     Write-Host 'ngrok nao foi encontrado.' -ForegroundColor Red
     Write-Host 'Instale-o uma vez seguindo https://ngrok.com/download' -ForegroundColor Red
     exit 1
 }
+$ngrokExe = if ($ngrokCmd -is [System.Management.Automation.CommandInfo]) { $ngrokCmd.Source } else { $ngrokCmd }
 
 if (-not (Test-Path $PythonExe)) {
     Write-Host "O ambiente virtual nao foi encontrado em $PythonExe" -ForegroundColor Red
@@ -140,10 +152,19 @@ if (-not $ngrokAuthToken) {
     exit 1
 }
 
+# Load all environment variables from .env file for Django
+Get-Content $EnvFile | Where-Object { $_ -notmatch '^#' } | ForEach-Object {
+    $key, $value = $_.split('=', 2)
+    if ($key -and $value) {
+        Set-Item "Env:$key" -Value $value.Trim() -Force
+    }
+}
+
+Write-Host 'Variaveis de ambiente carregadas do .env.' -ForegroundColor Green
 Write-Host 'Iniciando o tunel HTTPS do ngrok...'
 $env:NGROK_AUTHTOKEN = $ngrokAuthToken
 
-$ngrokProcess = Start-Process -FilePath 'ngrok' `
+$ngrokProcess = Start-Process -FilePath $ngrokExe `
     -ArgumentList @('http', "$BackendPort", "--authtoken=$ngrokAuthToken", '--log=stdout') `
     -PassThru `
     -NoNewWindow `

@@ -22,9 +22,9 @@ class UserProfile(models.Model):
     skills = models.JSONField(blank=True, default=list)
     subscription_plan = models.CharField(max_length=50, default='Gratuito')
 
-    # Novos campos
-    foto_perfil = models.ImageField(upload_to='fotos_perfil/', null=True, blank=True)
-    banner = models.ImageField(upload_to='banners/', null=True, blank=True)
+    # Novos campos (armazenam URLs públicas do Cloudinary)
+    foto_perfil = models.URLField(max_length=500, null=True, blank=True)
+    banner = models.URLField(max_length=500, null=True, blank=True)
     disponivel = models.BooleanField(default=True)
 
     # Informações de contato e localização
