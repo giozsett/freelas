@@ -464,7 +464,7 @@ export default function MeusFreelas() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="mf-card__badges">
-                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)' }}>Pendente de Aprovação</span>
+                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast) !important' }}>Pendente de Aprovação</span>
                       </div>
                       <h4 style={{ margin: '0.25rem 0 0.35rem', fontSize: '1.1rem' }}>{app.titulo_anuncio}</h4>
                       <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
@@ -527,12 +527,12 @@ export default function MeusFreelas() {
                       <div className="mf-card__summary">
                         <div style={{ minWidth: 0 }}>
                           <div className="mf-card__badges">
-                            <span className="badge" style={{ background: 'var(--pending-accent)', color: 'var(--pending-accent-contrast)', fontSize: '0.75rem' }}>Pendente de Pagamento</span>
+                            <span className="badge" style={{ background: 'var(--pending-accent)', color: 'var(--pending-accent-contrast) !important', fontSize: '0.75rem' }}>Pendente de Pagamento</span>
                             <span className="badge role-badge" style={{ fontSize: '0.75rem' }}>
                               Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                             </span>
                             {app.cancelamento_pendente && (
-                              <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast) !important', fontSize: '0.75rem' }}>
                                 <Ban size={11} /> Cancelamento Pendente
                               </span>
                             )}
@@ -614,12 +614,12 @@ export default function MeusFreelas() {
                               Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                             </span>
                             {app.tem_solicitacao && (
-                              <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning-color)', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning-color) !important', fontSize: '0.75rem' }}>
                                 <Bell size={11} /> Alteração Pendente
                               </span>
                             )}
                             {app.cancelamento_pendente && (
-                              <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger-color) !important', fontSize: '0.75rem' }}>
                                 <Ban size={11} /> Cancelamento Pendente
                               </span>
                             )}
