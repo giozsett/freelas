@@ -153,7 +153,7 @@ export default function ManageAdApplications() {
                   <div>
                      <h3 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         {app.applicant_name} 
-                        <Link to={`/user/${app.user}`} style={{ fontSize: '0.85rem', color: 'var(--holo-blue)', textDecoration: 'underline' }}>(Ver perfil)</Link>
+                        <Link to={`/user/${app.user}`} className="link-hover-card" style={{ fontSize: '0.85rem' }}>Ver perfil</Link>
                      </h3>
                      <div style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.25rem' }}>
                        Valor proposto do anúncio: <strong>R$ {ad.price}</strong>

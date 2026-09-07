@@ -182,6 +182,21 @@ a { color: var(--text-color); text-decoration: none; }
 .badge.salmon { background-color: var(--secondary); }
 .badge.purple { background-color: var(--secondary); }
 
+/* Link para anúncio/perfil de usuário: colorido por padrão, e no hover vira
+   um "cardzinho" (contorno + fundo suave) em vez do sublinhado padrão de
+   HTML puro. Reaproveitar em qualquer lugar que linke para /ad/:id ou
+   /user/:id — títulos de anúncio, nomes de autor/contratante/freelancer. */
+.link-hover-card {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  color: var(--primary); text-decoration: none; border-radius: 7px;
+  border: 1px solid transparent; padding: 0.1rem 0.4rem; margin: -0.1rem -0.4rem;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.link-hover-card:hover {
+  border-color: var(--primary); background: var(--secondary); color: var(--primary);
+  transform: translateY(-1px);
+}
+
 /* Dialogs owned by the application (replaces browser/localhost dialogs). */
 .dialog-backdrop { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; padding: 1rem; background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(4px); }
 .dialog-card { width: min(520px, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; position: relative; padding: 1.5rem; border: 1px solid var(--border-color); border-top: 5px solid var(--primary); border-radius: 12px; color: var(--text-color); background: var(--surface-color); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28); }
@@ -245,10 +260,77 @@ a { color: var(--text-color); text-decoration: none; }
 .filter-group .work-mode-option.selected { background: var(--surface-color); }
 .range-label { color: var(--text-secondary); display: block; font-size: 0.75rem; margin-top: 0.4rem; }
 .ads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 1.25rem; min-width: 0; }
-.ad-card { min-width: 0; overflow-wrap: anywhere; }
-.ad-card-meta { flex-wrap: wrap; }
-.ad-card .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .expired-ads-help { color: var(--text-secondary); background: rgba(120, 120, 120, 0.1); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+
+/* Combobox de busca+seleção (filtro de categoria/habilidade da lista de
+   anúncios) — campo de texto que filtra as opções numa lista abaixo. */
+.combo { position: relative; min-width: 0; }
+.combo__label { font-weight: 500; display: block; margin-bottom: 0.5rem; font-size: 0.92rem; }
+.combo__field { position: relative; display: flex; align-items: center; }
+.combo__field .combo__input { padding-right: 2.1rem; }
+.combo__clear {
+  position: absolute; right: 0.4rem; width: 24px; height: 24px; display: grid; place-items: center;
+  background: transparent; border: 0; border-radius: 50%; cursor: pointer; color: var(--text-secondary);
+}
+.combo__clear:hover { background: var(--bg-color); color: var(--danger-color); }
+.combo__list {
+  position: absolute; z-index: 30; top: calc(100% + 0.35rem); left: 0; right: 0; max-height: 240px;
+  overflow-y: auto; background: var(--surface-color); border: 1px solid var(--border-color);
+  border-radius: 10px; box-shadow: 0 16px 32px var(--shadow-color); padding: 0.35rem; margin: 0;
+  list-style: none; animation: fadeInDown 0.16s ease both;
+}
+.combo__option { padding: 0.5rem 0.65rem; border-radius: 7px; cursor: pointer; font-size: 0.87rem; }
+.combo__option:hover { background: var(--secondary); color: var(--primary); }
+.combo__empty { padding: 0.5rem 0.65rem; font-size: 0.83rem; color: var(--text-secondary); }
+.combo__hint { font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.35rem; }
+
+/* Card da lista de anúncios — 3 "zonas" (identidade / detalhes do serviço /
+   preço+ação) separadas por divisória, em vez de uma pilha de linhas soltas. */
+.ad-list-card { display: flex; flex-direction: column; height: 100%; padding: 1.15rem; }
+.ad-list-card__zone { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem 0; min-width: 0; }
+.ad-list-card__zone:first-child { padding-top: 0; }
+.ad-list-card__zone + .ad-list-card__zone { border-top: 1px solid var(--border-color); }
+.ad-list-card__zone--footer { margin-top: auto; padding-bottom: 0; flex-direction: row; align-items: center; justify-content: space-between; gap: 0.75rem; }
+
+.ad-list-card__top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.5rem 0.6rem; }
+.ad-list-card__top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; flex-shrink: 0; }
+.ad-list-card__date { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.85; }
+.ad-list-card__rating {
+  display: inline-flex; align-items: center; gap: 0.3rem; color: #9A6700; font-weight: 700; font-size: 0.88rem;
+  background: rgba(154, 103, 0, 0.1); border: 1px solid rgba(154, 103, 0, 0.3);
+  border-radius: 999px; padding: 0.2rem 0.55rem 0.2rem 0.5rem;
+}
+[data-theme='dark'] .ad-list-card__rating {
+  color: #FACC15; background: rgba(250, 204, 21, 0.12); border-color: rgba(250, 204, 21, 0.32);
+}
+.ad-list-card__title {
+  font-size: 1.05rem; line-height: 1.35; font-weight: 700;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ad-list-card__title.link-hover-card { padding: 0.05rem 0.3rem; margin: -0.05rem -0.3rem -0.05rem -0.3rem; }
+.ad-list-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; font-size: 0.82rem; color: var(--text-secondary); font-weight: 600; }
+.ad-list-card__chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ad-list-card__skills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ad-list-card__skill-more { font-size: 0.72rem; color: var(--text-secondary); align-self: center; }
+.ad-list-card__price {
+  display: flex; flex-direction: column; line-height: 1.2; min-width: 0;
+  color: #37633f; background: #e8f5df; border: 1px solid #c7dfba;
+  border-radius: 8px; padding: 0.4rem 0.7rem;
+}
+[data-theme='dark'] .ad-list-card__price { color: #d8f2cc; background: rgba(82, 128, 65, 0.22); border-color: rgba(164, 205, 147, 0.35); }
+.ad-list-card__price .label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8; }
+.ad-list-card__price strong { font-size: 1.15rem; white-space: nowrap; }
+.ad-list-card__price small { font-size: 0.74rem; font-weight: 500; opacity: 0.8; }
+.ad-list-card__zone--footer .btn { padding: 0.55rem 1rem; font-size: 0.85rem; flex-shrink: 0; }
+.ad-list-card .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+.ads-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.ads-toolbar h2 { margin: 0; font-size: 1.5rem; color: var(--primary); }
+.ads-toolbar__count { font-size: 0.88rem; color: var(--text-secondary); }
+
+.ads-pagination { display: flex; justify-content: center; align-items: center; gap: 0.85rem; flex-wrap: wrap; margin-top: 2rem; font-size: 0.9rem; text-align: center; }
+.ads-pagination button { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 0.7rem; }
+.ads-pagination button:disabled { opacity: 0.45; cursor: not-allowed; }
 /* ═══════════════════════════════════════════════════════════════
    DETALHES DO ANÚNCIO (ad-*, icon-badge, reputation-*, stat-*) —
    painéis soltos com cantos arredondados e chips em pílula, mesmo
@@ -281,8 +363,7 @@ a { color: var(--text-color); text-decoration: none; }
   text-transform: uppercase;
 }
 .ad-author-row__info { min-width: 0; flex: 1; }
-.ad-author-row__name { font-weight: 700; color: var(--text-color); text-decoration: none; }
-.ad-author-row__name:hover { color: var(--primary); text-decoration: underline; }
+.ad-author-row__name { font-weight: 700; }
 
 /* Meta-informações (avaliação / data / localização): separadas por
    divisor vertical, mesmo peso visual — em vez de espremidas com "•". */
@@ -387,24 +468,6 @@ a { color: var(--text-color); text-decoration: none; }
 .edit-profile-section-title { font-size: 1.25rem; margin-bottom: 1rem; padding-bottom: 0.55rem; border-bottom: 1px solid var(--border-color); }
 .tab-content-animation { animation: tabContentIn 0.28s ease both; }
 @keyframes tabContentIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-
-/* Advertisement cards */
-.ad-card { display: flex; flex-direction: column; gap: 0.85rem; height: 100%; padding: 1.15rem; }
-.ad-card-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
-.ad-card-heading h3 { font-size: 1.2rem; line-height: 1.3; margin: 0; }
-.ad-card-title { transition: color 0.15s ease; }
-.card-hover:hover .ad-card-title { color: var(--primary); text-decoration: underline; }
-.ad-card-rating { color: var(--primary); display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; font-weight: 700; }
-.ad-card-byline { color: var(--text-secondary); display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; font-size: 0.86rem; padding-bottom: 0.7rem; border-bottom: 1px solid var(--border-color); }
-.ad-card-byline strong { color: var(--text-color); }
-.ad-card-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.ad-category-badge { background: var(--secondary); border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); }
-.ad-skill-badge { background: color-mix(in srgb, var(--accent) 18%, var(--surface-color)); color: var(--text-color) !important; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border-color)); }
-.ad-price-card { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.4rem; color: #37633f; background: #e8f5df; border: 1px solid #c7dfba; border-radius: 8px; padding: 0.45rem 0.7rem; margin-top: auto; }
-[data-theme='dark'] .ad-price-card { color: #d8f2cc; background: rgba(82, 128, 65, 0.22); border-color: rgba(164, 205, 147, 0.35); }
-.ad-location-row { color: var(--text-secondary); display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; min-width: 0; }
-.ad-location-row span { overflow-wrap: anywhere; }
-.ad-card-action { margin-top: 0.25rem; text-align: center; width: 100%; }
 
 .plan-subscribe-btn { color: var(--text-color) !important; }
 [data-theme='dark'] .plan-subscribe-btn { color: #fff !important; }
@@ -776,6 +839,11 @@ a { color: var(--text-color); text-decoration: none; }
   .ads-page-layout { gap: 1.25rem; overflow-x: clip; }
   .filter-groups { grid-template-columns: 1fr; }
   .ads-grid { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 1rem; }
+  .ads-toolbar { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+  .ads-toolbar h2 { font-size: 1.3rem; }
+  .ad-list-card__zone--footer { flex-wrap: wrap; }
+  .ad-list-card__zone--footer .btn { width: 100%; }
+  .ads-pagination { gap: 0.6rem; font-size: 0.85rem; }
   .profile-card { padding: 1.15rem; }
   .profile-banner { width: calc(100% + 2.3rem); margin: -1.15rem -1.15rem 0; }
   .profile-tabs, .edit-profile-tabs { gap: 0.25rem; }
@@ -799,7 +867,6 @@ a { color: var(--text-color); text-decoration: none; }
   .location-number-field label { white-space: normal; }
   .filters-sidebar { padding: 0.75rem; }
   .filter-group { padding: 0.65rem; }
-  .ad-card-meta { gap: 0.65rem !important; }
   .profile-tabs, .edit-profile-tabs { overflow: hidden; }
   .profile-tab-option { font-size: 0.64rem; }
   h1 { font-size: 1.5rem !important; }

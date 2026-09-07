@@ -170,12 +170,7 @@ export default function MyAds() {
                     </span>
                   </div>
                   <h3 className="mf-card__title">
-                    <Link
-                      to={`/ad/${ad.id}`}
-                      style={{ color: 'inherit', textDecoration: 'none' }}
-                      onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
-                      onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
-                    >
+                    <Link to={`/ad/${ad.id}`} className="link-hover-card">
                       {ad.title || ad.titulo}
                     </Link>
                   </h3>

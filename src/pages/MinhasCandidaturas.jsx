@@ -273,12 +273,7 @@ export default function MinhasCandidaturas() {
                     </div>
 
                     <h3 className="mf-card__title">
-                      <Link
-                        to={`/ad/${app.anuncio_id}`}
-                        style={{ color: 'inherit', textDecoration: 'none' }}
-                        onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
-                        onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
-                      >
+                      <Link to={`/ad/${app.anuncio_id}`} className="link-hover-card">
                         {app.ad_title}
                       </Link>
                     </h3>

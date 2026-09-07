@@ -254,7 +254,7 @@ export default function AdDetails() {
         <div className="ad-author-row">
           <div className="ad-avatar">{initial}</div>
           <div className="ad-author-row__info">
-            <Link to={`/user/${ad.author_id}`} className="ad-author-row__name">{ad.author}</Link>
+            <Link to={`/user/${ad.author_id}`} className="ad-author-row__name link-hover-card">{ad.author}</Link>
 
             <div className="ad-meta-row">
               {ad.rating !== null ? (
