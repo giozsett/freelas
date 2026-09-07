@@ -10,40 +10,19 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
 import { DIAS_SEMANA, PERIODOS, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
 
-// Comentários padrão de reputação (estilo iFood/Mercado Livre) por faixa de
-// nota — o cálculo da nota em si ainda é mockado (ver reputationScore
-// abaixo) até a reputação de usuário ser implementada de verdade.
-function reputacaoInfo(score) {
-  if (score > 80) {
-    return {
-      color: 'var(--success-color)',
-      label: 'Excelente',
-      tags: [
-        { tone: 'positivo', text: 'Entrega no prazo combinado' },
-        { tone: 'positivo', text: 'Boa comunicação durante o serviço' },
-        { tone: 'positivo', text: 'Recomendado por outros usuários' },
-      ],
-    };
-  }
-  if (score > 50) {
-    return {
-      color: 'var(--warning-color)',
-      label: 'Regular',
-      tags: [
-        { tone: 'positivo', text: 'Boa comunicação durante o serviço' },
-        { tone: 'alerta', text: 'Já reagendou compromissos algumas vezes' },
-      ],
-    };
-  }
-  return {
-    color: 'var(--danger-color)',
-    label: 'Baixa',
-    tags: [
-      { tone: 'alerta', text: 'Cancela acordos com frequência' },
-      { tone: 'alerta', text: 'Demora para responder mensagens' },
-    ],
-  };
-}
+// Reputação padrão exibida quando a API não retorna author_reputation
+// (ex.: autor sem perfil associado). Espelha o fallback "sem avaliações"
+// calculado em calcular_reputacao_usuario (backend/core/serializers.py).
+const REPUTACAO_PADRAO = {
+  score: 100,
+  label: 'Excelente',
+  color: 'var(--success-color)',
+  tags: [
+    { tone: 'positivo', text: 'Novo usuário na plataforma' },
+    { tone: 'positivo', text: 'Sem histórico de infrações ou cancelamentos' },
+  ],
+  total_avaliacoes: 0,
+};
 
 export default function AdDetails() {
   const { id } = useParams();
@@ -108,7 +87,7 @@ export default function AdDetails() {
           createdAt: data.created_at,
           deadline: data.deadline || null,
           availability: normalizarDisponibilidade(data.availability),
-          reputationScore: 92 // Maintained mock as requested
+          reputation: data.author_reputation || null,
         });
         setIsLoading(false);
       })
@@ -216,7 +195,7 @@ export default function AdDetails() {
   const isFreelancerAd = ad.type === 'freelancer';
   const isAuthor = user && user.id === ad.author_id;
   const initial = (ad.author || '?').charAt(0).toUpperCase();
-  const rep = reputacaoInfo(ad.reputationScore);
+  const rep = ad.reputation || REPUTACAO_PADRAO;
   const diasNoAr = ad.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(ad.createdAt)) / 86400000))
     : null;
@@ -421,11 +400,15 @@ export default function AdDetails() {
             </div>
             <div className="rep-score-row">
               <div className="rep-score-track">
-                <div className="rep-score-marker" style={{ left: `${ad.reputationScore}%`, border: `3px solid ${rep.color}` }} />
+                <div className="rep-score-marker" style={{ left: `${rep.score}%`, border: `3px solid ${rep.color}` }} />
               </div>
               <span className="rep-score-label" style={{ color: rep.color }}>{rep.label}</span>
             </div>
-            <p className="rep-note">Cálculo a implementar — comentários abaixo resumem o histórico do usuário.</p>
+            <p className="rep-note">
+              {rep.total_avaliacoes > 0
+                ? `Baseado em ${rep.total_avaliacoes} ${rep.total_avaliacoes === 1 ? 'avaliação recebida' : 'avaliações recebidas'}.`
+                : 'Ainda sem avaliações recebidas nesta função.'}
+            </p>
             <div className="reputation-tags">
               {rep.tags.map(tag => (
                 <span key={tag.text} className={`reputation-tag ${tag.tone}`}>

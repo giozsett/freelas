@@ -16,6 +16,7 @@ from .models import (
     SolicitacaoAlteracaoAcordo,
     SolicitacaoCancelamentoAcordo,
     UserProfile,
+    VerificacaoEmail,
 )
 
 
@@ -807,3 +808,382 @@ class DashboardAdminAPITests(TestCase):
 
         freelas = response.data['geral']['freelas']
         self.assertEqual(freelas['fecharam_acordo_mes'], 2)
+
+
+class AutenticacaoSenhaAPITests(TestCase):
+    """
+    Testes dos requisitos de senha na autenticação:
+    - mínimo de 8 caracteres
+    - pelo menos 1 letra maiúscula
+    - pelo menos 1 número
+    - pelo menos 1 caractere especial (@, #, *, etc.)
+
+    Cobrem os endpoints que recebem senha em texto claro:
+    RegisterAPI (/api/auth/register/) e RedefinirSenhaAPI (/api/auth/redefinir-senha/).
+    """
+
+    SENHA_VALIDA = 'Abcdef1@'
+
+    def setUp(self):
+        self.client = APIClient()
+
+    # ---------- Cadastro (RegisterAPI) ----------
+
+    def test_cadastro_recusa_senha_menor_que_8_caracteres(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'curta@example.com',
+                'email': 'curta@example.com',
+                'password': 'Ab1@xyz',  # 7 caracteres
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='curta@example.com').exists())
+
+    def test_cadastro_recusa_senha_sem_letra_maiuscula(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'semmaiuscula@example.com',
+                'email': 'semmaiuscula@example.com',
+                'password': 'abcdef1@',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='semmaiuscula@example.com').exists())
+
+    def test_cadastro_recusa_senha_sem_numero(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'semnumero@example.com',
+                'email': 'semnumero@example.com',
+                'password': 'Abcdefg@',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='semnumero@example.com').exists())
+
+    def test_cadastro_recusa_senha_sem_caractere_especial(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'semespecial@example.com',
+                'email': 'semespecial@example.com',
+                'password': 'Abcdefg1',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='semespecial@example.com').exists())
+
+    def test_cadastro_aceita_senha_que_atende_todos_os_requisitos(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'valida@example.com',
+                'email': 'valida@example.com',
+                'password': self.SENHA_VALIDA,
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('token', response.data)
+        user = User.objects.get(username='valida@example.com')
+        self.assertTrue(user.check_password(self.SENHA_VALIDA))
+
+    # ---------- Redefinição de senha (RedefinirSenhaAPI) ----------
+
+    def _criar_usuario_com_codigo(self, email, codigo='123456'):
+        user = User.objects.create_user(username=email, email=email, password='SenhaAntiga1@')
+        VerificacaoEmail.objects.create(usuario=user, codigo=codigo)
+        return user
+
+    def test_redefinicao_recusa_senha_menor_que_8_caracteres(self):
+        user = self._criar_usuario_com_codigo('redef-curta@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'Ab1@xyz'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('Ab1@xyz'))
+
+    def test_redefinicao_recusa_senha_sem_letra_maiuscula(self):
+        user = self._criar_usuario_com_codigo('redef-semmaiuscula@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'abcdef1@'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('abcdef1@'))
+
+    def test_redefinicao_recusa_senha_sem_numero(self):
+        user = self._criar_usuario_com_codigo('redef-semnumero@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'Abcdefg@'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('Abcdefg@'))
+
+    def test_redefinicao_recusa_senha_sem_caractere_especial(self):
+        user = self._criar_usuario_com_codigo('redef-semespecial@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'Abcdefg1'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('Abcdefg1'))
+
+    def test_redefinicao_aceita_senha_que_atende_todos_os_requisitos(self):
+        user = self._criar_usuario_com_codigo('redef-valida@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': self.SENHA_VALIDA},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(self.SENHA_VALIDA))
+
+    # ---------- Login (LoginAPI) ----------
+
+    def test_login_com_credenciais_corretas_retorna_token(self):
+        User.objects.create_user(
+            username='login-ok@example.com',
+            email='login-ok@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        response = self.client.post(
+            '/api/auth/login/',
+            {'username': 'login-ok@example.com', 'password': self.SENHA_VALIDA},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('token', response.data)
+
+    def test_login_com_senha_incorreta_e_recusado(self):
+        User.objects.create_user(
+            username='login-errado@example.com',
+            email='login-errado@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        response = self.client.post(
+            '/api/auth/login/',
+            {'username': 'login-errado@example.com', 'password': 'SenhaTotalmenteErrada9#'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class CriteriosAvaliacaoAPITests(TestCase):
+    """
+    Cobre os critérios descritos em Criterios_Novos.md:
+    - comentário da avaliação é opcional;
+    - o anúncio expõe author_reputation (score/label/tags) calculado a
+      partir das avaliações recebidas pelo autor, consumido pelo frontend
+      em DetalhesAnuncio.jsx no lugar do mock antigo.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = User.objects.create_user(
+            username='contratante-crit@example.com',
+            email='contratante-crit@example.com',
+            password='secret123',
+        )
+        self.freelancer = User.objects.create_user(
+            username='freelancer-crit@example.com',
+            email='freelancer-crit@example.com',
+            password='secret123',
+        )
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Criação de identidade visual',
+            description='Logo e material de papelaria',
+            price='800.00',
+            role='contractor',
+            location_type='remoto',
+        )
+        self.candidatura = Candidatura.objects.create(
+            user=self.freelancer,
+            ad=self.ad,
+            status='pendente',
+        )
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Concluído',
+            valor_acordado=800,
+            titulo_anuncio='Criação de identidade visual',
+            descricao_servico='Logo e material de papelaria',
+        )
+
+    def test_avaliacao_sem_comentario_e_aceita(self):
+        self.client.force_authenticate(self.contratante)
+
+        response = self.client.post(
+            '/api/avaliacoes/',
+            {
+                'acordo': self.acordo.id,
+                'criterios': {
+                    'qualidade_tecnica': 5,
+                    'cumprimento_prazos': 5,
+                    'comunicacao_remota': 5,
+                },
+                # 'comentario' propositalmente omitido: deve ser opcional.
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['comentario'], '')
+        avaliacao = Avaliacao.objects.get(acordo=self.acordo, avaliador=self.contratante.profile)
+        self.assertEqual(avaliacao.comentario, '')
+
+    def test_avaliacao_com_comentario_em_branco_e_aceita(self):
+        self.client.force_authenticate(self.contratante)
+
+        response = self.client.post(
+            '/api/avaliacoes/',
+            {
+                'acordo': self.acordo.id,
+                'criterios': {
+                    'qualidade_tecnica': 4,
+                    'cumprimento_prazos': 4,
+                    'comunicacao_remota': 4,
+                },
+                'comentario': '   ',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['comentario'], '')
+
+    def test_anuncio_expoe_author_reputation_calculada_das_avaliacoes(self):
+        # O anúncio foi publicado pelo contratante (role='contractor'), então
+        # author_reputation reflete as avaliações que ELE recebeu como
+        # contratante — quem avalia é o freelancer do acordo.
+        self.client.force_authenticate(self.freelancer)
+        self.client.post(
+            '/api/avaliacoes/',
+            {
+                'acordo': self.acordo.id,
+                'criterios': {
+                    'clareza_escopo': 5,
+                    'comunicacao_feedback': 5,
+                    'pagamento_compromisso': 5,
+                },
+            },
+            format='json',
+        )
+
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        reputacao = response.data['author_reputation']
+        self.assertIsNotNone(reputacao)
+        self.assertEqual(reputacao['total_avaliacoes'], 1)
+        self.assertEqual(reputacao['score'], 100)
+        self.assertEqual(reputacao['label'], 'Excelente')
+        self.assertTrue(any(tag['tone'] == 'positivo' for tag in reputacao['tags']))
+
+    def test_anuncio_sem_avaliacoes_expoe_reputacao_padrao(self):
+        # Sem avaliações e sem nenhuma seção do perfil preenchida, o score
+        # parte de uma base neutra (40) em vez do antigo "Excelente" fixo.
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        reputacao = response.data['author_reputation']
+        self.assertIsNotNone(reputacao)
+        self.assertEqual(reputacao['total_avaliacoes'], 0)
+        self.assertEqual(reputacao['score'], 40)
+        self.assertEqual(reputacao['label'], 'Baixa')
+        self.assertEqual(reputacao['completude_perfil'], 0)
+
+    def test_perfil_completo_aumenta_reputacao_mesmo_sem_avaliacoes(self):
+        # Preencher as seções do perfil deve somar pontos na reputação,
+        # mesmo antes de qualquer avaliação (bônus de completude "estilo
+        # Tinder").
+        profile = self.contratante.profile
+        profile.foto_perfil = 'https://exemplo.com/foto.jpg'
+        profile.bio = 'Contratante de projetos de tecnologia há alguns anos.'
+        profile.cidade = 'São Paulo'
+        profile.telefone = '11999999999'
+        profile.telefone_visivel = True
+        profile.categories = ['Desenvolvimento Web']
+        profile.skills = [{'name': 'Gestão de Projetos', 'level': 'avancado'}]
+        profile.save()
+
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        reputacao = response.data['author_reputation']
+        self.assertEqual(reputacao['completude_perfil'], 100)
+        self.assertEqual(reputacao['score'], 70)  # 40 base + 30 (bônus máximo)
+        self.assertEqual(reputacao['label'], 'Regular')
+
+
+class PerfilBioEReputacaoAPITests(TestCase):
+    """
+    Cobre a correção do bug da bio padrão (perfis novos não devem herdar o
+    texto fixo de exemplo) e a exposição do termômetro de reputação
+    (freelancer + contratante) no endpoint /api/auth/user/, usado pelas
+    telas de perfil.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_cadastro_novo_nao_recebe_bio_padrao(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'sembio@example.com',
+                'email': 'sembio@example.com',
+                'password': 'Abcdef1@',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user = User.objects.get(username='sembio@example.com')
+        profile = UserProfile.objects.get(user=user)
+        self.assertEqual(profile.bio, '')
+        self.assertNotIn('adestrador', profile.bio.lower())
+
+    def test_endpoint_user_expoe_reputacao_freelancer_e_contratante(self):
+        user = User.objects.create_user(
+            username='reputacao@example.com',
+            email='reputacao@example.com',
+            password='secret123',
+        )
+        UserProfile.objects.get_or_create(user=user)
+        self.client.force_authenticate(user)
+
+        response = self.client.get('/api/auth/user/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('reputacao', response.data)
+        self.assertIn('freelancer', response.data['reputacao'])
+        self.assertIn('contratante', response.data['reputacao'])
+        self.assertEqual(response.data['reputacao']['freelancer']['total_avaliacoes'], 0)
+        self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)

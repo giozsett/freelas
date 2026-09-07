@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import IconeRedeSocial from '../components/IconeRedeSocial';
+import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 
 const API = 'http://localhost:8000';
@@ -34,6 +35,7 @@ export default function Profile() {
     contratante: { nota: null, total: 0 },
   });
   const [receivedReviews, setReceivedReviews] = useState([]);
+  const [reputacao, setReputacao] = useState({ freelancer: null, contratante: null });
 
   useEffect(() => {
     if (!token) return;
@@ -69,6 +71,7 @@ export default function Profile() {
       .then(data => {
         if (data.resumo_avaliacoes) setReviewSummary(data.resumo_avaliacoes);
         if (Array.isArray(data.avaliacoes_recebidas)) setReceivedReviews(data.avaliacoes_recebidas);
+        if (data.reputacao) setReputacao(data.reputacao);
       })
       .catch(err => console.error(err));
 
@@ -212,6 +215,17 @@ export default function Profile() {
         <section className="profile-section">
           <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
           <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{profile.bio || "Adicione uma biografia no botão 'Editar'."}</p>
+        </section>
+
+        <section className="profile-section">
+          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Reputação</h2>
+          <p style={{ fontSize: '0.9rem', opacity: 0.75, marginTop: '-0.5rem', marginBottom: '1rem' }}>
+            Quanto mais completo o seu perfil, mais pontos de confiança ele soma — <Link to="/profile/edit" style={{ color: 'var(--primary)', fontWeight: 600 }}>complete suas informações</Link> para melhorar sua reputação.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <TermometroReputacao titulo="Reputação como Freelancer" reputacao={reputacao.freelancer} />
+            <TermometroReputacao titulo="Reputação como Contratante" reputacao={reputacao.contratante} />
+          </div>
         </section>
 
         {/* Tabs */}

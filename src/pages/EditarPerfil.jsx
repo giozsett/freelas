@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, User, Plus, Trash2, Upload, ToggleLeft, ToggleRight, Briefcase, Pencil, Check } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useRole } from '../context/ContextoPapel';
 import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 import { calcularTempo } from '../utils/calcularTempo';
 import ModalCrop from '../components/ModalCrop';
@@ -9,8 +10,14 @@ import { useDialogo } from '../context/ContextoDialogo';
 
 const API = 'http://localhost:8000';
 
+const BIO_PLACEHOLDER = {
+  freelancer: 'Faça um resumo sobre sua trajetória profissional: suas principais habilidades, experiências e o que você pode oferecer aos contratantes...',
+  contractor: 'Conte um pouco sobre você ou sua empresa: que tipo de profissionais você costuma contratar, como funciona o seu processo de seleção e o que espera de quem vai trabalhar com você...',
+};
+
 export default function EditProfile() {
   const { user: authUser, token, login } = useAuth();
+  const { role } = useRole();
   const { alerta } = useDialogo();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -892,7 +899,14 @@ export default function EditProfile() {
           {/* Bio */}
           <div data-section="atuacao">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Biografia</label>
-            <textarea className="input" rows="5" value={bio} onChange={(e) => setBio(e.target.value)} style={{ resize: 'none' }}></textarea>
+            <textarea
+              className="input"
+              rows="5"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder={BIO_PLACEHOLDER[role] || BIO_PLACEHOLDER.freelancer}
+              style={{ resize: 'none' }}
+            ></textarea>
           </div>
 
           {/* Categories */}

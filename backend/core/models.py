@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import User
 import random
@@ -17,7 +18,7 @@ class UserProfile(models.Model):
 
     # Campos que existiam no UserProfile (faltantes na tabela usuarios)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', null=True, blank=True)
-    bio = models.TextField(blank=True, default="Sou um adestrador certificado e apaixonado por animais. Tenho anos de experiência lidando com comportamento canino, ajudando donos a entenderem e treinarem seus cães com reforço positivo.")
+    bio = models.TextField(blank=True, default="")
     categories = models.JSONField(blank=True, default=list)
     skills = models.JSONField(blank=True, default=list)
     subscription_plan = models.CharField(max_length=50, default='Gratuito')
@@ -425,9 +426,10 @@ class Avaliacao(models.Model):
         related_name='avaliacoes_recebidas',
     )
     papel_avaliado = models.CharField(max_length=20, choices=PAPEIS)
+    modalidade = models.CharField(max_length=20, default='remoto')
     criterios = models.JSONField(default=dict)
     nota_geral = models.DecimalField(max_digits=3, decimal_places=2)
-    comentario = models.TextField()
+    comentario = models.TextField(blank=True, default='')
     criado_em = models.DateTimeField(auto_now_add=True, db_column='criada_em')
 
     class Meta:
@@ -446,6 +448,41 @@ class Avaliacao(models.Model):
 
     def __str__(self):
         return f"Avaliação de {self.avaliador} para {self.avaliado}"
+
+
+class CriterioAvaliacao(models.Model):
+    PAPEIS = Avaliacao.PAPEIS
+    MODALIDADES = (
+        ('remoto', 'Remoto'),
+        ('presencial', 'Presencial'),
+    )
+
+    avaliacao = models.ForeignKey(
+        Avaliacao,
+        on_delete=models.CASCADE,
+        related_name='detalhes_criterios',
+    )
+    chave = models.CharField(max_length=50)
+    titulo = models.CharField(max_length=255, null=True, blank=True)
+    nota = models.SmallIntegerField()
+    papel_avaliado = models.CharField(max_length=20, choices=PAPEIS, null=True, blank=True)
+    modalidade = models.CharField(max_length=20, choices=MODALIDADES, default='remoto')
+    peso = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('1.00'))
+    descricao = models.CharField(max_length=255, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'criterios_avaliacao'
+        ordering = ['id']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(nota__gte=1) & models.Q(nota__lte=5),
+                name='check_nota_entre_um_e_cinco',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.titulo or self.chave}: {self.nota} (Avaliação {self.avaliacao_id})"
 
 
 class Pagamento(models.Model):

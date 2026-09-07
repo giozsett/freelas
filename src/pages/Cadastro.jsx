@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { useDialogo } from '../context/ContextoDialogo';
+import { checkPasswordStrength } from '../utils/validacaoSenha';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 48 48" style={{ marginRight: '8px' }}>
@@ -31,17 +32,6 @@ export default function Cadastro() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const { alerta } = useDialogo();
-
-  const checkPasswordStrength = (pwd) => {
-    if (!pwd) return '';
-    const hasLetters = /[a-zA-Z]/.test(pwd);
-    const hasNumbers = /[0-9]/.test(pwd);
-    const hasUppercase = /[A-Z]/.test(pwd);
-    const hasSpecial = /[^a-zA-Z0-9]/.test(pwd);
-    if (hasUppercase && hasNumbers && hasSpecial) return 'Forte';
-    if (hasLetters && hasNumbers) return 'Média';
-    return 'Fraca';
-  };
 
   const passwordStrength = checkPasswordStrength(password);
 

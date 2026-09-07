@@ -1053,7 +1053,7 @@ class SolicitacaoAlteracaoAdminListAPIView(generics.ListAPIView):
 
 
 from .models import Avaliacao
-from .serializers import AvaliacaoSerializer, CRITERIOS_AVALIACAO
+from .serializers import AvaliacaoSerializer, CRITERIOS_AVALIACAO, obter_criterios_definicao
 
 
 def _partes_do_acordo(acordo):
@@ -1195,16 +1195,18 @@ class AvaliacoesPendentesAPIView(APIView):
                 if avaliado and hasattr(avaliado, 'profile')
                 else avaliado.get_full_name() or avaliado.username
             )
+            anuncio = acordo.candidatura.ad if (acordo.candidatura and acordo.candidatura.ad) else None
+            modalidade = 'presencial' if (anuncio and getattr(anuncio, 'location_type', None) == 'presencial') else 'remoto'
+            criterios = obter_criterios_definicao(papel_avaliado, modalidade)
+
             pendentes.append({
                 'acordo_id': acordo.id,
                 'titulo_acordo': acordo.titulo_anuncio,
                 'avaliado_id': avaliado.id,
                 'avaliado_nome': nome,
                 'papel_avaliado': papel_avaliado,
-                'criterios': [
-                    {'chave': key, 'rotulo': label}
-                    for key, label in CRITERIOS_AVALIACAO[papel_avaliado].items()
-                ],
+                'modalidade': modalidade,
+                'criterios': criterios,
                 'concluido_em': acordo.concluido_em,
             })
 
