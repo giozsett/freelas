@@ -41,21 +41,25 @@ const STATUS_CONFIG = {
   },
 };
 
-const EXPIRADA_MOTIVO = 'Anúncio expirado.';
+// Mesma mensagem usada no backend (serializers.CandidaturaSerializer) tanto para
+// anúncio excluído (soft delete) quanto vencido — para quem se candidatou, os
+// dois casos significam a mesma coisa: o anúncio não existe mais pra ninguém decidir.
+const ANUNCIO_INDISPONIVEL_MOTIVO =
+  'Este anúncio não está mais disponível. Provavelmente foi removido pelo anunciante ou expirou.';
 
-function isExpirada(app) {
-  return app.indisponivel === true && app.motivo_indisponibilidade === EXPIRADA_MOTIVO;
+function isAnuncioIndisponivel(app) {
+  return app.indisponivel === true && app.motivo_indisponibilidade === ANUNCIO_INDISPONIVEL_MOTIVO;
 }
 
 function getStatusInfo(app) {
-  if (isExpirada(app)) {
+  if (isAnuncioIndisponivel(app)) {
     return {
       badgeBg: 'var(--pending-card)',
       badgeColor: 'var(--text-secondary)',
-      label: 'Anúncio expirado',
+      label: 'Anúncio indisponível',
       icon: Archive,
       sideColor: 'var(--pending-accent)',
-      description: 'O prazo do anúncio terminou antes da seleção da sua proposta.',
+      description: ANUNCIO_INDISPONIVEL_MOTIVO,
     };
   }
   if (app.indisponivel || app.status === 'encerrada') {
@@ -71,13 +75,14 @@ function getStatusInfo(app) {
   return STATUS_CONFIG[app.status] || STATUS_CONFIG.pendente;
 }
 
-// Candidaturas finalizadas: recusadas, aprovadas, expiradas (anúncio vencido) e encerradas.
+// Candidaturas finalizadas: recusadas, aprovadas, encerradas e com anúncio
+// indisponível (excluído pelo anunciante ou vencido).
 function isFinalizada(app) {
   return (
     app.status === 'aprovada' ||
     app.status === 'recusada' ||
     app.status === 'encerrada' ||
-    isExpirada(app)
+    isAnuncioIndisponivel(app)
   );
 }
 
@@ -162,7 +167,7 @@ export default function MinhasCandidaturas() {
   const pendentes = emAndamento.filter((a) => a.status === 'pendente');
   const aprovadas = applications.filter((a) => a.status === 'aprovada');
   const naoSelecionadas = applications.filter(
-    (a) => a.status === 'recusada' || a.status === 'encerrada' || isExpirada(a)
+    (a) => a.status === 'recusada' || a.status === 'encerrada' || isAnuncioIndisponivel(a)
   );
 
   const visibleApplications = activeTab === 'em-andamento' ? emAndamento : finalizadas;
@@ -290,7 +295,7 @@ export default function MinhasCandidaturas() {
                       )}
                     </div>
 
-                    {isUnavailable && !isExpirada(app) && (
+                    {isUnavailable && !isAnuncioIndisponivel(app) && (
                       <p
                         style={{
                           margin: '0.5rem 0 0',
@@ -373,7 +378,7 @@ export default function MinhasCandidaturas() {
           <p>
             {activeTab === 'em-andamento'
               ? 'Suas candidaturas pendentes aparecerão aqui.'
-              : 'Candidaturas aprovadas, recusadas ou com anúncio vencido aparecerão aqui.'}
+              : 'Candidaturas aprovadas, recusadas ou com anúncio indisponível aparecerão aqui.'}
           </p>
         </div>
       )}

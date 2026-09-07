@@ -34,6 +34,7 @@ export default function AdDetails() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [proposalPrice, setProposalPrice] = useState('');
+  const [showPriceInput, setShowPriceInput] = useState(false);
   const [proposalText, setProposalText] = useState('');
   const [hasApplied, setHasApplied] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -60,7 +61,10 @@ export default function AdDetails() {
   }, [user, id]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/ads/${id}/`)
+    const token = localStorage.getItem('token');
+    fetch(`http://localhost:8000/api/ads/${id}/`, {
+      headers: token ? { 'Authorization': `Token ${token}` } : {},
+    })
       .then(res => {
         if (!res.ok) throw new Error('Not found');
         return res.json();
@@ -127,7 +131,7 @@ export default function AdDetails() {
       body: JSON.stringify({
         ad: ad.id,
         mensagem: proposalText,
-        valor_proposta: proposalPrice // although 'valor_proposta' is not in model, user put 'proposalPrice'
+        valor_proposta: proposalPrice.trim() !== '' ? proposalPrice : ad.price // sem alteração, mantém o valor original do anúncio
       })
     })
     .then(res => {
@@ -137,6 +141,7 @@ export default function AdDetails() {
         setHasApplied(true);
         setIsModalOpen(false);
         setProposalPrice('');
+        setShowPriceInput(false);
         setProposalText('');
       } else {
         console.error("Erro ao enviar candidatura.");
@@ -426,7 +431,7 @@ export default function AdDetails() {
         <div className="mf-modal-backdrop">
            <div className="mf-modal" style={{ width: '100%', maxWidth: '500px' }}>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => { setIsModalOpen(false); setProposalPrice(''); setShowPriceInput(false); }}
                 style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
               >
                 <X size={24} />
@@ -440,18 +445,6 @@ export default function AdDetails() {
 
               <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                  <div>
-                    <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor da Proposta (R$)</label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder={`Valor original: R$ ${ad.price}`}
-                      value={proposalPrice}
-                      onChange={(e) => setProposalPrice(e.target.value)}
-                      required
-                    />
-                 </div>
-
-                 <div>
                     <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Sua Mensagem de Apresentação</label>
                     <textarea
                       className="input"
@@ -463,8 +456,36 @@ export default function AdDetails() {
                     ></textarea>
                  </div>
 
+                 <div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      Valor do anúncio: <strong style={{ color: 'var(--text-color)' }}>R$ {ad.price}</strong>
+                      {!showPriceInput && (
+                        <>
+                          {' · '}
+                          <button
+                            type="button"
+                            onClick={() => setShowPriceInput(true)}
+                            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+                          >
+                            propor outro valor
+                          </button>
+                        </>
+                      )}
+                    </p>
+                    {showPriceInput && (
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder={`Ex: ${ad.price}`}
+                        value={proposalPrice}
+                        onChange={(e) => setProposalPrice(e.target.value)}
+                        style={{ maxWidth: '180px', fontSize: '0.9rem', padding: '0.5rem 0.75rem', marginTop: '0.5rem' }}
+                      />
+                    )}
+                 </div>
+
                  <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setIsModalOpen(false); setProposalPrice(''); setShowPriceInput(false); }}>Cancelar</button>
                     <button type="submit" className="btn dark-text" style={{ flex: 1 }}>Enviar Apresentação</button>
                  </div>
               </form>

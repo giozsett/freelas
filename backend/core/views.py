@@ -334,8 +334,8 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
         from django.db.models import Q, Avg
 
         Ad.atualizar_vencidos()
-        return (
-            Ad.objects.exclude(deletado=True)
+        queryset = (
+            Ad.objects
             .select_related('author', 'author__profile')
             .annotate(
                 _media_freelancer=Avg(
@@ -348,6 +348,22 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
                 ),
             )
         )
+
+        if self.request.method != 'GET':
+            # Editar/excluir um anúncio já excluído não faz sentido: mantém a
+            # exclusão simples de sempre para essas ações.
+            return queryset.exclude(deletado=True)
+
+        # Um anúncio vencido ou excluído (soft delete) deixa de ser "público":
+        # só quem publicou ou quem já se candidatou a ele pode continuar
+        # visualizando os detalhes. Para todo mundo, ele deixa de existir.
+        indisponivel = Q(deletado=True) | Q(status_anuncio='Vencido')
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return queryset.exclude(indisponivel)
+        return queryset.filter(
+            ~indisponivel | Q(author=user) | Q(candidaturas__user=user)
+        ).distinct()
 
     def get_permissions(self):
         if self.request.method == 'GET':

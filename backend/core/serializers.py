@@ -582,6 +582,11 @@ class AdSerializer(serializers.ModelSerializer):
 
 from .models import Candidatura
 
+# Usado tanto para anúncio excluído (soft delete) quanto vencido: do ponto de
+# vista de quem se candidatou, os dois casos são "não dá mais pra saber o que
+# aconteceu com isso" e devem ser tratados como finalizados com a mesma mensagem.
+MOTIVO_ANUNCIO_INDISPONIVEL = 'Este anúncio não está mais disponível. Provavelmente foi removido pelo anunciante ou expirou.'
+
 class CandidaturaSerializer(serializers.ModelSerializer):
     applicant_name = serializers.SerializerMethodField()
     ad_title = serializers.SerializerMethodField()
@@ -651,17 +656,17 @@ class CandidaturaSerializer(serializers.ModelSerializer):
         return None
 
     def get_indisponivel(self, obj):
-        if obj.ad and obj.ad.status_anuncio == 'Vencido':
+        if not obj.ad_id or (obj.ad and (obj.ad.deletado or obj.ad.status_anuncio == 'Vencido')):
             return True
         if obj.status == 'encerrada':
             return True
-        if not obj.ad_id or obj.status == 'aprovada':
+        if obj.status == 'aprovada':
             return False
         return obj.ad.candidaturas.filter(status='aprovada').exclude(pk=obj.pk).exists()
 
     def get_motivo_indisponibilidade(self, obj):
-        if obj.ad and obj.ad.status_anuncio == 'Vencido':
-            return 'Anúncio expirado.'
+        if not obj.ad_id or (obj.ad and (obj.ad.deletado or obj.ad.status_anuncio == 'Vencido')):
+            return MOTIVO_ANUNCIO_INDISPONIVEL
         if self.get_indisponivel(obj):
             return 'O autor já aprovou outra candidatura para este anúncio.'
         return None
