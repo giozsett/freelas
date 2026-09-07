@@ -138,7 +138,7 @@ export default function MeusFreelas() {
   const handlePayService = async (acordoId) => {
     const checkoutWindow = window.open('', '_blank');
     if (!checkoutWindow) {
-      showStatus('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', 'error');
+      showStatus('Permita pop-ups para abrir o checkout do Stripe em uma nova aba.', 'error');
       return;
     }
     setPayingAgreementId(acordoId);
@@ -162,7 +162,7 @@ export default function MeusFreelas() {
         }
         setPayingAgreementId(null);
       } else {
-        throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+        throw new Error('O Stripe não retornou o endereço do checkout.');
       }
     } catch (err) {
       if (!checkoutWindow.closed) checkoutWindow.close();
@@ -289,8 +289,8 @@ export default function MeusFreelas() {
     const checkout = params.get('checkout');
     if (checkout) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      if (checkout === 'success') showStatus('Pagamento enviado. Aguardando a confirmação do Mercado Pago.', 'success');
-      else if (checkout === 'pending') showStatus('O pagamento está em análise no Mercado Pago.', 'success');
+      if (checkout === 'success') showStatus('Pagamento enviado. Aguardando a confirmação do Stripe.', 'success');
+      else if (checkout === 'pending') showStatus('O pagamento está em análise no Stripe.', 'success');
       else showStatus('O pagamento não foi concluído. Você pode tentar novamente.', 'error');
       fetchAgreements();
     }
@@ -544,7 +544,7 @@ export default function MeusFreelas() {
                           </div>
                           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
                             {userIsContractor
-                              ? 'Para ativar este acordo, conclua o pagamento no checkout seguro do Mercado Pago.'
+                              ? 'Para ativar este acordo, conclua o pagamento no checkout seguro do Stripe.'
                               : 'Aguardando o contratante concluir o pagamento para iniciar o projeto.'}
                           </p>
                         </div>

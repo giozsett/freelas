@@ -20,7 +20,6 @@ from .models import Ad
 from .serializers import ReportSerializer
 from .models import Report
 from django.core.mail import send_mail
-from django.shortcuts import redirect
 from .models import VerificacaoEmail
 from .serializers import CertificadoSerializer, InstituicaoEnsinoSerializer, ExperienciaSerializer
 from .models import Certificado, InstituicaoEnsino, Experiencia
@@ -1230,7 +1229,7 @@ class AvaliacoesPendentesAPIView(APIView):
 
 
 import logging
-import requests
+import stripe
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from django.db import transaction
@@ -1240,25 +1239,21 @@ from .serializers import CartaoUsuarioSerializer, PagamentoSerializer
 
 
 logger = logging.getLogger(__name__)
-MERCADO_PAGO_API = 'https://api.mercadopago.com'
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY', '').strip()
 PLANOS_PAGOS = {
-    'gold': {'nome': 'Gold', 'valor': Decimal('29.90')},
-    'platinum': {'nome': 'Platinum', 'valor': Decimal('79.90')},
+    'gold': {
+        'nome': 'Gold', 'valor': Decimal('29.90'),
+        'stripe_price': os.environ.get('STRIPE_PRICE_GOLD', '').strip(),
+    },
+    'platinum': {
+        'nome': 'Platinum', 'valor': Decimal('79.90'),
+        'stripe_price': os.environ.get('STRIPE_PRICE_PLATINUM', '').strip(),
+    },
 }
 
 
-def _mercado_pago_headers(reference=None):
-    token = os.environ.get('MERCADO_PAGO_ACCESS_TOKEN', '').strip()
-    if not token or token.startswith('YOUR_'):
-        return None
-
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-    }
-    if reference:
-        headers['X-Idempotency-Key'] = reference
-    return headers
+def _stripe_configurado():
+    return bool(stripe.api_key) and not stripe.api_key.startswith('YOUR_')
 
 
 def _frontend_url(path):
@@ -1266,168 +1261,102 @@ def _frontend_url(path):
     return f'{base_url}{path}'
 
 
-def _notification_url():
-    base_url = os.environ.get('BACKEND_PUBLIC_URL', '').rstrip('/')
-    if base_url.startswith('https://'):
-        return f'{base_url}/api/pagamentos/webhook/'
-    return None
-
-
-def _checkout_return_url(flow, result='success'):
-    public_backend = os.environ.get('BACKEND_PUBLIC_URL', '').rstrip('/')
-    if public_backend.startswith('https://'):
-        return f'{public_backend}/api/pagamentos/retorno/{flow}/{result}/'
-
-    frontend = os.environ.get('FRONTEND_URL', '').rstrip('/')
-    if frontend.startswith('https://'):
-        if flow == 'acordo':
-            return f'{frontend}/my-freelas?checkout={result}'
-        return f'{frontend}/my-payments?checkout=subscription'
-    return None
-
-
-class MercadoPagoReturnAPI(APIView):
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-
-    def get(self, request, flow, result):
-        if flow == 'acordo' and result in {'success', 'failure', 'pending'}:
-            path = f'/my-freelas?checkout={result}'
-        elif flow == 'assinatura':
-            path = '/my-payments?checkout=subscription'
-        else:
-            path = '/'
-        return redirect(_frontend_url(path))
-
-
-def _checkout_response_error(response):
-    try:
-        data = response.json()
-        return data.get('message') or data.get('error') or 'Erro não informado pelo Mercado Pago.'
-    except ValueError:
-        return 'Resposta inválida do Mercado Pago.'
-
-
-def _response_json(response):
-    try:
-        return response.json()
-    except ValueError:
-        return {}
-
-
 def _checkout_academico_habilitado():
-    test_mode = os.environ.get('MERCADO_PAGO_TEST_MODE', '').strip().lower()
+    test_mode = os.environ.get('PAGAMENTOS_TEST_MODE', '').strip().lower()
     return settings.DEBUG and test_mode in {'1', 'true', 'yes', 'on'}
 
 
+def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=None, detalhe_status=None):
+    """Marca o pagamento como pago e ativa a assinatura/acordo correspondente."""
+    pagamento.status = 'pago'
+    if external_id:
+        pagamento.mp_payment_id = external_id
+    if forma_pagamento:
+        pagamento.forma_pagamento = forma_pagamento
+    if detalhe_status:
+        pagamento.detalhe_status = detalhe_status
+    pagamento.aprovado_em = pagamento.aprovado_em or timezone.now()
+    pagamento.save()
+
+    if pagamento.tipo == 'assinatura':
+        profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
+        profile.subscription_plan = pagamento.plano
+        profile.save(update_fields=['subscription_plan'])
+        criar_notificacao(
+            usuario=pagamento.usuario,
+            tipo='pagamento',
+            titulo='Plano ativado',
+            mensagem=f'Seu plano {pagamento.plano} foi ativado com sucesso.',
+            link='/my-payments',
+        )
+    elif pagamento.tipo == 'acordo' and pagamento.acordo:
+        if pagamento.acordo.status_acordo != 'Cancelado':
+            pagamento.acordo.status_acordo = 'Ativo'
+            pagamento.acordo.save(update_fields=['status_acordo'])
+
+            _, freelancer = _partes_do_acordo(pagamento.acordo)
+            criar_notificacao(
+                usuario=freelancer,
+                tipo='pagamento',
+                titulo='Pagamento recebido',
+                mensagem=f'O pagamento do acordo "{pagamento.acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
+                link='/my-freelas',
+            )
+        else:
+            logger.warning(
+                'Pagamento aprovado após cancelamento do acordo %s; '
+                'o acordo permaneceu cancelado e exige análise financeira.',
+                pagamento.acordo_id,
+            )
+
+
 def _aprovar_checkout_academico(pagamento):
-    """Confirma localmente após o MP aceitar a criação do checkout."""
-    return _confirmar_pagamento({
-        'id': f'ACADEMIC-{uuid4().hex}',
-        'external_reference': pagamento.referencia_externa,
-        'transaction_amount': str(pagamento.valor),
-        'currency_id': 'BRL',
-        'status': 'approved',
-        'status_detail': 'checkout_criado_em_modo_academico',
-        'payment_method_id': 'simulacao_pagamento',
-    })
+    """Confirma localmente logo após criar a Checkout Session, sem depender
+    de completar o checkout de verdade no Stripe."""
+    with transaction.atomic():
+        pagamento = Pagamento.objects.select_for_update().get(pk=pagamento.pk)
+        if pagamento.status == 'pago':
+            return True
+        _aplicar_pagamento_aprovado(
+            pagamento,
+            external_id=f'ACADEMIC-{uuid4().hex}',
+            forma_pagamento='simulacao_pagamento',
+            detalhe_status='aprovado_em_ambiente_local',
+        )
+    return True
 
 
-def _registrar_cartao(usuario, payment_data):
-    card = payment_data.get('card') or {}
-    last_four = str(card.get('last_four_digits') or '').strip()
-    payment_method = str(payment_data.get('payment_method_id') or '').strip()
-    if not last_four or not payment_method:
-        return
-
-    cardholder = card.get('cardholder') or {}
-    CartaoUsuario.objects.update_or_create(
-        usuario=usuario,
-        bandeira=payment_method,
-        ultimos_quatro=last_four[-4:],
-        defaults={
-            'mp_card_id': str(card.get('id')) if card.get('id') else None,
-            'mes_expiracao': card.get('expiration_month'),
-            'ano_expiracao': card.get('expiration_year'),
-            'nome_titular': cardholder.get('name') or None,
-            'ativo': True,
-        },
-    )
-
-
-def _confirmar_pagamento(payment_data):
-    reference = payment_data.get('external_reference')
+def _confirmar_pagamento_stripe(session):
+    """Processa um evento `checkout.session.completed` do Stripe."""
+    reference = session.get('client_reference_id') or (session.get('metadata') or {}).get('reference')
     if not reference:
         return False
 
+    if session.get('payment_status') not in {'paid', 'no_payment_required'}:
+        return False
+
     try:
-        amount = Decimal(str(payment_data.get('transaction_amount')))
+        amount = (Decimal(session.get('amount_total')) / Decimal('100')).quantize(Decimal('0.01'))
     except (InvalidOperation, TypeError):
         return False
 
     with transaction.atomic():
         try:
-            pagamento = (
-                Pagamento.objects.select_for_update()
-                .get(referencia_externa=reference)
-            )
+            pagamento = Pagamento.objects.select_for_update().get(referencia_externa=reference)
         except Pagamento.DoesNotExist:
             return False
 
-        if amount != pagamento.valor or payment_data.get('currency_id') != 'BRL':
-            logger.warning('Pagamento Mercado Pago divergente para a referência %s.', reference)
-            return False
-
-        mp_status = payment_data.get('status')
-        pagamento.mp_payment_id = str(payment_data.get('id') or '')
-        pagamento.detalhe_status = payment_data.get('status_detail') or None
-        pagamento.forma_pagamento = payment_data.get('payment_method_id') or None
-
-        if mp_status == 'approved':
-            pagamento.status = 'pago'
-            pagamento.aprovado_em = pagamento.aprovado_em or timezone.now()
-            pagamento.save()
-
-            if pagamento.tipo == 'assinatura':
-                profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
-                profile.subscription_plan = pagamento.plano
-                profile.save(update_fields=['subscription_plan'])
-                criar_notificacao(
-                    usuario=pagamento.usuario,
-                    tipo='pagamento',
-                    titulo='Plano ativado',
-                    mensagem=f'Seu plano {pagamento.plano} foi ativado com sucesso.',
-                    link='/my-payments',
-                )
-            elif pagamento.tipo == 'acordo' and pagamento.acordo:
-                if pagamento.acordo.status_acordo != 'Cancelado':
-                    pagamento.acordo.status_acordo = 'Ativo'
-                    pagamento.acordo.save(update_fields=['status_acordo'])
-
-                    _, freelancer = _partes_do_acordo(pagamento.acordo)
-                    criar_notificacao(
-                        usuario=freelancer,
-                        tipo='pagamento',
-                        titulo='Pagamento recebido',
-                        mensagem=f'O pagamento do acordo "{pagamento.acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
-                        link='/my-freelas',
-                    )
-                else:
-                    logger.warning(
-                        'Pagamento aprovado após cancelamento do acordo %s; '
-                        'o acordo permaneceu cancelado e exige análise financeira.',
-                        pagamento.acordo_id,
-                    )
-
-            _registrar_cartao(pagamento.usuario, payment_data)
+        if pagamento.status == 'pago':
             return True
 
-        if mp_status in {'rejected', 'cancelled', 'refunded', 'charged_back'}:
-            pagamento.status = 'cancelado' if mp_status in {'cancelled', 'refunded'} else 'falhou'
-        else:
-            pagamento.status = 'pendente'
-        pagamento.save()
-        return False
+        if amount != pagamento.valor or (session.get('currency') or '').upper() != 'BRL':
+            logger.warning('Pagamento Stripe divergente para a referência %s.', reference)
+            return False
+
+        external_id = session.get('payment_intent') or session.get('subscription') or session.get('id')
+        _aplicar_pagamento_aprovado(pagamento, external_id=external_id, forma_pagamento='stripe')
+        return True
+
 
 class CriarPreferenciaAssinaturaAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1449,24 +1378,13 @@ class CriarPreferenciaAssinaturaAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        headers = _mercado_pago_headers()
-        if not headers:
-            return Response(
-                {'error': 'O checkout do Mercado Pago ainda não está configurado.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        return_urls = {
-            result: _checkout_return_url('assinatura', result)
-            for result in ('success', 'failure', 'pending')
-        }
-        if not all(return_urls.values()):
-            return Response(
-                {'error': 'Configure BACKEND_PUBLIC_URL com a URL HTTPS do ngrok.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
         plan = PLANOS_PAGOS[plano]
+        if not _stripe_configurado() or not plan['stripe_price']:
+            return Response(
+                {'error': 'O checkout do Stripe ainda não está configurado.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         reference = f'sub:{plano}:{request.user.id}:{uuid4().hex}'
         pagamento = Pagamento.objects.create(
             usuario=request.user,
@@ -1477,67 +1395,35 @@ class CriarPreferenciaAssinaturaAPI(APIView):
             plano=plan['nome'],
         )
 
-        payer_email = request.user.email
-        if _checkout_academico_habilitado():
-            payer_email = (
-                os.environ.get('MERCADO_PAGO_TEST_PAYER_EMAIL', '').strip()
-                or payer_email
-            )
-
-        body = {
-            'items': [{
-                'id': f'assinatura-{plano}',
-                'title': f"Assinatura mensal - Plano {plan['nome']}",
-                'description': 'Checkout simbólico de assinatura do projeto acadêmico',
-                'quantity': 1,
-                'unit_price': float(plan['valor']),
-                'currency_id': 'BRL',
-            }],
-            'payer': {'email': payer_email},
-            'back_urls': return_urls,
-            'auto_return': 'approved',
-            'external_reference': reference,
-        }
-        notification_url = _notification_url()
-        if notification_url:
-            body['notification_url'] = notification_url
-
         try:
-            mp_response = requests.post(
-                f'{MERCADO_PAGO_API}/checkout/preferences',
-                json=body,
-                headers={**headers, 'X-Idempotency-Key': reference},
-                timeout=15,
+            session = stripe.checkout.Session.create(
+                mode='subscription',
+                line_items=[{'price': plan['stripe_price'], 'quantity': 1}],
+                customer_email=request.user.email,
+                client_reference_id=reference,
+                metadata={'reference': reference},
+                success_url=_frontend_url('/my-payments?checkout=subscription'),
+                cancel_url=_frontend_url('/my-payments?checkout=cancelled'),
+                idempotency_key=reference,
             )
-        except requests.RequestException:
+        except stripe.error.StripeError as exc:
             pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'mercado_pago_indisponivel'
+            pagamento.detalhe_status = 'stripe_indisponivel'
             pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
             return Response(
-                {'error': 'Não foi possível conectar ao Mercado Pago. Tente novamente.'},
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        data = _response_json(mp_response)
-        checkout_url = data.get('init_point') or data.get('sandbox_init_point')
-        if mp_response.status_code not in (200, 201) or not checkout_url:
-            pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'erro_criacao_checkout'
-            pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
-            return Response(
-                {'error': _checkout_response_error(mp_response)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        pagamento.mp_preference_id = data.get('id')
-        pagamento.checkout_url = checkout_url
+        pagamento.mp_preference_id = session.id
+        pagamento.checkout_url = session.url
         pagamento.save(update_fields=['mp_preference_id', 'checkout_url', 'atualizado_em'])
         test_approved = False
         if _checkout_academico_habilitado():
             test_approved = _aprovar_checkout_academico(pagamento)
         return Response({
             'checkout_required': True,
-            'init_point': checkout_url,
+            'init_point': session.url,
             'reference': reference,
             'test_approved': test_approved,
         })
@@ -1608,20 +1494,9 @@ class CriarPreferenciaAcordoAPI(APIView):
                 'test_approved': test_approved,
             })
 
-        headers = _mercado_pago_headers()
-        if not headers:
+        if not _stripe_configurado():
             return Response(
-                {'error': 'O checkout do Mercado Pago ainda não está configurado.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        return_urls = {
-            result: _checkout_return_url('acordo', result)
-            for result in ('success', 'failure', 'pending')
-        }
-        if not all(return_urls.values()):
-            return Response(
-                {'error': 'Configure BACKEND_PUBLIC_URL com a URL HTTPS do ngrok.'},
+                {'error': 'O checkout do Stripe ainda não está configurado.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -1635,60 +1510,45 @@ class CriarPreferenciaAcordoAPI(APIView):
             acordo=acordo,
         )
 
-        body = {
-            'items': [{
-                'id': f'acordo-{acordo.id}',
-                'title': f'Serviço freelancer - {acordo.titulo_anuncio}',
-                'description': acordo.descricao_servico or 'Pagamento de serviço freelancer',
-                'quantity': 1,
-                'unit_price': float(price),
-                'currency_id': 'BRL',
-            }],
-            'payer': {'email': request.user.email},
-            'back_urls': return_urls,
-            'auto_return': 'approved',
-            'external_reference': reference,
-        }
-        notification_url = _notification_url()
-        if notification_url:
-            body['notification_url'] = notification_url
-
         try:
-            mp_response = requests.post(
-                f'{MERCADO_PAGO_API}/checkout/preferences',
-                json=body,
-                headers={**headers, 'X-Idempotency-Key': reference},
-                timeout=15,
+            session = stripe.checkout.Session.create(
+                mode='payment',
+                line_items=[{
+                    'price_data': {
+                        'currency': 'brl',
+                        'product_data': {
+                            'name': f'Serviço freelancer - {acordo.titulo_anuncio}',
+                            'description': (acordo.descricao_servico or 'Pagamento de serviço freelancer')[:500],
+                        },
+                        'unit_amount': int(price * 100),
+                    },
+                    'quantity': 1,
+                }],
+                customer_email=request.user.email,
+                client_reference_id=reference,
+                metadata={'reference': reference},
+                success_url=_frontend_url('/my-freelas?checkout=success'),
+                cancel_url=_frontend_url('/my-freelas?checkout=failure'),
+                idempotency_key=reference,
             )
-        except requests.RequestException:
+        except stripe.error.StripeError as exc:
             pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'mercado_pago_indisponivel'
+            pagamento.detalhe_status = 'stripe_indisponivel'
             pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
             return Response(
-                {'error': 'Não foi possível conectar ao Mercado Pago. Tente novamente.'},
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        data = _response_json(mp_response)
-        checkout_url = data.get('init_point') or data.get('sandbox_init_point')
-        if mp_response.status_code not in (200, 201) or not checkout_url:
-            pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'erro_criacao_checkout'
-            pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
-            return Response(
-                {'error': _checkout_response_error(mp_response)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        pagamento.mp_preference_id = data.get('id')
-        pagamento.checkout_url = checkout_url
+        pagamento.mp_preference_id = session.id
+        pagamento.checkout_url = session.url
         pagamento.save(update_fields=['mp_preference_id', 'checkout_url', 'atualizado_em'])
         test_approved = False
         if _checkout_academico_habilitado():
             test_approved = _aprovar_checkout_academico(pagamento)
         return Response({
             'checkout_required': True,
-            'init_point': checkout_url,
+            'init_point': session.url,
             'reference': reference,
             'test_approved': test_approved,
         })
@@ -1700,7 +1560,7 @@ class SimularPagamentoAcordoAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
-        test_mode = os.environ.get('MERCADO_PAGO_TEST_MODE', '').strip().lower()
+        test_mode = os.environ.get('PAGAMENTOS_TEST_MODE', '').strip().lower()
         if not settings.DEBUG or test_mode not in {'1', 'true', 'yes', 'on'}:
             return Response(
                 {'error': 'A simulação de pagamento não está habilitada.'},
@@ -1756,25 +1616,14 @@ class SimularPagamentoAcordoAPI(APIView):
                     acordo=acordo,
                 )
 
-            pagamento.status = 'pago'
             pagamento.valor = amount
-            pagamento.mp_payment_id = f'LOCAL-TEST-{uuid4().hex}'
-            pagamento.forma_pagamento = 'simulacao_pagamento'
-            pagamento.detalhe_status = 'aprovado_em_ambiente_local'
-            pagamento.aprovado_em = pagamento.aprovado_em or timezone.now()
-            pagamento.save()
-
-            acordo.status_acordo = 'Ativo'
-            acordo.save(update_fields=['status_acordo'])
-
-            _, freelancer = _partes_do_acordo(acordo)
-            criar_notificacao(
-                usuario=freelancer,
-                tipo='pagamento',
-                titulo='Pagamento recebido',
-                mensagem=f'O pagamento do acordo "{acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
-                link='/my-freelas',
+            _aplicar_pagamento_aprovado(
+                pagamento,
+                external_id=f'LOCAL-TEST-{uuid4().hex}',
+                forma_pagamento='simulacao_pagamento',
+                detalhe_status='aprovado_em_ambiente_local',
             )
+            acordo.refresh_from_db()
 
         return Response({
             'message': 'Pagamento de teste aprovado e acordo movido para Em Andamento.',
@@ -1783,43 +1632,35 @@ class SimularPagamentoAcordoAPI(APIView):
         })
 
 
-class MercadoPagoWebhookAPI(APIView):
+class StripeWebhookAPI(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
-        payment_id = request.data.get('data', {}).get('id') or request.query_params.get('id')
-        topic = request.data.get('type') or request.query_params.get('topic')
-
-        if not payment_id or (topic and topic != 'payment'):
-            return Response({'status': 'ignored'})
-
-        headers = _mercado_pago_headers()
-        if not headers:
+        webhook_secret = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
+        if not webhook_secret:
             return Response(
-                {'error': 'Credencial do Mercado Pago não configurada.'},
+                {'error': 'Webhook do Stripe não configurado.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         try:
-            mp_response = requests.get(
-                f'{MERCADO_PAGO_API}/v1/payments/{payment_id}',
-                headers=headers,
-                timeout=15,
+            event = stripe.Webhook.construct_event(
+                request.body,
+                request.META.get('HTTP_STRIPE_SIGNATURE', ''),
+                webhook_secret,
             )
-        except requests.RequestException:
+        except (ValueError, stripe.error.SignatureVerificationError):
             return Response(
-                {'error': 'Falha temporária ao consultar o Mercado Pago.'},
-                status=status.HTTP_502_BAD_GATEWAY,
+                {'error': 'Assinatura do webhook inválida.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if mp_response.status_code != 200:
-            return Response(
-                {'error': 'Pagamento não encontrado no Mercado Pago.'},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        if event['type'] == 'checkout.session.completed':
+            processed = _confirmar_pagamento_stripe(event['data']['object'])
+            return Response({'status': 'processed' if processed else 'received'})
 
-        processed = _confirmar_pagamento(mp_response.json())
-        return Response({'status': 'processed' if processed else 'received'})
+        return Response({'status': 'ignored'})
 
 
 class PagamentoHistoricoAPIView(generics.ListAPIView):

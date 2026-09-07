@@ -75,13 +75,13 @@ export default function MyPayments() {
 
     const paymentStatus = params.get('status');
     if (paymentStatus === 'approved') {
-      setCheckoutMessage('Pagamento enviado. Seu plano será atualizado após a confirmação do Mercado Pago.');
+      setCheckoutMessage('Pagamento enviado. Seu plano será atualizado após a confirmação do Stripe.');
     } else if (paymentStatus === 'pending') {
-      setCheckoutMessage('O pagamento da assinatura está em análise no Mercado Pago.');
+      setCheckoutMessage('O pagamento da assinatura está em análise no Stripe.');
     } else if (paymentStatus) {
       setCheckoutMessage('A assinatura não foi concluída. Você pode tentar novamente.');
     } else {
-      setCheckoutMessage('Checkout finalizado. Aguardando a confirmação do Mercado Pago.');
+      setCheckoutMessage('Checkout finalizado. Aguardando a confirmação do Stripe.');
     }
     window.history.replaceState({}, document.title, window.location.pathname);
   }, []);
@@ -110,6 +110,8 @@ export default function MyPayments() {
       visa: 'Visa',
       elo: 'Elo',
       hipercard: 'Hipercard',
+      stripe: 'Stripe',
+      simulacao_pagamento: 'Simulado (modo de teste)',
     };
     return brands[String(brand).toLowerCase()] || brand;
   };
@@ -162,9 +164,9 @@ export default function MyPayments() {
           <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', background: 'rgba(12, 140, 233, 0.03)', border: '1px dashed var(--border-color)' }}>
             <Shield size={36} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '4px' }} />
             <div>
-              <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Pagamento protegido pelo Mercado Pago</h2>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Pagamento protegido pelo Stripe</h2>
               <p style={{ margin: 0, fontSize: '0.95rem', opacity: 0.8, lineHeight: '1.5' }}>
-                O checkout acontece no Mercado Pago. O Freelas guarda somente bandeira, final e validade para você reconhecer seus cartões — nunca o número completo ou o código de segurança.
+                O checkout acontece no Stripe. O Freelas guarda somente bandeira, final e validade para você reconhecer seus cartões — nunca o número completo ou o código de segurança.
               </p>
             </div>
           </div>
@@ -218,7 +220,7 @@ export default function MyPayments() {
                               {payment.tipo === 'assinatura' ? `Assinatura ${payment.plano || ''}` : 'Serviço freelancer'}
                             </td>
                             <td style={{ padding: '1rem 0.5rem', fontSize: '0.9rem' }}>
-                              {payment.forma_pagamento ? formatBrand(payment.forma_pagamento) : 'Mercado Pago'}
+                              {payment.forma_pagamento ? formatBrand(payment.forma_pagamento) : 'Stripe'}
                             </td>
                             <td style={{ padding: '1rem 0.5rem', fontWeight: 'bold' }}>
                               {formatCurrency(payment.valor)}
@@ -235,7 +237,7 @@ export default function MyPayments() {
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>
-                    Nenhuma transação aprovada ainda. Pagamentos pendentes só aparecem após a confirmação do Mercado Pago.
+                    Nenhuma transação aprovada ainda. Pagamentos pendentes só aparecem após a confirmação do Stripe.
                   </div>
                 )}
               </div>
@@ -243,7 +245,7 @@ export default function MyPayments() {
               <div role="tabpanel" className="tab-content-animation">
                 <h2 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Meus cartões</h2>
                 <p style={{ marginTop: 0, marginBottom: '1rem', opacity: 0.7, fontSize: '0.9rem' }}>
-                  Cartões identificados em pagamentos aprovados pelo Mercado Pago.
+                  Cartões identificados em pagamentos aprovados pelo Stripe.
                 </p>
                 {cards.length > 0 ? (
                   <div style={{ overflowX: 'auto' }}>

@@ -45,7 +45,7 @@ export default function SubscriptionSetup() {
     e.preventDefault();
     const checkoutWindow = selectedPlanId === 'free' ? null : window.open('', '_blank');
     if (selectedPlanId !== 'free' && !checkoutWindow) {
-      await alerta('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
+      await alerta('Permita pop-ups para abrir o checkout do Stripe em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
       return;
     }
 
@@ -76,7 +76,7 @@ export default function SubscriptionSetup() {
         } else if (!data.checkout_required) {
           navigate('/');
         } else {
-          throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+          throw new Error('O Stripe não retornou o endereço do checkout.');
         }
       } else {
         if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
@@ -165,7 +165,7 @@ export default function SubscriptionSetup() {
         <p style={{ marginBottom: '2rem', opacity: 0.8 }}>
           {selectedPlanId === 'free'
             ? 'Você selecionou o Plano Gratuito. Clique abaixo para concluir.'
-            : `Você selecionou o plano ${plans.find(p => p.id === selectedPlanId)?.name}. Você será redirecionado ao Mercado Pago para realizar o pagamento.`
+            : `Você selecionou o plano ${plans.find(p => p.id === selectedPlanId)?.name}. Você será redirecionado ao Stripe para realizar o pagamento.`
           }
         </p>
         <form onSubmit={handleCompleteSetup}>

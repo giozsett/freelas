@@ -43,7 +43,7 @@ export default function Plans() {
   const handleSubscribe = async (planId) => {
     const checkoutWindow = planId === 'free' ? null : window.open('', '_blank');
     if (planId !== 'free' && !checkoutWindow) {
-      await alerta('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
+      await alerta('Permita pop-ups para abrir o checkout do Stripe em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
       return;
     }
 
@@ -72,7 +72,7 @@ export default function Plans() {
       } else if (!data.checkout_required) {
         navigate('/my-payments');
       } else {
-        throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+        throw new Error('O Stripe não retornou o endereço do checkout.');
       }
     } catch (err) {
       if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();

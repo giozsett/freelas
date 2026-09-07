@@ -9,7 +9,6 @@ from .models import (
     Ad,
     AcordoServico,
     Avaliacao,
-    CartaoUsuario,
     Candidatura,
     Pagamento,
     Report,
@@ -20,14 +19,19 @@ from .models import (
 )
 
 
-class MercadoPagoResponse:
-    def __init__(self, status_code, data):
-        self.status_code = status_code
-        self._data = data
-        self.content = b'{}'
+class FakeStripeSession(dict):
+    """Simula o objeto retornado por stripe.checkout.Session.create nos testes."""
 
-    def json(self):
-        return self._data
+    def __init__(self, id, url):
+        super().__init__(id=id, url=url)
+        self.id = id
+        self.url = url
+
+
+FAKE_PLANOS_PAGOS = {
+    'gold': {'nome': 'Gold', 'valor': Decimal('29.90'), 'stripe_price': 'price_test_gold'},
+    'platinum': {'nome': 'Platinum', 'valor': Decimal('79.90'), 'stripe_price': 'price_test_platinum'},
+}
 
 
 class PagamentoAPITests(TestCase):
@@ -68,17 +72,10 @@ class PagamentoAPITests(TestCase):
             descricao_servico='Site institucional',
         )
 
-    @override_settings(DEBUG=False)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-    })
-    @patch('core.views.requests.post')
-    def test_contratante_abre_checkout_do_valor_integral(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'pref-1', 'init_point': 'https://mercadopago.com/checkout/1'},
-        )
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_contratante_abre_checkout_do_valor_integral(self, create):
+        create.return_value = FakeStripeSession('cs_test_1', 'https://checkout.stripe.com/c/pay/cs_test_1')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -89,14 +86,12 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['checkout_required'])
+        self.assertEqual(create.call_args.kwargs['mode'], 'payment')
         self.assertEqual(
-            post.call_args.kwargs['json']['items'][0]['unit_price'],
-            1250.0,
+            create.call_args.kwargs['line_items'][0]['price_data']['unit_amount'],
+            125000,
         )
-        self.assertEqual(
-            post.call_args.kwargs['json']['back_urls']['success'],
-            'https://teste.ngrok-free.dev/api/pagamentos/retorno/acordo/success/',
-        )
+        self.assertEqual(response.data['init_point'], 'https://checkout.stripe.com/c/pay/cs_test_1')
         pagamento = Pagamento.objects.get(acordo=self.acordo)
         self.assertEqual(pagamento.valor, Decimal('1250.00'))
         self.assertEqual(pagamento.status, 'pendente')
@@ -105,11 +100,6 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(history.status_code, 200)
         self.assertEqual(history.data, [])
 
-    @override_settings(DEBUG=False)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-    })
     def test_freelancer_nao_pode_pagar_como_contratante(self):
         self.client.force_authenticate(self.freelancer)
 
@@ -122,9 +112,9 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Pagamento.objects.exists())
 
-    @patch.dict('os.environ', {'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token'})
-    @patch('core.views.requests.get')
-    def test_webhook_aprova_ativa_acordo_e_registra_cartao(self, get):
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_webhook_aprova_pagamento_e_ativa_acordo(self, construct_event):
         pagamento = Pagamento.objects.create(
             usuario=self.contratante,
             tipo='acordo',
@@ -133,26 +123,20 @@ class PagamentoAPITests(TestCase):
             referencia_externa='acordo:test:1',
             acordo=self.acordo,
         )
-        get.return_value = MercadoPagoResponse(200, {
-            'id': 987654,
-            'status': 'approved',
-            'status_detail': 'accredited',
-            'external_reference': pagamento.referencia_externa,
-            'transaction_amount': 1250,
-            'currency_id': 'BRL',
-            'payment_method_id': 'visa',
-            'card': {
-                'id': 'card-123',
-                'last_four_digits': '4242',
-                'expiration_month': 12,
-                'expiration_year': 2030,
-                'cardholder': {'name': 'CLIENTE TESTE'},
-            },
-        })
+        construct_event.return_value = {
+            'type': 'checkout.session.completed',
+            'data': {'object': {
+                'client_reference_id': pagamento.referencia_externa,
+                'amount_total': 125000,
+                'currency': 'brl',
+                'payment_status': 'paid',
+                'payment_intent': 'pi_teste123',
+            }},
+        }
 
         response = self.client.post(
             '/api/pagamentos/webhook/',
-            {'type': 'payment', 'data': {'id': '987654'}},
+            {},
             format='json',
         )
 
@@ -161,30 +145,19 @@ class PagamentoAPITests(TestCase):
         pagamento.refresh_from_db()
         self.acordo.refresh_from_db()
         self.assertEqual(pagamento.status, 'pago')
+        self.assertEqual(pagamento.mp_payment_id, 'pi_teste123')
         self.assertIsNotNone(pagamento.aprovado_em)
         self.assertEqual(self.acordo.status_acordo, 'Ativo')
-        card = CartaoUsuario.objects.get(usuario=self.contratante)
-        self.assertEqual(card.bandeira, 'visa')
-        self.assertEqual(card.ultimos_quatro, '4242')
 
         self.client.force_authenticate(self.contratante)
         history = self.client.get('/api/pagamentos/historico/')
-        cards = self.client.get('/api/pagamentos/cartoes/')
         self.assertEqual(len(history.data), 1)
-        self.assertEqual(len(cards.data), 1)
-        self.assertNotIn('mp_card_id', cards.data[0])
 
-    @override_settings(DEBUG=False)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-    })
-    @patch('core.views.requests.post')
-    def test_plano_pago_abre_checkout_recorrente_sem_alterar_perfil(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'subscription-1', 'init_point': 'https://mercadopago.com/subscription/1'},
-        )
+    @patch.dict('core.views.PLANOS_PAGOS', FAKE_PLANOS_PAGOS)
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_plano_pago_abre_checkout_recorrente_sem_alterar_perfil(self, create):
+        create.return_value = FakeStripeSession('cs_test_2', 'https://checkout.stripe.com/c/pay/cs_test_2')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -196,36 +169,21 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.contratante.profile.refresh_from_db()
         self.assertEqual(self.contratante.profile.subscription_plan, 'Gratuito')
-        self.assertEqual(
-            post.call_args.kwargs['json']['items'][0]['unit_price'],
-            29.9,
-        )
-        self.assertEqual(
-            post.call_args.kwargs['json']['back_urls']['success'],
-            'https://teste.ngrok-free.dev/api/pagamentos/retorno/assinatura/success/',
-        )
-        self.assertEqual(
-            post.call_args.args[0],
-            'https://api.mercadopago.com/checkout/preferences',
-        )
+        self.assertEqual(create.call_args.kwargs['mode'], 'subscription')
+        self.assertEqual(create.call_args.kwargs['line_items'][0]['price'], 'price_test_gold')
+        self.assertEqual(create.call_args.kwargs['customer_email'], self.contratante.email)
         self.assertEqual(
             Pagamento.objects.get(usuario=self.contratante).status,
             'pendente',
         )
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-        'MERCADO_PAGO_TEST_MODE': 'true',
-        'MERCADO_PAGO_TEST_PAYER_EMAIL': 'comprador@testuser.com',
-    })
-    @patch('core.views.requests.post')
-    def test_checkout_academico_aprova_assinatura_ao_criar_link(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'subscription-test', 'init_point': 'https://mercadopago.com/subscription/test'},
-        )
+    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
+    @patch.dict('core.views.PLANOS_PAGOS', FAKE_PLANOS_PAGOS)
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_checkout_academico_aprova_assinatura_ao_criar_link(self, create):
+        create.return_value = FakeStripeSession('cs_test_3', 'https://checkout.stripe.com/c/pay/cs_test_3')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -236,10 +194,7 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['test_approved'])
-        self.assertEqual(
-            post.call_args.kwargs['json']['payer']['email'],
-            'comprador@testuser.com',
-        )
+        self.assertEqual(create.call_args.kwargs['customer_email'], self.contratante.email)
         self.contratante.profile.refresh_from_db()
         self.assertEqual(self.contratante.profile.subscription_plan, 'Platinum')
         pagamento = Pagamento.objects.get(usuario=self.contratante)
@@ -247,17 +202,11 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-        'MERCADO_PAGO_TEST_MODE': 'true',
-    })
-    @patch('core.views.requests.post')
-    def test_checkout_academico_registra_pagamento_e_inicia_acordo(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'preference-test', 'init_point': 'https://mercadopago.com/checkout/test'},
-        )
+    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_checkout_academico_registra_pagamento_e_inicia_acordo(self, create):
+        create.return_value = FakeStripeSession('cs_test_4', 'https://checkout.stripe.com/c/pay/cs_test_4')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -275,7 +224,7 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
         self.assertEqual(
             response.data['init_point'],
-            'https://mercadopago.com/checkout/test',
+            'https://checkout.stripe.com/c/pay/cs_test_4',
         )
 
     def test_plano_gratuito_nao_exige_checkout(self):
@@ -420,7 +369,7 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 409)
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {'MERCADO_PAGO_TEST_MODE': 'true'})
+    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
     def test_acordo_ativo_legado_pode_ser_concluido_no_ambiente_local(self):
         self.acordo.status_acordo = 'Ativo'
         self.acordo.save(update_fields=['status_acordo'])
@@ -654,16 +603,8 @@ class PagamentoAPITests(TestCase):
         self.assertTrue(self.acordo.tem_solicitacao)
         self.assertEqual(self.acordo.valor_acordado, 1250)
 
-    def test_retorno_publico_redireciona_para_frontend_local(self):
-        response = self.client.get('/api/pagamentos/retorno/acordo/success/')
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            response.url,
-            'http://localhost:5173/my-freelas?checkout=success',
-        )
-
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {'MERCADO_PAGO_TEST_MODE': 'true'})
+    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
     def test_simulacao_local_aprova_pagamento_e_ativa_acordo(self):
         self.client.force_authenticate(self.contratante)
 
