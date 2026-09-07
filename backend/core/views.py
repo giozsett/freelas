@@ -1,4 +1,3 @@
-import email
 from django.conf import settings
 from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
@@ -12,8 +11,6 @@ from .serializers import UserSerializer, RegisterSerializer
 from google.oauth2 import id_token
 import os
 from google.auth.transport import requests as google_requests
-from rest_framework.authtoken.models import Token
-from django.contrib.auth.models import User
 from .serializers import UserProfileSerializer, FotoPerfilSerializer
 from .models import UserProfile
 from .serializers import CandidaturaSerializer
@@ -97,51 +94,52 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
         profile, created = UserProfile.objects.get_or_create(user=self.request.user)
         return profile
 
+    def update(self, request, *args, **kwargs):
+        profile = self.get_object()
+        foto_file = request.FILES.get('foto_perfil')
+        if foto_file in (None, ''):
+            if request.data.get('foto_perfil') is None:
+                self._deletar_imagem_antiga(profile.foto_perfil)
+                profile.foto_perfil = None
+                profile.save(update_fields=['foto_perfil', 'atualizado_em'])
+                return Response({'foto_perfil': None}, status=status.HTTP_200_OK)
+            return Response({'error': 'Nenhum arquivo de imagem enviado.'}, status=status.HTTP_400_BAD_REQUEST)
 
-class CertificadoListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = CertificadoSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+        if foto_file.size > 2 * 1024 * 1024:
+            return Response({'error': 'A foto de perfil não pode exceder 2 MB.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    def get_queryset(self):
-        return Certificado.objects.filter(usuario__user=self.request.user).order_by('-criado_em')
+        url = self._subir_cloudinary(foto_file, 'fotos_perfil')
+        if not url:
+            return Response({'error': 'Não foi possível enviar a imagem.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    def perform_create(self, serializer):
-        serializer.save(usuario=self.request.user.profile)
+        self._deletar_imagem_antiga(profile.foto_perfil)
+        profile.foto_perfil = url
+        profile.save(update_fields=['foto_perfil', 'atualizado_em'])
+        return Response({'foto_perfil': url}, status=status.HTTP_200_OK)
 
+    @staticmethod
+    def _subir_cloudinary(arquivo, pasta):
+        import cloudinary.uploader
+        try:
+            resposta = cloudinary.uploader.upload(
+                arquivo,
+                folder=pasta,
+                resource_type='image',
+            )
+            return resposta.get('secure_url') or resposta.get('url')
+        except Exception:
+            return None
 
-class CertificadoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = CertificadoSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
-
-    def get_queryset(self):
-        return Certificado.objects.filter(usuario__user=self.request.user)
-
-
-class InstituicaoEnsinoListAPIView(generics.ListAPIView):
-    queryset = InstituicaoEnsino.objects.filter(verificado=True)
-    serializer_class = InstituicaoEnsinoSerializer
-    permission_classes = [permissions.AllowAny]
-
-
-class ExperienciaListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = ExperienciaSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Experiencia.objects.filter(usuario__user=self.request.user).order_by('-data_inicio')
-
-    def perform_create(self, serializer):
-        serializer.save(usuario=self.request.user.profile)
-
-
-class ExperienciaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = ExperienciaSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Experiencia.objects.filter(usuario__user=self.request.user)
+    @staticmethod
+    def _deletar_imagem_antiga(url):
+        if not url or 'res.cloudinary.com' not in url:
+            return
+        import cloudinary.uploader
+        try:
+            public_id = url.split('/image/upload/')[-1].split('?')[0]
+            cloudinary.uploader.destroy(public_id, resource_type='image', invalidate=True)
+        except Exception:
+            pass
 
 
 class CertificadoListCreateAPIView(generics.ListCreateAPIView):
