@@ -137,6 +137,9 @@ class Report(models.Model):
     type = models.CharField(max_length=20, choices=REPORT_TYPES, null=True, blank=True)
     target_id = models.CharField(max_length=50, null=True, blank=True)
     target_name = models.CharField(max_length=200, null=True, blank=True)
+    reporter = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='denuncias_enviadas'
+    )
     
     category = models.CharField(max_length=100, null=True, blank=True)
     comment = models.TextField(null=True, blank=True)
@@ -552,6 +555,32 @@ class Experiencia(models.Model):
 
     def __str__(self):
         return f"{self.cargo} na {self.empresa}"
+
+
+class MensagemChat(models.Model):
+    """Mensagem do chat de um acordo — persistida no Postgres.
+
+    O chat é sempre entre duas partes (contratante e freelancer), então
+    "lida" representa se a outra parte já viu a mensagem (não precisa de
+    um contador por usuário como numa conversa em grupo).
+    """
+
+    acordo = models.ForeignKey(AcordoServico, on_delete=models.CASCADE, related_name='mensagens_chat')
+    remetente = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mensagens_chat_enviadas')
+    texto = models.TextField(max_length=2000)
+    lida = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'mensagens_chat'
+        ordering = ['criado_em']
+        indexes = [
+            models.Index(fields=['acordo', 'criado_em'], name='chat_acordo_criado_idx'),
+            models.Index(fields=['acordo', 'lida'], name='chat_acordo_lida_idx'),
+        ]
+
+    def __str__(self):
+        return f"Mensagem de {self.remetente_id} no acordo {self.acordo_id}"
 
 
 class Notificacao(models.Model):

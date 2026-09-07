@@ -595,7 +595,7 @@ export default function EditProfile() {
 
           {/* Profile Picture */}
           <div data-section="identidade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <div style={{
+            <div className="avatar-clickable" style={{
               position: 'relative',
               width: '120px',
               height: '120px',

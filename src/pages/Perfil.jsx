@@ -102,18 +102,18 @@ export default function Profile() {
 
   return (
     <div className="profile-page">
-      <div className="card profile-card">
+      <div className="card profile-card fade-in">
         {/* Banner */}
           <div className="profile-banner" style={{
             aspectRatio: '4 / 1',
-            background: profile.banner ? `url(${profile.banner}) center/cover no-repeat` : '#e0e0e0',
+            background: profile.banner ? `url(${profile.banner}) center/cover no-repeat` : 'var(--border-color)',
             borderRadius: '12px 12px 0 0',
           }} />
 
         <div className="profile-header" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start', marginBottom: '2rem' }}>
           <div style={{ marginTop: profile.banner ? '-40px' : '0', width: '150px', height: '150px', borderRadius: '50%', background: 'var(--holo-gradient)', border: '4px solid var(--surface-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {profile.foto_perfil ? (
-              <img src={profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+              <img src={profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
                 {userContext.name.charAt(0)}
@@ -131,9 +131,9 @@ export default function Profile() {
                 borderRadius: '20px',
                 fontSize: '0.85rem',
                 fontWeight: '600',
-                background: profile.disponivel ? '#2ecc7120' : '#e74c3c20',
-                color: profile.disponivel ? '#2ecc71' : '#e74c3c',
-                border: `1px solid ${profile.disponivel ? '#2ecc7130' : '#e74c3c30'}`
+                background: profile.disponivel ? 'var(--success-soft)' : 'var(--danger-soft)',
+                color: profile.disponivel ? 'var(--success-color)' : 'var(--danger-color)',
+                border: `1px solid ${profile.disponivel ? 'var(--success-color)' : 'var(--danger-color)'}`
               }}>
                 {profile.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
                 {profile.disponivel ? 'Disponível' : 'Indisponível'}
@@ -157,7 +157,7 @@ export default function Profile() {
                   <div key={item.key} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <span className={`badge ${item.className}`} style={{ color: 'white' }}>{item.label}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 'bold' }}>
-                      <Star fill={summary.nota ? 'currentColor' : 'transparent'} size={19} color="#f1c40f" />
+                      <Star fill={summary.nota ? 'currentColor' : 'transparent'} size={19} color="var(--warning-color)" />
                       {summary.nota ?? '—'} ({summary.total})
                     </span>
                   </div>

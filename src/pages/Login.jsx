@@ -72,7 +72,7 @@ export default function Login() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-        <div className="card">
+        <div className="card fade-in">
           <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
@@ -91,16 +91,8 @@ export default function Login() {
                 <label style={{ fontWeight: '500' }}>Senha</label>
                 <button
                   type="button"
+                  className="password-toggle"
                   onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-primary, #333)',
-                    cursor: 'pointer',
-                    padding: '0',
-                    fontSize: '0.8rem',
-                    [':focus']: { outline: 'none' }
-                  }}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -117,7 +109,7 @@ export default function Login() {
                 Esqueci minha senha
               </Link>
             </div>
-            {errorMsg && <div style={{ color: 'red', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
+            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '1rem', width: '100%' }}>
               Entrar
             </button>

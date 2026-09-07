@@ -47,5 +47,7 @@ Next_Steps.md
 Testes.md
 roteiro.txt
 roteiro2.txt
-Implementation.md
-supabase-migrationbackend/.env.bak
+supabase-migration
+backend/.env.bak
+
+/historico

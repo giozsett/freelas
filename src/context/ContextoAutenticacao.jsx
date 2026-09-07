@@ -18,10 +18,16 @@ export const AuthProvider = ({ children }) => {
       })
       .then(res => {
         if (res.ok) return res.json();
-        throw new Error('Token is invalid');
+        // Só desloga se o servidor realmente rejeitou o token (401/403).
+        // Outros erros (500, rede, etc.) podem ser transitórios e não
+        // devem apagar uma sessão válida.
+        if (res.status === 401 || res.status === 403) {
+          throw new Error('Token is invalid');
+        }
+        return null;
       })
       .then(data => {
-        setUser(data);
+        if (data) setUser(data);
       })
       .catch(err => {
         console.error(err);
