@@ -206,7 +206,7 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         from django.db.models import Case, IntegerField, Value, When
 
-        queryset = Report.objects.annotate(
+        queryset = Report.objects.select_related('reporter').annotate(
             status_order=Case(
                 When(status='pending', then=Value(0)),
                 When(status='procedente', then=Value(1)),
@@ -222,8 +222,11 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        # Uma denúncia nova nunca pode chegar do cliente já julgada.
-        serializer.save(status='pending')
+        # Uma denúncia nova nunca pode chegar do cliente já julgada, e quem
+        # denunciou é sempre o usuário autenticado (nunca o que o cliente
+        # mandar no corpo) — reporter já é read-only no serializer.
+        reporter = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(status='pending', reporter=reporter)
 
 class ReportUpdateAPIView(generics.UpdateAPIView):
     queryset = Report.objects.all()
@@ -242,6 +245,48 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
         report.status = new_status
         report.save(update_fields=['status'])
         return Response(self.get_serializer(report).data)
+
+
+# Limite de anúncios que cada plano de assinatura pode publicar por mês.
+# None = sem limite (plano Platinum).
+LIMITE_ANUNCIOS_MENSAL = {
+    'Gratuito': 3,
+    'Gold': 10,
+    'Platinum': None,
+}
+
+MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO = (
+    'Você já atingiu seu limite de postagem de anúncios esse mês, '
+    'atualize seu plano para postar mais anúncios.'
+)
+
+
+def _status_limite_anuncios(user):
+    profile = getattr(user, 'profile', None)
+    plano = (profile.subscription_plan if profile else None) or 'Gratuito'
+    limite = LIMITE_ANUNCIOS_MENSAL.get(plano, LIMITE_ANUNCIOS_MENSAL['Gratuito'])
+
+    usados = 0
+    if limite is not None:
+        inicio_mes = _mes_inicio(timezone.now())
+        usados = Ad.objects.exclude(deletado=True).filter(
+            author=user,
+            created_at__gte=inicio_mes,
+        ).count()
+
+    return {
+        'plano': plano,
+        'limite': limite,
+        'usados': usados,
+        'atingiu_limite': limite is not None and usados >= limite,
+    }
+
+
+class AdLimiteMensalAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response(_status_limite_anuncios(request.user))
 
 
 class AdListCreateAPIView(generics.ListCreateAPIView):
@@ -274,7 +319,13 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        from rest_framework.exceptions import ValidationError
+
+        user = self.request.user
+        if _status_limite_anuncios(user)['atingiu_limite']:
+            raise ValidationError(MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO)
+
+        serializer.save(author=user)
 
 class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdSerializer
@@ -895,11 +946,21 @@ class SolicitacaoCancelamentoAdminListAPIView(generics.ListAPIView):
     pagination_class = SolicitacoesAdminPagination
 
     def get_queryset(self):
+        from django.db.models import Case, IntegerField, Value, When
+
         queryset = SolicitacaoCancelamentoAcordo.objects.select_related(
             'acordo',
             'solicitante',
             'analisado_por',
-        ).order_by('-criado_em')
+        ).annotate(
+            status_order=Case(
+                When(status='pendente', then=Value(0)),
+                When(status='aprovada', then=Value(1)),
+                When(status='recusada', then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            ),
+        ).order_by('status_order', '-criado_em')
         status_filtro = self.request.query_params.get('status')
         if status_filtro in {'pendente', 'aprovada', 'recusada'}:
             queryset = queryset.filter(status=status_filtro)
@@ -970,11 +1031,21 @@ class SolicitacaoAlteracaoAdminListAPIView(generics.ListAPIView):
     pagination_class = SolicitacoesAdminPagination
 
     def get_queryset(self):
+        from django.db.models import Case, IntegerField, Value, When
+
         queryset = SolicitacaoAlteracaoAcordo.objects.select_related(
             'acordo',
             'solicitante',
             'decidido_por',
-        ).order_by('-criado_em')
+        ).annotate(
+            status_order=Case(
+                When(status='pendente', then=Value(0)),
+                When(status='aprovada', then=Value(1)),
+                When(status='recusada', then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            ),
+        ).order_by('status_order', '-criado_em')
         status_filtro = self.request.query_params.get('status')
         if status_filtro in {'pendente', 'aprovada', 'recusada'}:
             queryset = queryset.filter(status=status_filtro)
@@ -1767,10 +1838,70 @@ def _variacao(atual, anterior):
     return round(((atual - anterior) / anterior) * 100, 1)
 
 
-def _contagem_por_periodo(queryset, campo, agora):
+# Filtros de período do dashboard: além do "mês atual" (que sempre existiu e
+# compara o mês corrente até agora com o mês calendário anterior INTEIRO),
+# aceita janelas móveis de N dias e um intervalo de datas personalizado. Para
+# esses dois últimos, o período anterior é a mesma duração imediatamente
+# antes, para a comparação ficar justa.
+_PERIODOS_DIAS = {'7d': 7, '30d': 30, '90d': 90, 'ano': 365}
+
+_PERIODO_LABELS = {
+    'mes_atual': 'Mês atual',
+    '7d': 'Últimos 7 dias',
+    '30d': 'Últimos 30 dias',
+    '90d': 'Últimos 90 dias',
+    'ano': 'Últimos 12 meses',
+    'custom': 'Período personalizado',
+}
+
+
+def _parse_data(valor):
+    if not valor:
+        return None
+    from datetime import datetime
+
+    try:
+        return timezone.make_aware(datetime.strptime(valor, '%Y-%m-%d'))
+    except ValueError:
+        return None
+
+
+def _resolver_periodo(request):
+    """Resolve o filtro de período (?periodo=... e, se personalizado,
+    ?data_inicio=AAAA-MM-DD&data_fim=AAAA-MM-DD) em limites de data concretos.
+
+    Retorna (chave_periodo, inicio_atual, fim_atual, inicio_anterior); o fim
+    do período anterior é sempre inicio_atual (janelas contíguas, sem lacuna).
+    """
+    agora = timezone.now()
+    periodo = request.query_params.get('periodo') or 'mes_atual'
+
+    if periodo == 'custom':
+        inicio_atual = _parse_data(request.query_params.get('data_inicio'))
+        fim_informado = _parse_data(request.query_params.get('data_fim'))
+        if inicio_atual and fim_informado:
+            fim_atual = min(fim_informado + timezone.timedelta(days=1), agora)
+            duracao = max(fim_atual - inicio_atual, timezone.timedelta(days=1))
+            inicio_anterior = inicio_atual - duracao
+            return periodo, inicio_atual, fim_atual, inicio_anterior
+        periodo = 'mes_atual'
+
+    if periodo in _PERIODOS_DIAS:
+        fim_atual = agora
+        inicio_atual = agora - timezone.timedelta(days=_PERIODOS_DIAS[periodo])
+        inicio_anterior = inicio_atual - (fim_atual - inicio_atual)
+        return periodo, inicio_atual, fim_atual, inicio_anterior
+
     inicio_atual = _mes_inicio(agora)
+    fim_atual = agora
     inicio_anterior = _mes_inicio(inicio_atual - timezone.timedelta(days=1))
-    atual = queryset.filter(**{f'{campo}__gte': inicio_atual}).count()
+    return 'mes_atual', inicio_atual, fim_atual, inicio_anterior
+
+
+def _contagem_por_periodo(queryset, campo, inicio_atual, fim_atual, inicio_anterior):
+    atual = queryset.filter(
+        **{f'{campo}__gte': inicio_atual, f'{campo}__lt': fim_atual},
+    ).count()
     anterior = queryset.filter(
         **{f'{campo}__gte': inicio_anterior, f'{campo}__lt': inicio_atual},
     ).count()
@@ -1783,12 +1914,10 @@ class DashboardAdminAPIView(APIView):
     def get(self, request, *args, **kwargs):
         from django.db.models import Count, Sum
 
-        agora = timezone.now()
-        inicio_mes = _mes_inicio(agora)
-        inicio_mes_anterior = _mes_inicio(inicio_mes - timezone.timedelta(days=1))
+        periodo, inicio_atual, fim_atual, inicio_anterior = _resolver_periodo(request)
 
         def serie_usuarios(qs):
-            return _contagem_por_periodo(qs, 'date_joined', agora)
+            return _contagem_por_periodo(qs, 'date_joined', inicio_atual, fim_atual, inicio_anterior)
 
         usuarios_atual, usuarios_anterior = serie_usuarios(User.objects.all())
 
@@ -1807,52 +1936,63 @@ class DashboardAdminAPIView(APIView):
             (autores_freelancer | autores_contratante).distinct(),
         )
 
-        acordos_do_mes = AcordoServico.objects.filter(data_confirmacao__gte=inicio_mes)
-        ids_freela_acordo_mes = set(
-            acordos_do_mes.exclude(candidatura__user=None)
+        acordos_do_periodo = AcordoServico.objects.filter(
+            data_confirmacao__gte=inicio_atual, data_confirmacao__lt=fim_atual,
+        )
+        ids_freela_acordo_periodo = set(
+            acordos_do_periodo.exclude(candidatura__user=None)
             .values_list('candidatura__user_id', flat=True),
         )
-        ids_contratante_acordo_mes = set(
-            acordos_do_mes.exclude(candidatura__ad__author=None)
+        ids_contratante_acordo_periodo = set(
+            acordos_do_periodo.exclude(candidatura__ad__author=None)
             .values_list('candidatura__ad__author_id', flat=True),
         )
-        pessoas_fecharam_acordo_mes = len(ids_freela_acordo_mes | ids_contratante_acordo_mes)
+        pessoas_fecharam_acordo_periodo = len(ids_freela_acordo_periodo | ids_contratante_acordo_periodo)
 
         denuncias_atual, denuncias_anterior = _contagem_por_periodo(
-            Report.objects.all(), 'created_at', agora,
+            Report.objects.all(), 'created_at', inicio_atual, fim_atual, inicio_anterior,
         )
         cancelamentos_atual, cancelamentos_anterior = _contagem_por_periodo(
             Pagamento.objects.filter(tipo='assinatura', status='cancelado'),
-            'criado_em',
-            agora,
+            'criado_em', inicio_atual, fim_atual, inicio_anterior,
         )
 
         receita_assinatura_atual = Pagamento.objects.filter(
-            tipo='assinatura', status='pago', aprovado_em__gte=inicio_mes,
+            tipo='assinatura', status='pago',
+            aprovado_em__gte=inicio_atual, aprovado_em__lt=fim_atual,
         ).aggregate(total=Sum('valor'))['total'] or 0
         receita_assinatura_anterior = Pagamento.objects.filter(
             tipo='assinatura', status='pago',
-            aprovado_em__gte=inicio_mes_anterior,
-            aprovado_em__lt=inicio_mes,
+            aprovado_em__gte=inicio_anterior,
+            aprovado_em__lt=inicio_atual,
         ).aggregate(total=Sum('valor'))['total'] or 0
 
         receita_acordo_atual = Pagamento.objects.filter(
-            tipo='acordo', status='pago', aprovado_em__gte=inicio_mes,
+            tipo='acordo', status='pago',
+            aprovado_em__gte=inicio_atual, aprovado_em__lt=fim_atual,
         ).aggregate(total=Sum('valor'))['total'] or 0
         receita_acordo_anterior = Pagamento.objects.filter(
             tipo='acordo', status='pago',
-            aprovado_em__gte=inicio_mes_anterior,
-            aprovado_em__lt=inicio_mes,
+            aprovado_em__gte=inicio_anterior,
+            aprovado_em__lt=inicio_atual,
         ).aggregate(total=Sum('valor'))['total'] or 0
 
         return Response({
+            'periodo': {
+                'chave': periodo,
+                'label': _PERIODO_LABELS.get(periodo, periodo),
+                'inicio': inicio_atual.date().isoformat(),
+                # fim_atual é o limite exclusivo (__lt) usado nas queries; para exibir
+                # a data "até" de forma inclusiva, mostramos o último instante contido.
+                'fim': (fim_atual - timezone.timedelta(microseconds=1)).date().isoformat(),
+            },
             'geral': {
                 'usuarios': _item_contagem(usuarios_atual, usuarios_anterior),
                 'freelancers': _item_contagem(freelancer_atual, freelancer_anterior),
                 'contratantes': _item_contagem(contratante_atual, contratante_anterior),
                 'freelas': {
                     **_item_contagem(freelas_atual, freelas_anterior),
-                    'fecharam_acordo_mes': pessoas_fecharam_acordo_mes,
+                    'fecharam_acordo_periodo': pessoas_fecharam_acordo_periodo,
                 },
                 'denuncias': _item_contagem(denuncias_atual, denuncias_anterior),
                 'cancelamentos_planos': _item_contagem(cancelamentos_atual, cancelamentos_anterior),
@@ -1881,13 +2021,13 @@ class DashboardAdminAPIView(APIView):
             ).count(),
             'receita': {
                 'assinatura': {
-                    'mes_atual': str(receita_assinatura_atual),
-                    'mes_anterior': str(receita_assinatura_anterior),
+                    'atual': str(receita_assinatura_atual),
+                    'anterior': str(receita_assinatura_anterior),
                     'variacao': _variacao(receita_assinatura_atual, receita_assinatura_anterior),
                 },
                 'acordo': {
-                    'mes_atual': str(receita_acordo_atual),
-                    'mes_anterior': str(receita_acordo_anterior),
+                    'atual': str(receita_acordo_atual),
+                    'anterior': str(receita_acordo_anterior),
                     'variacao': _variacao(receita_acordo_atual, receita_acordo_anterior),
                 },
             },
@@ -1914,8 +2054,8 @@ class DashboardAdminAPIView(APIView):
 def _item_contagem(atual, anterior):
     return {
         'total': atual,
-        'mes_atual': atual,
-        'mes_anterior': anterior,
+        'atual': atual,
+        'anterior': anterior,
         'variacao': _variacao(atual, anterior),
     }
 
@@ -1938,17 +2078,16 @@ def _distribuicao_planos():
     return planos
 
 
-### chat entre freelancer e contratante (mensagens no Redis) ###
+### chat entre freelancer e contratante (mensagens no Postgres) ###
 from django.db.models import Q as _Q
 from .chat import (
     chat_ativo,
     enviar_mensagem,
     listar_mensagens,
     marcar_lidas,
-    nao_lidas,
+    total_nao_lidas,
     partes_do_acordo as _partes_chat,
 )
-from .chat import ChatIndisponivel
 from .serializers import ChatConversaSerializer, _info_usuario_com_papel
 
 
@@ -2020,13 +2159,7 @@ class ChatDetailAPIView(APIView):
         contratante, freelancer = _partes_chat(acordo)
         outra = freelancer if request_user == contratante else contratante
         papel = 'freelancer' if outra == freelancer else 'contratante'
-        try:
-            mensagens = listar_mensagens(acordo.id)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        mensagens = listar_mensagens(acordo.id)
         return Response({
             'id': acordo.id,
             'titulo_anuncio': acordo.titulo_anuncio,
@@ -2068,13 +2201,7 @@ class ChatEnviarMensagemAPIView(APIView):
                 {'error': 'A mensagem deve ter no máximo 2000 caracteres.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        try:
-            mensagem = enviar_mensagem(acordo, request.user, texto)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        mensagem = enviar_mensagem(acordo, request.user, texto)
         return Response(mensagem, status=status.HTTP_201_CREATED)
 
 
@@ -2090,13 +2217,7 @@ class ChatMarcarLidaAPIView(APIView):
                 {'error': 'Você não participa deste acordo.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        try:
-            marcar_lidas(acordo.id, request.user.id)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        marcar_lidas(acordo.id, request.user.id)
         return Response({'ok': True})
 
 
@@ -2113,11 +2234,5 @@ class ChatNaoLidasAPIView(APIView):
             acordos = AcordoServico.objects.filter(
                 _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
             )
-        try:
-            total = sum(nao_lidas(acordo.id, user.id) for acordo in acordos)
-        except ChatIndisponivel:
-            return Response(
-                {'error': 'Serviço de mensagens indisponível. Verifique o Redis.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        total = total_nao_lidas(acordos.values_list('id', flat=True), user.id)
         return Response({'total': total})

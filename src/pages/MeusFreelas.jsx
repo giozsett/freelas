@@ -43,6 +43,18 @@ AgreementSteps.propTypes = {
   isPaid: PropTypes.bool,
 };
 
+// Nome do contratante/freelancer do acordo — vira link para o perfil quando
+// o id da outra parte está disponível, senão mostra só o texto (fallback).
+function NomeParte({ nome, userId }) {
+  const texto = nome || '—';
+  if (!userId) return texto;
+  return <Link to={`/user/${userId}`} className="link-hover-card">{texto}</Link>;
+}
+NomeParte.propTypes = {
+  nome: PropTypes.string,
+  userId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+};
+
 function MoreActionsMenu({ items, buttonLabel }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -527,8 +539,8 @@ export default function MeusFreelas() {
                           </div>
                           <h3 className="mf-card__title">{app.titulo_anuncio}</h3>
                           <div className="mf-card__meta">
-                            <span><User size={14} /> <strong>Contratante:</strong> {app.nome_contratante || '—'}</span>
-                            <span><User size={14} /> <strong>Freelancer:</strong> {app.nome_prestador || '—'}</span>
+                            <span><User size={14} /> <strong>Contratante:</strong> <NomeParte nome={app.nome_contratante} userId={app.contratante_id} /></span>
+                            <span><User size={14} /> <strong>Freelancer:</strong> <NomeParte nome={app.nome_prestador} userId={app.freelancer_id} /></span>
                           </div>
                           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
                             {userIsContractor
@@ -614,8 +626,8 @@ export default function MeusFreelas() {
                           </div>
                           <h3 className="mf-card__title">{app.titulo_anuncio}</h3>
                           <div className="mf-card__meta">
-                            <span><User size={14} /> <strong>Contratante:</strong> {app.nome_contratante || '—'}</span>
-                            <span><User size={14} /> <strong>Freelancer:</strong> {app.nome_prestador || '—'}</span>
+                            <span><User size={14} /> <strong>Contratante:</strong> <NomeParte nome={app.nome_contratante} userId={app.contratante_id} /></span>
+                            <span><User size={14} /> <strong>Freelancer:</strong> <NomeParte nome={app.nome_prestador} userId={app.freelancer_id} /></span>
                             <span><Calendar size={14} /> Prazo: <strong>{app.conclusao_prevista ? new Date(app.conclusao_prevista + 'T00:00:00').toLocaleDateString() : '—'}</strong></span>
                           </div>
                           <div className="mf-card__next">
@@ -807,8 +819,8 @@ export default function MeusFreelas() {
                         </div>
                         <h3 className="mf-card__title" style={{ fontSize: '1.15rem', fontWeight: 500 }}>{app.titulo_anuncio}</h3>
                         <div className="mf-card__meta">
-                          <span><User size={13} /> <strong>Contratante:</strong> {app.nome_contratante || '—'}</span>
-                          <span><User size={13} /> <strong>Freelancer:</strong> {app.nome_prestador || '—'}</span>
+                          <span><User size={13} /> <strong>Contratante:</strong> <NomeParte nome={app.nome_contratante} userId={app.contratante_id} /></span>
+                          <span><User size={13} /> <strong>Freelancer:</strong> <NomeParte nome={app.nome_prestador} userId={app.freelancer_id} /></span>
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>

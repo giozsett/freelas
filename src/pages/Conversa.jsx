@@ -160,7 +160,7 @@ export default function Conversa() {
         const res = await fetch(`${API}/api/chat/${id}/`, { headers: authHeaders() });
         if (!res.ok) {
           const dados = await res.json().catch(() => ({}));
-          throw new Error(dados.error || 'Não foi possível carregar a conversa.');
+          throw new Error(dados.error || dados.detail || 'Não foi possível carregar a conversa.');
         }
         const dados = await res.json();
         setChat(dados);
@@ -556,8 +556,9 @@ export default function Conversa() {
                   const eu = msg.remetente_id === user?.id;
                   const anterior = index > 0 ? messages[index - 1] : null;
                   const novoDia = !anterior || diaDaMensagem(msg.criado_em) !== diaDaMensagem(anterior.criado_em);
+                  const ehUltima = index === messages.length - 1;
                   return (
-                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div key={msg.id} className={ehUltima ? 'chat-bubble-enter' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                       {novoDia && <span className="chat-mensagem-dia">{diaDaMensagem(msg.criado_em)}</span>}
                       <div style={{ display: 'flex', gap: '0.6rem', alignSelf: eu ? 'flex-end' : 'flex-start', maxWidth: '85%', flexDirection: eu ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
                         {!eu && <Avatar nome={msg.remetente_nome} tamanho={30} />}

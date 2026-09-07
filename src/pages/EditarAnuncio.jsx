@@ -252,7 +252,7 @@ export default function EditAd() {
                 Adicionar
               </button>
             </div>
-            {skillError && <p style={{ color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{skillError}</p>}
+            {skillError && <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{skillError}</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {skills.map((skill, index) => (
                 <span key={index} className="badge purple" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -288,7 +288,7 @@ export default function EditAd() {
           </div>
 
           {locationType === 'presencial' && (
-            <div>
+            <div className="tab-content-animation">
               <h3 style={{ marginBottom: '0.25rem' }}>{locationType === 'presencial' ? 'Local do trabalho' : 'Sua área de atendimento'}</h3>
               <p className="form-help">Cidade obrigatória para o anúncio. Endereço, bairro e localização exata são opcionais.</p>
               <LocalizacaoAnuncio value={localizacao} onChange={setLocalizacao} cidadeObrigatoria />

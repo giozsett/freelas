@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Lock } from 'lucide-react';
 import { useRole } from '../context/ContextoPapel';
 import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
 import DisponibilidadeSemanal, { disponibilidadeVazia } from '../components/DisponibilidadeSemanal';
@@ -27,8 +28,24 @@ export default function CreateAd() {
   
   const [deadline, setDeadline] = useState('');
   const [availability, setAvailability] = useState(disponibilidadeVazia);
+  const [submitError, setSubmitError] = useState('');
+  const [limiteAtingido, setLimiteAtingido] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    fetch('http://localhost:8000/api/ads/limite/', {
+      headers: { 'Authorization': `Token ${token}` }
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.atingiu_limite) setLimiteAtingido(true);
+      })
+      .catch((err) => console.error(err));
+  }, []);
 
   const handleAddSkill = (e) => {
     e.preventDefault();
@@ -56,8 +73,10 @@ export default function CreateAd() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+    if (limiteAtingido) return;
     const token = localStorage.getItem('token');
-    
+
     if (!token) {
       console.log("Você precisa estar logado para postar um anúncio.");
       return;
@@ -96,16 +115,47 @@ export default function CreateAd() {
       } else {
         const errorData = await response.json();
         console.error(errorData);
-        console.error('Erro ao criar o anúncio.');
+        setSubmitError(errorData.detail || errorData[0] || 'Erro ao criar o anúncio.');
       }
     } catch (err) {
       console.error(err);
-      console.error('Erro de conexão ao criar o anúncio.');
+      setSubmitError('Erro de conexão ao criar o anúncio.');
     }
   };
 
   return (
     <div className="ad-form-page">
+      {limiteAtingido && (
+        <div className="mf-modal-backdrop">
+          <div className="mf-modal" style={{ width: '100%', maxWidth: '420px', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+              <Lock size={40} color="var(--danger-color)" />
+            </div>
+            <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Limite de anúncios atingido</h2>
+            <p style={{ opacity: 0.85, lineHeight: 1.5, marginBottom: '2rem' }}>
+              Você já atingiu seu limite de postagem de anúncios esse mês, atualize seu plano para postar mais anúncios.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: 1, border: '1px solid var(--border-color)', background: 'transparent' }}
+                onClick={() => navigate('/')}
+              >
+                Voltar ao início
+              </button>
+              <button
+                type="button"
+                className="btn dark-text"
+                style={{ flex: 1 }}
+                onClick={() => navigate('/plans')}
+              >
+                Ver planos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Postar Novo Anúncio</h1>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <span className={role === 'freelancer' ? 'badge purple' : 'badge green'} style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
@@ -187,7 +237,7 @@ export default function CreateAd() {
                 Adicionar
               </button>
             </div>
-            {skillError && <p style={{ color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{skillError}</p>}
+            {skillError && <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{skillError}</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {skills.map((skill, index) => (
                 <span key={index} className="badge purple" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -223,7 +273,7 @@ export default function CreateAd() {
           </div>
 
           {locationType === 'presencial' && (
-            <div>
+            <div className="tab-content-animation">
               <h3 style={{ marginBottom: '0.25rem' }}>{locationType === 'presencial' ? 'Local do trabalho' : 'Sua área de atendimento'}</h3>
               <p className="form-help">Cidade obrigatória para o anúncio. Endereço, bairro e localização exata são opcionais.</p>
               <LocalizacaoAnuncio value={localizacao} onChange={setLocalizacao} cidadeObrigatoria />
@@ -261,6 +311,12 @@ export default function CreateAd() {
             ></textarea>
             <small className="character-counter">{limiteDescricao - description.length} caracteres restantes</small>
           </div>
+
+          {submitError && (
+            <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+              {submitError}
+            </p>
+          )}
 
           <button type="submit" className="btn dark-text" style={{ padding: '1rem', fontSize: '1.2rem', marginTop: '1rem' }}>
             Publicar Anúncio

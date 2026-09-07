@@ -92,17 +92,30 @@ export default function PublicProfile() {
   }, [id]);
 
   if (isLoading) {
-    return <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando perfil...</div>;
+    return (
+      <div className="profile-page">
+        <div className="card profile-card">
+          <div className="skeleton profile-banner" style={{ aspectRatio: '4 / 1', borderRadius: '12px 12px 0 0' }} />
+          <div className="profile-header" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start', marginBottom: '2rem' }}>
+            <div className="skeleton" style={{ marginTop: '-40px', width: '150px', height: '150px', borderRadius: '50%', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="skeleton skeleton-text" style={{ height: '2.4rem', width: '55%' }} />
+              <div className="skeleton skeleton-text" style={{ width: '35%' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="profile-page">
-      <div className="card profile-card">
+      <div className="card profile-card fade-in">
 
         {/* Banner */}
         <div className="profile-banner" style={{
           aspectRatio: '4 / 1',
-          background: user.profile?.banner ? `url(${user.profile.banner}) center/cover no-repeat` : '#e0e0e0',
+          background: user.profile?.banner ? `url(${user.profile.banner}) center/cover no-repeat` : 'var(--border-color)',
           borderRadius: '12px 12px 0 0',
         }} />
 
@@ -116,7 +129,7 @@ export default function PublicProfile() {
             overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
             {user.profile?.foto_perfil ? (
-              <img src={user.profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+              <img src={user.profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
                 {user.name.charAt(0)}
@@ -134,16 +147,16 @@ export default function PublicProfile() {
                 borderRadius: '20px',
                 fontSize: '0.85rem',
                 fontWeight: '600',
-                background: user.profile?.disponivel ? '#2ecc7120' : '#e74c3c20',
-                color: user.profile?.disponivel ? '#2ecc71' : '#e74c3c',
-                border: `1px solid ${user.profile?.disponivel ? '#2ecc7130' : '#e74c3c30'}`
+                background: user.profile?.disponivel ? 'var(--success-soft)' : 'var(--danger-soft)',
+                color: user.profile?.disponivel ? 'var(--success-color)' : 'var(--danger-color)',
+                border: `1px solid ${user.profile?.disponivel ? 'var(--success-color)' : 'var(--danger-color)'}`
               }}>
                 {user.profile?.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
                 {user.profile?.disponivel ? 'Disponível' : 'Indisponível'}
               </span>
               <button
                 onClick={() => setIsReportModalOpen(true)}
-                style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: '#ff4757', cursor: 'pointer' }}
+                style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--danger-color)', cursor: 'pointer' }}
                 title="Denunciar Usuário"
               >
                 <HelpCircle size={20} />
@@ -155,7 +168,7 @@ export default function PublicProfile() {
                 <div key={role.type} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={role.type === 'Freelancer' ? "badge salmon" : "badge purple"} style={{ color: 'white' }}>{role.type}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                      <Star fill={role.rating ? 'currentColor' : 'transparent'} size={22} color="#f1c40f" /> {role.rating ?? '—'} ({role.reviews})
+                      <Star fill={role.rating ? 'currentColor' : 'transparent'} size={22} color="var(--warning-color)" /> {role.rating ?? '—'} ({role.reviews})
                   </span>
                 </div>
               ))}

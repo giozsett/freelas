@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView,
     ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView,
+    AdLimiteMensalAPIView,
     PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView,
     CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI,
     VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI,
@@ -34,6 +35,7 @@ urlpatterns = [
     path('api/reports/', ReportListCreateAPIView.as_view(), name='report-list'),
     path('api/reports/<int:pk>/', ReportUpdateAPIView.as_view(), name='report-detail'),
     path('api/ads/', AdListCreateAPIView.as_view(), name='ad-list'),
+    path('api/ads/limite/', AdLimiteMensalAPIView.as_view(), name='ad-limite'),
     path('api/ads/<int:pk>/', AdRetrieveAPIView.as_view(), name='ad-detail'),
     path('api/users/<int:pk>/', PublicProfileAPIView.as_view(), name='public-profile'),
     path('api/candidaturas/', CandidaturaListCreateAPIView.as_view(), name='candidatura-list'),

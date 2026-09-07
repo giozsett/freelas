@@ -93,7 +93,19 @@ export default function ManageAdApplications() {
   };
 
   if (isLoading) {
-    return <div style={{ textAlign: 'center', padding: '3rem' }}>Carregando candidaturas...</div>;
+    return (
+      <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
+        <div className="skeleton" style={{ height: '2rem', width: '45%', marginBottom: '1.5rem' }} />
+        <div className="card" style={{ height: '5rem', marginBottom: '2rem' }}>
+          <div className="skeleton" style={{ height: '100%' }} />
+        </div>
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="card" style={{ height: '9rem', marginBottom: '1.5rem' }}>
+            <div className="skeleton" style={{ height: '100%' }} />
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (errorMsg || !ad) {
@@ -104,8 +116,8 @@ export default function ManageAdApplications() {
   const isExpired = adStatus === 'Vencido';
 
   return (
-    <div style={{ maxWidth: '900px', margin: '2rem auto' }}>
-      
+    <div className="fade-in" style={{ maxWidth: '900px', margin: '2rem auto' }}>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <h1 style={{ margin: 0 }}>Gerenciar Candidaturas</h1>
         <span className={adStatus === 'Em aberto' || adStatus === 'Ativo' ? "badge salmon" : "badge purple"} style={{ color: 'white' }}>
@@ -129,17 +141,19 @@ export default function ManageAdApplications() {
          Propostas Recebidas ({applications.length})
       </h3>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {applications.map(app => (
           <div key={app.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--holo-gradient-purple)' }}></div>
+                  <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--holo-gradient-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '1.1rem', textTransform: 'uppercase', flexShrink: 0 }}>
+                    {(app.applicant_name || '?').charAt(0)}
+                  </div>
                   <div>
                      <h3 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         {app.applicant_name} 
-                        <Link to={`/user/${app.user}`} style={{ fontSize: '0.85rem', color: 'var(--holo-blue)', textDecoration: 'underline' }}>(Ver perfil)</Link>
+                        <Link to={`/user/${app.user}`} className="link-hover-card" style={{ fontSize: '0.85rem' }}>Ver perfil</Link>
                      </h3>
                      <div style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.25rem' }}>
                        Valor proposto do anúncio: <strong>R$ {ad.price}</strong>
@@ -148,7 +162,7 @@ export default function ManageAdApplications() {
                </div>
 
                {app.status !== 'pendente' && (
-                  <span className="badge" style={{ background: app.status === 'aprovada' ? '#1dd1a1' : app.status === 'encerrada' ? '#777' : '#ff6b6b', color: 'white', borderColor: 'transparent' }}>
+                  <span className="badge" style={{ background: app.status === 'aprovada' ? 'var(--success-color)' : app.status === 'encerrada' ? 'var(--text-secondary)' : 'var(--danger-color)', color: 'white', borderColor: 'transparent' }}>
                     {app.status === 'aprovada' ? 'Aprovada' : app.status === 'encerrada' ? 'Indisponível' : 'Recusada'}
                   </span>
                )}
@@ -167,10 +181,10 @@ export default function ManageAdApplications() {
 
             {app.status === 'pendente' && !isExpired && (
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                 <button className="btn" style={{ flex: 1, background: '#1dd1a1', border: 'none' }} onClick={() => handleUpdateStatus(app.id, 'aprovada')}>
+                 <button className="btn" style={{ flex: 1, background: 'var(--success-color)', border: 'none' }} onClick={() => handleUpdateStatus(app.id, 'aprovada')}>
                    <Check size={18} /> Aprovar
                  </button>
-                 <button className="btn btn-secondary" style={{ flex: 1, borderColor: '#ff6b6b', color: '#ff6b6b' }} onClick={() => handleUpdateStatus(app.id, 'recusada')}>
+                 <button className="btn btn-secondary" style={{ flex: 1, borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }} onClick={() => handleUpdateStatus(app.id, 'recusada')}>
                    <X size={18} /> Recusar
                  </button>
                  <Link to={app.acordo_id ? `/chat/${app.acordo_id}` : '/chat'} className="btn btn-secondary" style={{ flex: 1 }}>
@@ -183,7 +197,10 @@ export default function ManageAdApplications() {
         ))}
 
         {applications.length === 0 && (
-           <p style={{ textAlign: 'center', opacity: 0.7, padding: '2rem 0' }}>Nenhuma proposta recebida até o momento.</p>
+           <div className="empty-state">
+             <h3>Nenhuma proposta recebida</h3>
+             <p>Assim que alguém se candidatar a este anúncio, a proposta aparecerá aqui.</p>
+           </div>
         )}
       </div>
 

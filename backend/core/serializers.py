@@ -150,9 +150,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 from .models import Report
 
 class ReportSerializer(serializers.ModelSerializer):
+    reporter_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Report
         fields = '__all__'
+        read_only_fields = ('reporter',)
+
+    def get_reporter_name(self, obj):
+        if not obj.reporter:
+            return None
+        return obj.reporter.first_name or obj.reporter.username
 
 from .models import Ad
 
@@ -711,7 +719,6 @@ from .chat import (
     partes_do_acordo,
     ultima_mensagem,
 )
-from .chat import ChatIndisponivel
 
 
 def _info_usuario(user, request):
@@ -767,16 +774,10 @@ class ChatConversaSerializer(serializers.ModelSerializer):
         return _info_usuario_com_papel(outra, papel, request)
 
     def get_ultima_mensagem(self, obj):
-        try:
-            return ultima_mensagem(obj.id)
-        except ChatIndisponivel:
-            return None
+        return ultima_mensagem(obj.id)
 
     def get_nao_lidas(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return 0
-        try:
-            return nao_lidas(obj.id, request.user.id)
-        except ChatIndisponivel:
-            return 0
+        return nao_lidas(obj.id, request.user.id)
