@@ -233,6 +233,12 @@ export default function Conversa() {
               prev.some((m) => m.id === msg.mensagem.id) ? prev : [...prev, msg.mensagem],
             );
             setChat((prev) => (prev ? { ...prev, chat_ativo: true } : prev));
+            // Chat está aberto e a mensagem já foi exibida: marca como lida
+            // imediatamente para o contador de não lidas não ficar preso.
+            fetch(`${API}/api/chat/${wsId}/ler/`, {
+              method: 'POST',
+              headers: authHeaders(),
+            }).catch(() => {});
             carregarChats();
           }
         } catch {
