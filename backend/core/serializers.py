@@ -1,4 +1,5 @@
 import json
+import logging
 from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -7,6 +8,8 @@ from django.utils import timezone
 from rest_framework import serializers
 from .models import UserProfile
 from .notificacoes import criar_notificacao
+
+logger = logging.getLogger(__name__)
 
 class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
@@ -44,6 +47,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 )
                 instance.banner = resposta.get('secure_url') or resposta.get('url')
             except Exception:
+                logger.exception('Falha ao enviar banner para o Cloudinary')
                 raise serializers.ValidationError({'banner': 'Não foi possível enviar a imagem do banner.'})
             instance.save(update_fields=['banner', 'atualizado_em'])
         elif 'banner' in self.initial_data and banner_val in (None, ''):
@@ -945,7 +949,7 @@ class ExperienciaSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-from .models import CartaoUsuario, Pagamento
+from .models import Pagamento
 from .models import Notificacao
 
 class NotificacaoSerializer(serializers.ModelSerializer):
@@ -962,16 +966,6 @@ class PagamentoSerializer(serializers.ModelSerializer):
             'id', 'tipo', 'status', 'valor', 'referencia_externa',
             'mp_payment_id', 'forma_pagamento', 'acordo', 'plano',
             'criado_em', 'aprovado_em',
-        )
-        read_only_fields = fields
-
-
-class CartaoUsuarioSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CartaoUsuario
-        fields = (
-            'id', 'bandeira', 'ultimos_quatro', 'mes_expiracao',
-            'ano_expiracao', 'nome_titular', 'ativo', 'atualizado_em',
         )
         read_only_fields = fields
 

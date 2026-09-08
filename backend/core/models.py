@@ -519,34 +519,6 @@ class Pagamento(models.Model):
         return f"Pagamento {self.tipo} - {self.status} - R$ {self.valor}"
 
 
-class CartaoUsuario(models.Model):
-    """Metadados não sensíveis de cartões usados no checkout do Mercado Pago."""
-
-    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cartoes')
-    mp_card_id = models.CharField(max_length=255, null=True, blank=True)
-    bandeira = models.CharField(max_length=50)
-    ultimos_quatro = models.CharField(max_length=4)
-    mes_expiracao = models.PositiveSmallIntegerField(null=True, blank=True)
-    ano_expiracao = models.PositiveSmallIntegerField(null=True, blank=True)
-    nome_titular = models.CharField(max_length=255, null=True, blank=True)
-    ativo = models.BooleanField(default=True)
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'cartoes_usuario'
-        ordering = ['-atualizado_em']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['usuario', 'bandeira', 'ultimos_quatro'],
-                name='cartao_usuario_bandeira_final_unico',
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.bandeira} final {self.ultimos_quatro}"
-
-
 class InstituicaoEnsino(models.Model):
     nome = models.CharField(max_length=255, unique=True)
     verificado = models.BooleanField(default=True)

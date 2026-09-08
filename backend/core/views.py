@@ -1,3 +1,4 @@
+import logging
 from django.conf import settings
 from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
@@ -23,6 +24,8 @@ from django.core.mail import send_mail
 from .models import VerificacaoEmail
 from .serializers import CertificadoSerializer, InstituicaoEnsinoSerializer, ExperienciaSerializer
 from .models import Certificado, InstituicaoEnsino, Experiencia
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -127,6 +130,7 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
             )
             return resposta.get('secure_url') or resposta.get('url')
         except Exception:
+            logger.exception('Falha ao enviar imagem para o Cloudinary (pasta=%s)', pasta)
             return None
 
     @staticmethod
@@ -1234,8 +1238,8 @@ from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
-from .models import CartaoUsuario, Pagamento
-from .serializers import CartaoUsuarioSerializer, PagamentoSerializer
+from .models import Pagamento
+from .serializers import PagamentoSerializer
 
 
 logger = logging.getLogger(__name__)
@@ -1657,7 +1661,7 @@ class StripeWebhookAPI(APIView):
             )
 
         if event['type'] == 'checkout.session.completed':
-            processed = _confirmar_pagamento_stripe(event['data']['object'])
+            processed = _confirmar_pagamento_stripe(event['data']['object'].to_dict())
             return Response({'status': 'processed' if processed else 'received'})
 
         return Response({'status': 'ignored'})
@@ -1674,17 +1678,6 @@ class PagamentoHistoricoAPIView(generics.ListAPIView):
             usuario=self.request.user,
             status='pago',
         ).order_by('-aprovado_em', '-criado_em')
-
-
-class CartaoUsuarioListAPIView(generics.ListAPIView):
-    serializer_class = CartaoUsuarioSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return CartaoUsuario.objects.filter(
-            usuario=self.request.user,
-            ativo=True,
-        ).order_by('-atualizado_em')
 
 
 def _mes_inicio(data):
