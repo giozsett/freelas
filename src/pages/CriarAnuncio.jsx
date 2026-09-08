@@ -217,11 +217,12 @@ export default function CreateAd() {
 
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5)</label>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <select 
-                className="input" 
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <select
+                className="input"
                 value={currentSkill}
                 onChange={(e) => setCurrentSkill(e.target.value)}
+                style={{ flex: 1, minWidth: 0 }}
               >
                 <option value="">Selecione uma habilidade...</option>
                 {habilidadesDisponiveis.map(skill => (

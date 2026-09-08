@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useNotificacoes } from '../context/ContextoNotificacao';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 const STATUS_CONFIG = {
   aprovada: {
@@ -133,6 +134,7 @@ export default function MinhasCandidaturas() {
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('em-andamento');
+  const tabsScrollRef = useScrollEdges();
 
   useEffect(() => {
     marcarLidas(['candidatura']);
@@ -224,7 +226,7 @@ export default function MinhasCandidaturas() {
 
       {/* ── Abas segmentadas ── */}
       {applications.length > 0 && (
-        <div className="mf-tabs" role="tablist" aria-label="Filtrar candidaturas">
+        <div className="mf-tabs" role="tablist" aria-label="Filtrar candidaturas" ref={tabsScrollRef}>
           <button
             type="button"
             role="tab"

@@ -146,7 +146,7 @@ export default function ManageAdApplications() {
           <div key={app.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                   <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--holo-gradient-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '1.1rem', textTransform: 'uppercase', flexShrink: 0 }}>
                     {(app.applicant_name || '?').charAt(0)}
                   </div>

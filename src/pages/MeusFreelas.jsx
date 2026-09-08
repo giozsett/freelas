@@ -11,6 +11,7 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 import { useNotificacoes } from '../context/ContextoNotificacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 function AgreementSteps({ status, isPaid }) {
   const steps = [
@@ -107,6 +108,7 @@ export default function MeusFreelas() {
   const { confirmar } = useDialogo();
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
+  const tabsScrollRef = useScrollEdges();
 
   useEffect(() => { marcarLidas(['acordo']); }, [marcarLidas]);
 
@@ -429,7 +431,7 @@ export default function MeusFreelas() {
       </div>
 
       {/* Segmented tabs */}
-      <div className="mf-tabs">
+      <div className="mf-tabs" ref={tabsScrollRef}>
         {[
           ['ativos', 'Em andamento', pendingPaymentAgreements.length + activeAgreements.length],
           ['concluidos', 'Concluídos', completedAgreements.length],
@@ -907,7 +909,7 @@ export default function MeusFreelas() {
                   style={{ resize: 'vertical' }}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="mf-budget-grid">
                 <div>
                   <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.92rem' }}>Novo Orçamento (R$)</label>
                   <input type="number" step="0.01" className="input" placeholder="Ex: 1500.00"

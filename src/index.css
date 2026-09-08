@@ -459,6 +459,10 @@ a { color: var(--text-color); text-decoration: none; }
 .profile-tab-option:hover { border-color: var(--primary); color: var(--primary); }
 .profile-tab-option.selected { border-color: var(--primary); background: var(--secondary); color: var(--primary); }
 .profile-tab-content { border: 1px solid var(--border-color); border-radius: 10px; padding: 1.1rem; min-width: 0; }
+@media (max-width: 640px) {
+  .profile-tabs, .edit-profile-tabs { display: flex; grid-template-columns: none; overflow-x: auto; width: 100%; }
+  .profile-tab-option { flex: 0 0 auto; white-space: nowrap; }
+}
 .edit-profile-form { display: flex; flex-direction: column; gap: 1.25rem; }
 .edit-profile-form > [data-section] { animation: tabContentIn 0.28s ease both; }
 .edit-profile-form[data-active-tab="identidade"] > [data-section]:not([data-section="identidade"]),
@@ -520,6 +524,35 @@ a { color: var(--text-color); text-decoration: none; }
 .chat-contacts-scroll::-webkit-scrollbar { width: 5px; }
 .chat-contacts-scroll::-webkit-scrollbar-track { background: transparent; }
 .chat-contacts-scroll::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+/* Sombra de borda para containers com scroll horizontal sem outra indicação
+   (tabelas e barras de abas). --bg usa var(--bg-color) para containers que
+   ficam sobre esse fundo (tabs); o padrão usa var(--surface-color) (tabelas
+   dentro de .card). */
+.scroll-fade { position: relative; }
+.scroll-fade::before,
+.scroll-fade::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 28px;
+  pointer-events: none; z-index: 2; opacity: 0; transition: opacity 0.2s ease;
+}
+.scroll-fade::before { left: 0; background: linear-gradient(90deg, var(--surface-color), transparent); }
+.scroll-fade::after  { right: 0; background: linear-gradient(270deg, var(--surface-color), transparent); }
+.scroll-fade:not([data-at-start='true'])::before { opacity: 1; }
+.scroll-fade:not([data-at-end='true'])::after { opacity: 1; }
+.scroll-fade--bg::before { background: linear-gradient(90deg, var(--bg-color), transparent); }
+.scroll-fade--bg::after  { background: linear-gradient(270deg, var(--bg-color), transparent); }
+
+/* Bolinhas de carrossel para fileiras de cards com scroll horizontal */
+.carrossel-indicador {
+  display: flex; justify-content: center; align-items: center; gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.carrossel-indicador__dot {
+  appearance: none; border: none; padding: 0; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-color); cursor: pointer; transition: background 0.2s ease, transform 0.2s ease;
+}
+.carrossel-indicador__dot--active { background: var(--primary); transform: scale(1.3); }
+
 .chat-contact-item {
   display: flex; align-items: center; gap: 0.6rem; width: 100%; min-width: 0;
   text-align: left; overflow: hidden;
@@ -831,7 +864,8 @@ a { color: var(--text-color); text-decoration: none; }
   .chat-layout.chat-selecionado > aside { display: none; }
   .chat-back-btn { display: flex; }
   .chat-contacts { flex-direction: row; overflow-x: auto; padding-bottom: 0.5rem; }
-  .chat-contacts > div, .chat-contacts > button { flex: 0 0 240px; white-space: normal; }
+  .chat-contacts > div, .chat-contacts > button, .chat-contacts > a { flex: 0 0 240px; white-space: normal; }
+  .chat-contacts-dots { display: flex; }
 
   .form-row { flex-direction: column; }
   .profile-header { flex-direction: column; text-align: center; justify-content: center; }
@@ -867,8 +901,11 @@ a { color: var(--text-color); text-decoration: none; }
   .location-number-field label { white-space: normal; }
   .filters-sidebar { padding: 0.75rem; }
   .filter-group { padding: 0.65rem; }
-  .profile-tabs, .edit-profile-tabs { overflow: hidden; }
-  .profile-tab-option { font-size: 0.64rem; }
+  .rs-plataforma-select { flex: 1 1 140px; }
+  .rs-nome-input { flex: 1 1 120px; }
+  .ep-estado-select { flex: 0 0 150px; }
+  .rep-score-row { flex-wrap: wrap; }
+  .rep-score-label { white-space: normal; }
   h1 { font-size: 1.5rem !important; }
   h2 { font-size: 1.25rem !important; }
 }
@@ -932,8 +969,19 @@ ul { list-style-type: none; }
 .mf-summary__icon--muted { background: var(--pending-card); color: var(--pending-accent); }
 .mf-summary__value { font-size: 1.35rem; font-weight: 700; line-height: 1.1; font-family: 'Poppins', sans-serif; }
 .mf-summary__label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+.mf-budget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 480px) { .mf-budget-grid { grid-template-columns: 1fr; } }
 
 /* Segmented tabs */
+.mf-tabs::before,
+.mf-tabs::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 24px;
+  pointer-events: none; z-index: 2; opacity: 0; transition: opacity 0.2s ease; border-radius: 12px;
+}
+.mf-tabs::before { left: 0; background: linear-gradient(90deg, var(--bg-color), transparent); }
+.mf-tabs::after  { right: 0; background: linear-gradient(270deg, var(--bg-color), transparent); }
+.mf-tabs:not([data-at-start='true'])::before { opacity: 1; }
+.mf-tabs:not([data-at-end='true'])::after { opacity: 1; }
 .mf-tabs {
   position: relative; display: flex; gap: 0.35rem; padding: 0.25rem;
   background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px;

@@ -5,12 +5,14 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 const API = 'http://localhost:8000';
 
 export default function Profile() {
   const { user: authUser, token } = useAuth();
   const [viewingPhoto, setViewingPhoto] = useState(false);
+  const tabsScrollRef = useScrollEdges();
   const [profile, setProfile] = useState({
     bio: '',
     categories: [],
@@ -229,7 +231,7 @@ export default function Profile() {
         </section>
 
         {/* Tabs */}
-        <div className="profile-tabs" role="tablist">
+        <div className="profile-tabs scroll-fade scroll-fade--bg" role="tablist" ref={tabsScrollRef}>
           {[
             { key: 'skills', label: 'Habilidades e Especialidades' },
             { key: 'experiencia', label: `Experiência${experiencias.length > 0 ? ` (${experiencias.length})` : ''}` },

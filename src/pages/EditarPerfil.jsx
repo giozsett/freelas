@@ -7,6 +7,7 @@ import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/opti
 import { calcularTempo } from '../utils/calcularTempo';
 import ModalCrop from '../components/ModalCrop';
 import { useDialogo } from '../context/ContextoDialogo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 const API = 'http://localhost:8000';
 
@@ -22,6 +23,7 @@ export default function EditProfile() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [activeEditTab, setActiveEditTab] = useState('identidade');
+  const tabsScrollRef = useScrollEdges();
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState([{ name: '', level: 'iniciante' }]);
   const [categories, setCategories] = useState(['']);
@@ -268,11 +270,16 @@ export default function EditProfile() {
       if (fotoPerfil) {
         const fotoData = new FormData();
         fotoData.append('foto_perfil', fotoPerfil);
-        await fetch(`${API}/api/auth/profile/foto/`, {
+        const fotoRes = await fetch(`${API}/api/auth/profile/foto/`, {
           method: 'PATCH',
           headers: { 'Authorization': `Token ${token}` },
           body: fotoData
         });
+        if (!fotoRes.ok) {
+          const errData = await fotoRes.json().catch(() => ({}));
+          console.error('Erro ao enviar foto de perfil:', fotoRes.status, errData);
+          throw new Error(errData.error || 'Erro ao enviar a foto de perfil');
+        }
       } else if (fotoRemovido) {
         await fetch(`${API}/api/auth/profile/foto/`, {
           method: 'PATCH',
@@ -505,7 +512,7 @@ export default function EditProfile() {
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Editar Perfil</h1>
       <div className="card">
-        <div className="edit-profile-tabs" role="tablist" aria-label="Seções da edição do perfil">
+        <div className="edit-profile-tabs scroll-fade scroll-fade--bg" role="tablist" aria-label="Seções da edição do perfil" ref={tabsScrollRef}>
           {[
             ['identidade', 'Identidade e perfil'],
             ['contato', 'Localização e contato'],
@@ -784,9 +791,9 @@ export default function EditProfile() {
           {/* Estado e Cidade */}
           <div data-section="contato">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Localização</label>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <select
-                className="input"
+                className="input ep-estado-select"
                 value={estado}
                 onChange={(e) => { setEstado(e.target.value); setCidade(''); }}
                 style={{ flex: '0 0 200px', minWidth: 0 }}
@@ -839,9 +846,9 @@ export default function EditProfile() {
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Redes Sociais <span style={{ fontWeight: '400', fontSize: '0.85rem', opacity: 0.6 }}>(máx. 4)</span></label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {redesSociais.map((item, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <select
-                    className="input"
+                    className="input rs-plataforma-select"
                     value={item.plataforma}
                     onChange={(e) => {
                       const nova = [...redesSociais];
@@ -858,7 +865,7 @@ export default function EditProfile() {
                   </select>
                   {item.plataforma === 'outro' && (
                     <input
-                      className="input"
+                      className="input rs-nome-input"
                       type="text"
                       placeholder="Nome da rede"
                       value={item.nome || ''}

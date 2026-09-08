@@ -5,6 +5,7 @@ import ReportModal from '../components/ModalDenuncia';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 const API = 'http://localhost:8000';
 
@@ -13,6 +14,7 @@ export default function PublicProfile() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(false);
   const [activeTab, setActiveTab] = useState('skills');
+  const tabsScrollRef = useScrollEdges();
   const [isLoading, setIsLoading] = useState(true);
 
   const [user, setUser] = useState({
@@ -240,7 +242,7 @@ export default function PublicProfile() {
         </section>
 
         {/* Tabs */}
-        <div className="profile-tabs" role="tablist" aria-label="Informações do perfil">
+        <div className="profile-tabs scroll-fade scroll-fade--bg" role="tablist" aria-label="Informações do perfil" ref={tabsScrollRef}>
           {[
             { key: 'skills', label: 'Habilidades e Especialidades' },
             { key: 'experiencia', label: `Experiência${user.profile?.experiencias?.length > 0 ? ` (${user.profile.experiencias.length})` : ''}` },

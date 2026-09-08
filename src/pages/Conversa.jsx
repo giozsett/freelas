@@ -4,6 +4,8 @@ import PropTypes from 'prop-types';
 import { Send, MessageSquare, Lock, HelpCircle, Loader2, ArrowLeft, Archive, MessagesSquare } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import ReportModal from '../components/ModalDenuncia';
+import CarrosselIndicador from '../components/CarrosselIndicador';
+import useCarrosselIndicador from '../hooks/useCarrosselIndicador';
 
 const API = 'http://localhost:8000';
 const WS_BASE = API.replace(/^http/, 'ws');
@@ -348,6 +350,7 @@ export default function Conversa() {
   const chatsEmAndamento = chats.filter((c) => c.chat_ativo);
   const chatsFinalizados = chats.filter((c) => !c.chat_ativo);
   const chatsFiltrados = chatTab === 'em-andamento' ? chatsEmAndamento : chatsFinalizados;
+  const { containerRef: contatosScrollRef, activeIndex: contatoAtivoIndex, scrollToIndex: irParaContato } = useCarrosselIndicador(chatsFiltrados.length);
 
   return (
     <div className={`chat-layout ${chat ? 'chat-selecionado' : ''}`}>
@@ -413,7 +416,7 @@ export default function Conversa() {
             </p>
           </div>
         ) : (
-          <div className="chat-contacts chat-contacts-scroll">
+          <div className="chat-contacts chat-contacts-scroll" ref={contatosScrollRef}>
             {chatsFiltrados.map((item) => {
               const ativo = item.id === chat?.id;
               const chipItem = STATUS_CHIP[item.status_acordo] || { label: item.status_acordo, tone: 'done' };
@@ -466,6 +469,12 @@ export default function Conversa() {
             })}
           </div>
         )}
+        <CarrosselIndicador
+          className="chat-contacts-dots"
+          count={chatsFiltrados.length}
+          active={contatoAtivoIndex}
+          onDotClick={irParaContato}
+        />
       </aside>
 
       {/* Área principal do chat */}
