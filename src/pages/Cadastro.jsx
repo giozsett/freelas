@@ -273,18 +273,39 @@ export default function Cadastro() {
             <div className="card" style={{ width: '100%', maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
               <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Termos de Uso</h2>
               <div onScroll={handleScrollTerms} style={{ flex: 1, overflowY: 'auto', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-color)', marginBottom: '1rem', lineHeight: '1.6' }}>
-                <p style={{ marginBottom: '1rem' }}>Bem-vindo ao Freelas. Ao utilizar nossa plataforma, você concorda com as seguintes condições:</p>
-                <h3 style={{ marginBottom: '0.5rem' }}>1. Uso da Plataforma</h3>
-                <p style={{ marginBottom: '1rem' }}>Você se compromete a usar a plataforma apenas para fins legais e de forma que não infrinja os direitos de, nem restrinja ou iniba o uso e usufruto desta plataforma por terceiros.</p>
-                <h3 style={{ marginBottom: '0.5rem' }}>2. Privacidade</h3>
-                <p style={{ marginBottom: '1rem' }}>Coletamos e armazenamos informações essenciais para a operação do serviço. Suas senhas são criptografadas.</p>
-                <h3 style={{ marginBottom: '0.5rem' }}>3. Responsabilidades</h3>
-                <p style={{ marginBottom: '1rem' }}>A plataforma não se responsabiliza por acordos fechados diretamente entre freelancers e contratantes. Somos um facilitador de conexões.</p>
-                <p style={{ marginBottom: '1rem' }}>Por favor, denuncie qualquer comportamento abusivo através da nossa ferramenta de moderação integrada.</p>
-                <p style={{ marginBottom: '3rem' }}>(Continue lendo...)</p>
-                <p style={{ marginBottom: '3rem' }}>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-                <p style={{ marginBottom: '3rem' }}>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-                <p style={{ fontWeight: 'bold' }}>Fim dos termos. Você já pode concordar.</p>
+                <p style={{ marginBottom: '1rem' }}>Bem-vindo ao Freelas. Ao criar uma conta e utilizar nossa plataforma, você concorda com os termos abaixo, elaborados em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>1. Sobre a Plataforma</h3>
+                <p style={{ marginBottom: '1rem' }}>O Freelas é um marketplace que conecta freelancers e contratantes, oferecendo ferramentas de busca, comunicação via chat, formalização de acordos de serviço, avaliação e reputação, e um canal de denúncias para moderação.</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>2. Natureza dos Acordos entre as Partes</h3>
+                <p style={{ marginBottom: '1rem' }}><strong>O Freelas atua exclusivamente como facilitador da conexão</strong> entre freelancers e contratantes. Os acordos de serviço firmados dentro da plataforma não constituem contrato de prestação de serviços com validade jurídica firmado ou intermediado pelo Freelas, tampouco substituem instrumentos formais (contratos, recibos, notas fiscais) que as partes devam celebrar entre si conforme a legislação aplicável à relação. É de responsabilidade exclusiva de freelancers e contratantes o cumprimento das obrigações fiscais, trabalhistas e contratuais decorrentes do serviço prestado. O Freelas não é parte do acordo firmado entre os usuários e não garante nem se responsabiliza pela execução, qualidade, prazo ou pagamento dos serviços contratados entre eles.</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>3. Pagamentos e Assinaturas</h3>
+                <p style={{ marginBottom: '1rem' }}>Assinaturas de planos e pagamentos de acordos são processados por meio de um parceiro de pagamento (Stripe). O Freelas não armazena dados completos de cartão de crédito; essas informações são tratadas diretamente pelo processador de pagamentos, conforme os padrões de segurança do setor.</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>4. Proteção de Dados Pessoais (LGPD)</h3>
+                <p style={{ marginBottom: '0.5rem' }}>Tratamos os dados pessoais fornecidos no cadastro e uso da plataforma (nome, e-mail, telefone, cidade/estado, foto de perfil, banner, biografia, habilidades, certificados, currículo, mensagens de chat, avaliações e demais informações que você opte por compartilhar) para as seguintes finalidades:</p>
+                <ul style={{ marginBottom: '1rem', paddingLeft: '1.25rem' }}>
+                  <li>Criar e autenticar sua conta;</li>
+                  <li>Viabilizar o chat, a formalização de acordos e o processamento de pagamentos;</li>
+                  <li>Exibir seu perfil público e seu histórico de avaliação/reputação;</li>
+                  <li>Moderar denúncias e garantir a segurança da plataforma;</li>
+                  <li>Enviar comunicações relacionadas ao serviço.</li>
+                </ul>
+                <p style={{ marginBottom: '0.5rem' }}>O tratamento se baseia na execução do contrato firmado com você (art. 7º, V, LGPD) e, quando aplicável, no seu consentimento (art. 7º, I). Utilizamos prestadores de serviço para viabilizar funcionalidades específicas — como processamento de pagamentos (Stripe) e armazenamento de imagens (Cloudinary) —, que têm acesso apenas aos dados estritamente necessários para a função que desempenham. Suas senhas são armazenadas de forma criptografada e nunca são acessíveis em texto puro pela nossa equipe. Mantemos seus dados pelo tempo necessário para cumprir as finalidades acima ou por prazo superior quando exigido por lei.</p>
+                <p style={{ marginBottom: '1rem' }}>Nos termos do art. 18 da LGPD, você pode a qualquer momento solicitar confirmação da existência de tratamento, acesso, correção, anonimização, bloqueio ou eliminação de dados desnecessários, portabilidade, informação sobre compartilhamento com terceiros e revogação do consentimento. Para exercer esses direitos, entre em contato pelos canais de suporte disponíveis na plataforma.</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>5. Conduta dos Usuários e Denúncias</h3>
+                <p style={{ marginBottom: '1rem' }}>Você se compromete a usar a plataforma apenas para fins lícitos, sem violar direitos de terceiros nem restringir ou prejudicar seu uso por outras pessoas. Comportamentos abusivos, fraudulentos, discriminatórios ou que violem estes termos podem ser denunciados através da nossa ferramenta de moderação integrada e podem resultar em suspensão ou exclusão da conta, a critério da administração da plataforma.</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>6. Limitação de Responsabilidade</h3>
+                <p style={{ marginBottom: '1rem' }}>O Freelas não garante a veracidade das informações fornecidas pelos usuários, nem se responsabiliza por prejuízos decorrentes de acordos descumpridos, má prestação de serviço ou condutas de terceiros fora do controle da plataforma. O uso da plataforma é por conta e risco do usuário.</p>
+
+                <h3 style={{ marginBottom: '0.5rem' }}>7. Alterações nestes Termos</h3>
+                <p style={{ marginBottom: '1rem' }}>Estes termos podem ser atualizados periodicamente para refletir mudanças na plataforma ou na legislação aplicável. Alterações relevantes serão comunicadas pelos meios disponíveis na plataforma.</p>
+
+                <p style={{ fontWeight: 'bold' }}>Ao clicar em "Concordar", você declara que leu, compreendeu e concorda integralmente com os termos acima.</p>
               </div>
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button className="btn btn-secondary" onClick={() => setIsTermsModalOpen(false)}>Cancelar</button>
