@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { useDialogo } from '../context/ContextoDialogo';
@@ -18,6 +19,7 @@ export default function Cadastro() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
@@ -69,15 +71,13 @@ export default function Cadastro() {
       });
       const data = await response.json();
       if (response.ok) {
-        // 2. Realiza o login direto sem exigir código de verificação no cadastro comum
-        login(data.user, data.token);
-        navigate('/subscription-setup');
+        // Código já foi enviado no cadastro: vai para a tela de confirmação do email
+        setEmailCadastrado(email);
+        setEtapa('verificacao');
       } else {
-        if (data.username || data.email) {
-          setErrorMsg('Já há um usuário cadastrado com esse email.');
-        } else {
-          setErrorMsg('Erro ao cadastrar. Verifique os dados.');
-        }
+        const emailError = Array.isArray(data.email) ? data.email[0] : data.email;
+        const usernameError = Array.isArray(data.username) ? data.username[0] : data.username;
+        setErrorMsg(emailError || usernameError || 'Erro ao cadastrar. Verifique os dados.');
       }
     } catch (err) {
       setErrorMsg('Erro interno de conexão.');
@@ -123,7 +123,7 @@ export default function Cadastro() {
   const handleGoogleRegister = async (credentialResponse) => {
     setErrorMsg('');
     try {
-      const response = await fetch('http://localhost:8000/api/auth/google/register/', {
+      const response = await fetch('http://localhost:8000/api/auth/google/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_token: credentialResponse.credential }),
@@ -132,10 +132,8 @@ export default function Cadastro() {
       if (response.ok) {
         login(data.user, data.token);
         navigate('/subscription-setup');
-      } else if (data.error === 'already_registered') {
-        setErrorMsg('Você já tem uma conta! Faça login.');
       } else {
-        setErrorMsg('Erro ao cadastrar com o Google. Tente novamente.');
+        setErrorMsg(data.error || 'Erro ao cadastrar com o Google. Tente novamente.');
       }
     } catch (err) {
       setErrorMsg('Erro interno de conexão.');
@@ -223,12 +221,21 @@ export default function Cadastro() {
             </div>
             <div className="form-row">
               <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha</label>
-                <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Sua senha" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ fontWeight: '500' }}>Senha</label>
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <input type={showPassword ? 'text' : 'password'} className="input" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Sua senha" />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a Senha</label>
-                <input type="password" className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Confirme" />
+                <input type={showPassword ? 'text' : 'password'} className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Confirme" />
               </div>
             </div>
 

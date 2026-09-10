@@ -16,6 +16,7 @@ from .models import (
     SolicitacaoAlteracaoAcordo,
     SolicitacaoCancelamentoAcordo,
     UserProfile,
+    VerificacaoEmail,
 )
 
 
@@ -807,3 +808,124 @@ class DashboardAdminAPITests(TestCase):
 
         freelas = response.data['geral']['freelas']
         self.assertEqual(freelas['fecharam_acordo_mes'], 2)
+
+
+class CadastroConflitoEmailTests(TestCase):
+    """Email não pode ser duplicado entre cadastro manual e login Google."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.fake_identity = {
+            'sub': '1234567890',
+            'email': 'googleteste@example.com',
+            'given_name': 'Google',
+            'family_name': 'Teste',
+            'email_verified': True,
+        }
+
+    def _post_google(self):
+        from allauth.socialaccount.providers.google import views as google_views
+
+        with patch.object(google_views, '_verify_and_decode', return_value=self.fake_identity):
+            return self.client.post('/api/auth/google/', {'id_token': 'fake.jwt'}, format='json')
+
+    def test_manual_rejeita_email_ja_utilizado(self):
+        User.objects.create_user(username='existente', email=self.fake_identity['email'], password='x')
+        resp = self.client.post('/api/auth/register/', {
+            'username': 'novo_usuario',
+            'email': self.fake_identity['email'],
+            'password': 'senha12345',
+            'first_name': 'Novo',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Este email já está sendo utilizado.', str(resp.data))
+
+    def test_manual_rejeita_email_proveniente_do_google(self):
+        self._post_google()
+        resp = self.client.post('/api/auth/register/', {
+            'username': 'outro_usuario',
+            'email': self.fake_identity['email'],
+            'password': 'senha12345',
+            'first_name': 'Outro',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Este email já está sendo utilizado.', str(resp.data))
+
+    def test_google_cria_conta_nova(self):
+        resp = self._post_google()
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(User.objects.filter(email=self.fake_identity['email']).exists())
+
+    def test_google_rejeita_email_de_conta_manual(self):
+        User.objects.create_user(username='manual', email=self.fake_identity['email'], password='x')
+        resp = self._post_google()
+        self.assertEqual(resp.status_code, 409)
+        self.assertIn('Este email já está sendo utilizado.', str(resp.data))
+
+    def test_google_relogin_mesma_conta_ok(self):
+        self._post_google()
+        token1 = self._post_google().data['token']
+        resp2 = self._post_google()
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.data['token'], token1)
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class VerificacaoEmailTests(TestCase):
+    """Cadastro manual exige confirmação do email antes de entrar no site."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def _registrar(self):
+        return self.client.post('/api/auth/register/', {
+            'username': 'novo@example.com',
+            'email': 'novo@example.com',
+            'password': 'senha12345',
+            'first_name': 'Novo',
+        }, format='json')
+
+    def test_registro_nao_emite_token_e_cria_codigo(self):
+        resp = self._registrar()
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('token', resp.data)
+        user = User.objects.get(email='novo@example.com')
+        verificacao = VerificacaoEmail.objects.get(usuario=user)
+        self.assertFalse(verificacao.verificado)
+        self.assertTrue(verificacao.codigo)
+
+    def test_login_bloqueado_antes_de_confirmar_email(self):
+        self._registrar()
+        resp = self.client.post('/api/auth/login/', {
+            'username': 'novo@example.com',
+            'password': 'senha12345',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('Confirme seu email', str(resp.data))
+
+    def test_codigo_incorreto_rejeitado(self):
+        self._registrar()
+        resp = self.client.post('/api/auth/verificar-codigo/', {
+            'email': 'novo@example.com',
+            'codigo': '000000',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_confirma_email_e_libera_acesso(self):
+        self._registrar()
+        user = User.objects.get(email='novo@example.com')
+        codigo = VerificacaoEmail.objects.get(usuario=user).codigo
+
+        resp = self.client.post('/api/auth/verificar-codigo/', {
+            'email': 'novo@example.com',
+            'codigo': codigo,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('token', resp.data)
+        self.assertTrue(VerificacaoEmail.objects.get(usuario=user).verificado)
+
+        login = self.client.post('/api/auth/login/', {
+            'username': 'novo@example.com',
+            'password': 'senha12345',
+        }, format='json')
+        self.assertEqual(login.status_code, 200)

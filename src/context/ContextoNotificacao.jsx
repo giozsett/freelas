@@ -1,8 +1,9 @@
-import { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { useAuth } from './ContextoAutenticacao';
 
 const API = 'http://localhost:8000';
+const WS_BASE = API.replace(/^http/, 'ws');
 
 const NotificacaoContext = createContext();
 
@@ -13,6 +14,15 @@ export const NotificacaoProvider = ({ children }) => {
   const [notificacoes, setNotificacoes] = useState([]);
   const [chatNaoLidas, setChatNaoLidas] = useState(0);
 
+  // Aplica um snapshot enviado pelo servidor (conexão inicial ou reconexão).
+  const aplicarSnapshot = useCallback((dados) => {
+    if (typeof dados.naoLidas === 'number') setNaoLidas(dados.naoLidas);
+    if (dados.tipos) setPorTipo(dados.tipos);
+    if (typeof dados.chatNaoLidas === 'number') setChatNaoLidas(dados.chatNaoLidas);
+  }, []);
+
+  // Sincronização manual (um-shot) — mantida para uso externo pontual.
+  // O estado normal é mantido pelo WebSocket, sem polling.
   const carregar = useCallback(async () => {
     if (!token) {
       setNaoLidas(0);
@@ -43,6 +53,89 @@ export const NotificacaoProvider = ({ children }) => {
     }
   }, [token]);
 
+  // WebSocket único para notificações e chat: entrega instantânea,
+  // com reconexão automática (o servidor reenvia o snapshot ao conectar).
+  const wsRef = useRef(null);
+  const retryTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!token) {
+      setNaoLidas(0);
+      setPorTipo({});
+      setChatNaoLidas(0);
+      setNotificacoes([]);
+      return undefined;
+    }
+
+    let fechado = false;
+
+    const abrir = () => {
+      if (fechado || !token) return;
+      try {
+        wsRef.current = new WebSocket(`${WS_BASE}/ws/notificacoes/?token=${encodeURIComponent(token)}`);
+      } catch {
+        return;
+      }
+
+      wsRef.current.onmessage = (evt) => {
+        if (fechado) return;
+        let dados;
+        try {
+          dados = JSON.parse(evt.data);
+        } catch {
+          return;
+        }
+        switch (dados.tipo) {
+          case 'sincronizacao':
+            aplicarSnapshot(dados);
+            break;
+          case 'nova_notificacao':
+            aplicarSnapshot(dados);
+            if (dados.notificacao?.id) {
+              setNotificacoes((atual) =>
+                atual.some((n) => n.id === dados.notificacao.id)
+                  ? atual
+                  : [dados.notificacao, ...atual],
+              );
+            }
+            break;
+          case 'chat_nao_lidas':
+            if (typeof dados.total === 'number') setChatNaoLidas(dados.total);
+            break;
+          default:
+            break;
+        }
+      };
+
+      wsRef.current.onclose = () => {
+        if (!fechado) {
+          // Reconecta com backoff simples; ao reconectar o servidor reenvia o snapshot.
+          retryTimerRef.current = setTimeout(abrir, 5000);
+        }
+      };
+
+      wsRef.current.onerror = () => {
+        try {
+          wsRef.current?.close();
+        } catch {
+          /* noop */
+        }
+      };
+    };
+
+    abrir();
+    return () => {
+      fechado = true;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      try {
+        wsRef.current?.close();
+      } catch {
+        /* noop */
+      }
+      wsRef.current = null;
+    };
+  }, [token, aplicarSnapshot]);
+
   const carregarLista = useCallback(async () => {
     if (!token) return;
     try {
@@ -55,12 +148,6 @@ export const NotificacaoProvider = ({ children }) => {
       // silencioso
     }
   }, [token]);
-
-  useEffect(() => {
-    carregar();
-    const id = setInterval(carregar, 8000);
-    return () => clearInterval(id);
-  }, [carregar]);
 
   const marcarLidas = useCallback(async (tipos = []) => {
     if (!token) return;

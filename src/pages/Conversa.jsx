@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { Send, MessageSquare, Lock, HelpCircle, Loader2, ArrowLeft, Archive, MessagesSquare } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useNotificacoes } from '../context/ContextoNotificacao';
 import ReportModal from '../components/ModalDenuncia';
 
 const API = 'http://localhost:8000';
@@ -110,6 +111,7 @@ Avatar.propTypes = {
 
 export default function Conversa() {
   const { user, token } = useAuth();
+  const { chatNaoLidas } = useNotificacoes();
   const { acordoId } = useParams();
   const navigate = useNavigate();
 
@@ -125,7 +127,6 @@ export default function Conversa() {
   const [modalDenuncia, setModalDenuncia] = useState(false);
   const [wsId, setWsId] = useState(null);
 
-  const selectedIdRef = useRef(null);
   const inicializadoRef = useRef(false);
   const fimRef = useRef(null);
   const wsRef = useRef(null);
@@ -152,7 +153,6 @@ export default function Conversa() {
 
   const abrirChat = useCallback(
     async (id) => {
-      selectedIdRef.current = id;
       setWsId(id);
       setCarregandoChat(true);
       setErro('');
@@ -192,8 +192,6 @@ export default function Conversa() {
     }
   }, [acordoId, abrirChat]);
 
-  const wsConectadoRef = useRef(false);
-
   // WebSocket em tempo real: entrega imediata de novas mensagens.
   useEffect(() => {
     const idAtual = wsId;
@@ -201,11 +199,40 @@ export default function Conversa() {
 
     if (wsRef.current) wsRef.current.close();
     wsRef.current = null;
-    wsConectadoRef.current = false;
 
     let fechado = false;
     let socket = null;
     let retryTimer = null;
+
+    // Uma única re-sincronização ao (re)conectar, para recuperar mensagens
+    // perdidas enquanto o socket esteve fora — sem polling contínuo.
+    const sincronizarConversa = async () => {
+      try {
+        const res = await fetch(`${API}/api/chat/${idAtual}/`, { headers: authHeaders() });
+        if (!res.ok) return;
+        const dados = await res.json();
+        if (fechado) return;
+        setMessages((prev) => {
+          const anterior = prev.length ? prev[prev.length - 1].id : null;
+          const nova = dados.messages?.length
+            ? dados.messages[dados.messages.length - 1].id
+            : null;
+          return anterior === nova ? prev : (dados.messages || []);
+        });
+        setChat((prev) =>
+          prev
+            ? {
+                ...prev,
+                status_acordo: dados.status_acordo,
+                chat_ativo: dados.chat_ativo,
+              }
+            : prev,
+        );
+        if (!dados.chat_ativo) setChatTab('finalizadas');
+      } catch {
+        // ignora: o WebSocket é a fonte principal, o histórico vem do abrirChat.
+      }
+    };
 
     const abrir = () => {
       if (fechado || !wsId) return;
@@ -215,14 +242,14 @@ export default function Conversa() {
         return;
       }
       socket.onopen = () => {
-        if (!fechado) {
-          wsConectadoRef.current = true;
-          // Marca como lido ao conectar e avisa o servidor.
-          fetch(`${API}/api/chat/${wsId}/ler/`, {
-            method: 'POST',
-            headers: authHeaders(),
-          }).catch(() => {});
-        }
+        if (fechado) return;
+        // Marca como lido ao conectar e avisa o servidor.
+        fetch(`${API}/api/chat/${idAtual}/ler/`, {
+          method: 'POST',
+          headers: authHeaders(),
+        }).catch(() => {});
+        carregarChats();
+        sincronizarConversa();
       };
       socket.onmessage = (evt) => {
         if (fechado) return;
@@ -240,9 +267,8 @@ export default function Conversa() {
         }
       };
       socket.onclose = () => {
-        wsConectadoRef.current = false;
         if (!fechado) {
-          // Reconecta com backoff simples.
+          // Reconecta com backoff simples; a re-sincronização ocorre no onopen.
           retryTimer = setTimeout(abrir, 5000);
         }
       };
@@ -265,43 +291,14 @@ export default function Conversa() {
         /* noop */
       }
       wsRef.current = null;
-      wsConectadoRef.current = false;
     };
   }, [token, authHeaders, carregarChats, wsId]);
 
+  // Atualiza a lista de conversas quando o total global de mensagens não
+  // lidas muda (evento do WebSocket de notificações) — sem polling.
   useEffect(() => {
-    const intervalo = setInterval(() => {
-      const idAtual = selectedIdRef.current;
-      // Se o WebSocket estiver conectado, o fallback de mensagens fica mais raro.
-      if (idAtual && token && !wsConectadoRef.current) {
-        fetch(`${API}/api/chat/${idAtual}/`, { headers: authHeaders() })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((dados) => {
-            if (!dados) return;
-            setMessages((prev) => {
-              const anterior = prev.length ? prev[prev.length - 1].id : null;
-              const nova = dados.messages?.length
-                ? dados.messages[dados.messages.length - 1].id
-                : null;
-              return anterior === nova ? prev : (dados.messages || []);
-            });
-            setChat((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    status_acordo: dados.status_acordo,
-                    chat_ativo: dados.chat_ativo,
-                  }
-                : prev,
-            );
-            if (selectedIdRef.current && !dados.chat_ativo) setChatTab('finalizadas');
-          })
-          .catch(() => {});
-      }
-      carregarChats();
-    }, wsConectadoRef.current ? 10000 : 3000);
-    return () => clearInterval(intervalo);
-  }, [token, authHeaders, carregarChats]);
+    if (token) carregarChats();
+  }, [token, chatNaoLidas, carregarChats]);
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -478,7 +475,7 @@ export default function Conversa() {
             {/* Header do chat */}
             <div style={{ padding: '1rem 1.25rem', borderBottom: 'var(--border-width) solid var(--border-color)', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
-                onClick={() => { setChat(null); setMessages([]); selectedIdRef.current = null; setWsId(null); navigate('/chat'); }}
+                onClick={() => { setChat(null); setMessages([]); setWsId(null); navigate('/chat'); }}
                 className="chat-back-btn"
                 title="Voltar para as conversas"
                 aria-label="Voltar para as conversas"
