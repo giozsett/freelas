@@ -127,6 +127,32 @@ Sempre usar o par cor+`-soft` (ex.: `--danger-color` no texto/ícone,
 - **Motion**: transições de 0.15–0.4s `ease`/`cubic-bezier`; nada abrupto; respeitar
   `prefers-reduced-motion`.
 
+## Checklist de completude do perfil (reputação)
+
+A completude do perfil (bônus de até 30 pontos na reputação, ver
+`Termômetro de reputação` em `TermometroReputacao.jsx`) é calculada por
+`_completude_perfil_itens` em `backend/core/serializers.py`, com 6 itens
+fixos somando 100 pontos:
+
+| Item | Pontos | Critério |
+|---|---|---|
+| Foto de perfil | 15 | ter uma foto |
+| Bio | 20 | pelo menos 20 caracteres |
+| Cidade | 10 | preenchida |
+| Contato | 10 | telefone **visível** OU alguma rede social |
+| Categorias | 15 | pelo menos 1 categoria |
+| Skills/Certificados/Experiências | 30 | pelo menos 1 dos três (não precisa dos três) |
+
+A API expõe esses itens em `reputacao.<freelancer|contratante>.completude_perfil_detalhe`
+(lista de `{chave, label, pontos, atendido}`), além do número agregado em
+`completude_perfil`. Em `Perfil.jsx` (só na própria página de perfil, não
+na pública) isso vira uma lista discreta abaixo dos termômetros: fonte
+pequena (~0.78rem), item atendido em `--success-color` com ícone
+`CheckCircle`, item pendente em `--text-secondary` com ícone `Circle`
+vazio. Se um redesign futuro mexer nessa área, manter esse detalhamento
+sempre pequeno/secundário — ele existe para tirar dúvida, não para
+competir visualmente com o termômetro principal.
+
 ## Ao propor um redesign (ex.: navbar, dropdowns, novos painéis)
 
 - Pode mudar **layout, agrupamento e hierarquia visual** livremente — isso é o que

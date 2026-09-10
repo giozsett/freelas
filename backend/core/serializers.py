@@ -299,29 +299,58 @@ def obter_criterios_definicao(papel_avaliado, modalidade='remoto'):
     return CRITERIOS_DETALHADOS.get(papel, {}).get(mod, [])
 
 
+def _completude_perfil_itens(profile):
+    """
+    Lista, item a item, o que soma pontos na completude do perfil (0-100),
+    nos moldes de apps como Tinder — cada seção preenchida soma pontos e o
+    total vira um bônus na reputação (ver calcular_reputacao_usuario). Os
+    mesmos itens valem tanto para freelancers quanto para contratantes, já
+    que são campos comuns do UserProfile. Exposto (via completude_perfil_detalhe)
+    para o usuário ver exatamente o que falta, não só o número final.
+    """
+    return [
+        {
+            'chave': 'foto',
+            'label': 'Foto de perfil',
+            'pontos': 15,
+            'atendido': bool(profile.foto_perfil),
+        },
+        {
+            'chave': 'bio',
+            'label': 'Bio (mínimo 20 caracteres)',
+            'pontos': 20,
+            'atendido': len((profile.bio or '').strip()) >= 20,
+        },
+        {
+            'chave': 'cidade',
+            'label': 'Cidade',
+            'pontos': 10,
+            'atendido': bool(profile.cidade),
+        },
+        {
+            'chave': 'contato',
+            'label': 'Telefone visível ou rede social',
+            'pontos': 10,
+            'atendido': bool((profile.telefone and profile.telefone_visivel) or profile.redes_sociais),
+        },
+        {
+            'chave': 'categorias',
+            'label': 'Categorias de atuação',
+            'pontos': 15,
+            'atendido': bool(profile.categories),
+        },
+        {
+            'chave': 'portfolio',
+            'label': 'Skills, certificados ou experiência',
+            'pontos': 30,
+            'atendido': bool(profile.skills or profile.certificados.exists() or profile.experiencias.exists()),
+        },
+    ]
+
+
 def _completude_perfil(profile):
-    """
-    Calcula o quanto do perfil está preenchido (0-100), nos moldes de apps
-    como Tinder: cada seção preenchida soma pontos e o valor final vira um
-    bônus na reputação (ver calcular_reputacao_usuario) — mais informações
-    no perfil significam mais confiabilidade para quem está se candidatando
-    ou conversando com o usuário. Os mesmos itens valem tanto para
-    freelancers quanto para contratantes, já que são campos comuns do
-    UserProfile.
-    """
-    pontos = 0
-    if profile.foto_perfil:
-        pontos += 15
-    if len((profile.bio or '').strip()) >= 20:
-        pontos += 20
-    if profile.cidade:
-        pontos += 10
-    if (profile.telefone and profile.telefone_visivel) or profile.redes_sociais:
-        pontos += 10
-    if profile.categories:
-        pontos += 15
-    if profile.skills or profile.certificados.exists() or profile.experiencias.exists():
-        pontos += 30
+    """Soma os pontos dos itens atendidos em _completude_perfil_itens (0-100)."""
+    pontos = sum(item['pontos'] for item in _completude_perfil_itens(profile) if item['atendido'])
     return min(100, pontos)
 
 
@@ -342,7 +371,8 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
     )
 
     total_avaliacoes = profile.avaliacoes_recebidas.filter(papel_avaliado=papel).count()
-    completude = _completude_perfil(profile)
+    completude_itens = _completude_perfil_itens(profile)
+    completude = min(100, sum(item['pontos'] for item in completude_itens if item['atendido']))
     bonus_completude = round(completude * 0.30)
 
     MENSAGENS_TAGS = {
@@ -464,6 +494,7 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
             'tags': tags,
             'total_avaliacoes': 0,
             'completude_perfil': completude,
+            'completude_perfil_detalhe': completude_itens,
         }
 
     media_geral_val = profile.avaliacoes_recebidas.filter(papel_avaliado=papel).aggregate(
@@ -521,6 +552,7 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
         'tags': tags_finais,
         'total_avaliacoes': total_avaliacoes,
         'completude_perfil': completude,
+        'completude_perfil_detalhe': completude_itens,
     }
 
 

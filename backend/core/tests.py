@@ -1133,6 +1133,36 @@ class CriteriosAvaliacaoAPITests(TestCase):
         self.assertEqual(reputacao['score'], 70)  # 40 base + 30 (bônus máximo)
         self.assertEqual(reputacao['label'], 'Regular')
 
+    def test_completude_perfil_detalha_itens_atendidos_e_faltantes(self):
+        # Reproduz o caso real que gerou a duvida: foto, cidade e categorias
+        # preenchidas, mas bio com menos de 20 caracteres e telefone com a
+        # visibilidade desligada - o detalhamento precisa apontar exatamente
+        # esses dois itens como pendentes, nao só o total agregado.
+        profile = self.contratante.profile
+        profile.foto_perfil = 'https://exemplo.com/foto.jpg'
+        profile.bio = 'Bio curta'
+        profile.cidade = 'São Paulo'
+        profile.telefone = '11999999999'
+        profile.telefone_visivel = False
+        profile.categories = ['Desenvolvimento Web']
+        profile.save()
+
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        itens = response.data['author_reputation']['completude_perfil_detalhe']
+        por_chave = {item['chave']: item for item in itens}
+
+        self.assertTrue(por_chave['foto']['atendido'])
+        self.assertEqual(por_chave['foto']['pontos'], 15)
+        self.assertFalse(por_chave['bio']['atendido'])
+        self.assertEqual(por_chave['bio']['pontos'], 20)
+        self.assertTrue(por_chave['cidade']['atendido'])
+        self.assertFalse(por_chave['contato']['atendido'])
+        self.assertTrue(por_chave['categorias']['atendido'])
+        self.assertFalse(por_chave['portfolio']['atendido'])
+        self.assertEqual(por_chave['portfolio']['pontos'], 30)
+
 
 class PerfilBioEReputacaoAPITests(TestCase):
     """

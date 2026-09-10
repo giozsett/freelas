@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
+import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Circle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
@@ -228,6 +228,23 @@ export default function Profile() {
             <TermometroReputacao titulo="Reputação como Freelancer" reputacao={reputacao.freelancer} />
             <TermometroReputacao titulo="Reputação como Contratante" reputacao={reputacao.contratante} />
           </div>
+          {reputacao.freelancer?.completude_perfil_detalhe && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1rem', marginTop: '0.85rem' }}>
+              {reputacao.freelancer.completude_perfil_detalhe.map((item) => (
+                <span
+                  key={item.chave}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                    fontSize: '0.78rem',
+                    color: item.atendido ? 'var(--success-color)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {item.atendido ? <CheckCircle size={13} /> : <Circle size={13} />}
+                  {item.label} (+{item.pontos})
+                </span>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Tabs */}
