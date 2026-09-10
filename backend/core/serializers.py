@@ -738,6 +738,8 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
     recusar_solicitacao = serializers.BooleanField(write_only=True, required=False)
     avaliacao_enviada = serializers.SerializerMethodField()
     cancelamento_pendente = serializers.SerializerMethodField()
+    taxa_plataforma = serializers.FloatField(read_only=True)
+    valor_total = serializers.FloatField(source='valor_total_com_taxa', read_only=True)
 
     class Meta:
         model = AcordoServico

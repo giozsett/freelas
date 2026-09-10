@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Gem,
   History,
@@ -10,19 +12,20 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useNotificacoes } from '../context/ContextoNotificacao';
-import useScrollEdges from '../hooks/useScrollEdges';
 
 const API = 'http://localhost:8000';
+const PAGE_SIZE = 15;
 
 export default function MyPayments() {
   const { token } = useAuth();
   const { marcarLidas } = useNotificacoes();
   const [subscriptionPlan, setSubscriptionPlan] = useState('Gratuito');
   const [history, setHistory] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const tableScrollRef = useScrollEdges();
 
   useEffect(() => {
     marcarLidas(['pagamento']);
@@ -41,7 +44,7 @@ export default function MyPayments() {
       try {
         const [profileResponse, historyResponse] = await Promise.all([
           fetch(`${API}/api/auth/profile/`, { headers }),
-          fetch(`${API}/api/pagamentos/historico/`, { headers }),
+          fetch(`${API}/api/pagamentos/historico/?page=${page}`, { headers }),
         ]);
 
         if (!profileResponse.ok || !historyResponse.ok) {
@@ -53,7 +56,8 @@ export default function MyPayments() {
           historyResponse.json(),
         ]);
         setSubscriptionPlan(profileData.subscription_plan || 'Gratuito');
-        setHistory(Array.isArray(historyData) ? historyData : []);
+        setHistory(Array.isArray(historyData.results) ? historyData.results : []);
+        setTotalCount(Number(historyData.count) || 0);
       } catch (error) {
         console.error(error);
         setErrorMessage(error.message);
@@ -63,7 +67,7 @@ export default function MyPayments() {
     };
 
     loadPayments();
-  }, [token]);
+  }, [token, page]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -107,9 +111,12 @@ export default function MyPayments() {
       elo: 'Elo',
       hipercard: 'Hipercard',
       stripe: 'Stripe',
-      simulacao_pagamento: 'Simulado (modo de teste)',
     };
-    return brands[String(brand).toLowerCase()] || brand;
+    const key = String(brand).toLowerCase();
+    if (brands[key]) return brands[key];
+    // Fallback para valores internos antigos (ex.: "registro_legado"): mostra
+    // um texto legível em vez do identificador cru salvo no banco.
+    return key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
   };
 
   return (
@@ -173,33 +180,34 @@ export default function MyPayments() {
                   <History size={20} /> Histórico de Transações
                 </h2>
                 {history.length > 0 ? (
-                  <div ref={tableScrollRef} className="scroll-fade" style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '650px' }}>
+                  <>
+                    <table className="responsive-table">
                       <thead>
-                        <tr style={{ borderBottom: '2px solid var(--border-color)', opacity: 0.8 }}>
-                          <th style={{ padding: '1rem 0.5rem' }}>Data da aprovação</th>
-                          <th style={{ padding: '1rem 0.5rem' }}>Tipo</th>
-                          <th style={{ padding: '1rem 0.5rem' }}>Pagamento</th>
-                          <th style={{ padding: '1rem 0.5rem' }}>Valor</th>
-                          <th style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>Status</th>
+                        <tr>
+                          <th>Data da aprovação</th>
+                          <th>Tipo</th>
+                          <th>Valor</th>
+                          <th>Status</th>
                         </tr>
                       </thead>
                       <tbody className="stagger">
                         {history.map((payment) => (
-                          <tr key={payment.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '1rem 0.5rem', fontSize: '0.9rem' }}>
+                          <tr key={payment.id}>
+                            <td data-label="Data da aprovação">
                               {formatDate(payment.aprovado_em || payment.criado_em)}
                             </td>
-                            <td style={{ padding: '1rem 0.5rem', fontWeight: 500 }}>
-                              {payment.tipo === 'assinatura' ? `Assinatura ${payment.plano || ''}` : 'Serviço freelancer'}
+                            <td data-label="Tipo">
+                              <span>
+                                {payment.tipo === 'assinatura' ? `Assinatura ${payment.plano || ''}` : 'Serviço freelancer'}
+                                <span className="responsive-table__secondary">
+                                  via {payment.forma_pagamento ? formatBrand(payment.forma_pagamento) : 'Stripe'}
+                                </span>
+                              </span>
                             </td>
-                            <td style={{ padding: '1rem 0.5rem', fontSize: '0.9rem' }}>
-                              {payment.forma_pagamento ? formatBrand(payment.forma_pagamento) : 'Stripe'}
-                            </td>
-                            <td style={{ padding: '1rem 0.5rem', fontWeight: 'bold' }}>
+                            <td data-label="Valor" style={{ fontWeight: 'bold' }}>
                               {formatCurrency(payment.valor)}
                             </td>
-                            <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
+                            <td data-label="Status">
                               <span className="badge" style={{ background: 'var(--success-soft)', color: 'var(--success-color)', border: 'none' }}>
                                 Aprovado
                               </span>
@@ -208,7 +216,32 @@ export default function MyPayments() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                    {totalCount > PAGE_SIZE && (
+                      <div className="pagination-controls">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          disabled={page <= 1}
+                        >
+                          <ChevronLeft size={16} /> Anterior
+                        </button>
+                        <span>
+                          Página {page} de {Math.ceil(totalCount / PAGE_SIZE)}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
+                          onClick={() => setPage((p) => Math.min(Math.ceil(totalCount / PAGE_SIZE), p + 1))}
+                          disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
+                        >
+                          Próxima <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>
                     Nenhuma transação aprovada ainda. Pagamentos pendentes só aparecem após a confirmação do Stripe.

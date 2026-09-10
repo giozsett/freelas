@@ -64,11 +64,7 @@ export default function Plans() {
       if (data.checkout_required && data.init_point) {
         checkoutWindow.opener = null;
         checkoutWindow.location.href = data.init_point;
-        if (data.test_approved) {
-          navigate('/my-payments?checkout=academic-approved');
-        } else {
-          setLoadingPlan(null);
-        }
+        setLoadingPlan(null);
       } else if (!data.checkout_required) {
         navigate('/my-payments');
       } else {

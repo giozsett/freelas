@@ -156,12 +156,7 @@ export default function MeusFreelas() {
       if (data.checkout_required && data.init_point) {
         checkoutWindow.opener = null;
         checkoutWindow.location.href = data.init_point;
-        if (data.test_approved) {
-          showStatus('Checkout aberto. Pagamento registrado e freela movido para Em andamento.', 'success');
-          fetchAgreements();
-        } else {
-          showStatus('Checkout aberto. O freela será iniciado após a aprovação do pagamento.', 'success');
-        }
+        showStatus('Checkout aberto. O freela será iniciado após a aprovação do pagamento.', 'success');
         setPayingAgreementId(null);
       } else {
         throw new Error('O Stripe não retornou o endereço do checkout.');
@@ -555,6 +550,12 @@ export default function MeusFreelas() {
                           <div className="mf-card__price-value">
                             {Number(app.valor_acordado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </div>
+                          {userIsContractor && (
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                              + taxa da plataforma (10%): {Number(app.taxa_plataforma || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {' · '}Total {Number(app.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </div>
+                          )}
                         </div>
                       </div>
 

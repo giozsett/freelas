@@ -260,6 +260,8 @@ class AcordoServico(models.Model):
         ('Cancelado', 'Cancelado'),
     )
 
+    TAXA_PLATAFORMA_PERCENTUAL = Decimal('0.10')
+
     # Campos que existiam/novos na tabela acordo_servico
     status_acordo = models.CharField(
         max_length=50,
@@ -294,6 +296,22 @@ class AcordoServico(models.Model):
 
     def __str__(self):
         return f"Acordo - {self.titulo_anuncio} ({self.status_acordo})"
+
+    @property
+    def taxa_plataforma(self):
+        """Taxa de serviço da plataforma: 10% sobre o valor acordado."""
+        if self.valor_acordado is None:
+            return None
+        valor = Decimal(str(self.valor_acordado))
+        return (valor * self.TAXA_PLATAFORMA_PERCENTUAL).quantize(Decimal('0.01'))
+
+    @property
+    def valor_total_com_taxa(self):
+        """Valor efetivamente cobrado no checkout: valor acordado + taxa da plataforma."""
+        if self.valor_acordado is None:
+            return None
+        valor = Decimal(str(self.valor_acordado))
+        return valor + self.taxa_plataforma
 
 
 class SolicitacaoCancelamentoAcordo(models.Model):

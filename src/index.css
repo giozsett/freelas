@@ -542,6 +542,49 @@ a { color: var(--text-color); text-decoration: none; }
 .scroll-fade--bg::before { background: linear-gradient(90deg, var(--bg-color), transparent); }
 .scroll-fade--bg::after  { background: linear-gradient(270deg, var(--bg-color), transparent); }
 
+/* ══ Tabela responsiva sem scroll horizontal (ex.: Meus Pagamentos) ══
+   Em telas largas é uma tabela normal; abaixo de 640px cada linha vira um
+   mini-card empilhado (rótulo + valor), usando o atributo data-label. */
+.responsive-table { width: 100%; border-collapse: collapse; text-align: left; }
+.responsive-table th {
+  padding: 1rem 0.5rem; border-bottom: 2px solid var(--border-color);
+  opacity: 0.8; font-size: 0.85rem; font-weight: 600;
+}
+.responsive-table td {
+  padding: 1rem 0.5rem; border-bottom: 1px solid var(--border-color);
+  vertical-align: top; font-size: 0.9rem;
+}
+.responsive-table th:last-child, .responsive-table td:last-child { text-align: right; }
+.responsive-table__secondary {
+  display: block; margin-top: 0.15rem; font-size: 0.78rem;
+  color: var(--text-secondary); font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .responsive-table thead { display: none; }
+  .responsive-table, .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
+  .responsive-table tr {
+    border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 0.7rem 0.9rem; margin-bottom: 0.75rem;
+  }
+  .responsive-table tr:last-child { margin-bottom: 0; }
+  .responsive-table td {
+    border-bottom: none; padding: 0.3rem 0; text-align: right !important;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  }
+  .responsive-table td::before {
+    content: attr(data-label); font-weight: 600; color: var(--text-secondary);
+    font-size: 0.78rem; text-align: left; flex-shrink: 0;
+  }
+}
+
+/* Paginação simples de página numerada */
+.pagination-controls {
+  display: flex; align-items: center; justify-content: center; gap: 1rem;
+  margin-top: 1.25rem; font-size: 0.88rem; color: var(--text-secondary);
+}
+.pagination-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* Bolinhas de carrossel para fileiras de cards com scroll horizontal */
 .carrossel-indicador {
   display: flex; justify-content: center; align-items: center; gap: 0.4rem;

@@ -68,11 +68,7 @@ export default function SubscriptionSetup() {
         if (data.checkout_required && data.init_point) {
           checkoutWindow.opener = null;
           checkoutWindow.location.href = data.init_point;
-          if (data.test_approved) {
-            navigate('/my-payments?checkout=academic-approved');
-          } else {
-            setIsSubmitting(false);
-          }
+          setIsSubmitting(false);
         } else if (!data.checkout_required) {
           navigate('/');
         } else {

@@ -74,7 +74,7 @@ class PagamentoAPITests(TestCase):
 
     @patch('core.views.stripe.api_key', 'sk_test_fake')
     @patch('core.views.stripe.checkout.Session.create')
-    def test_contratante_abre_checkout_do_valor_integral(self, create):
+    def test_contratante_abre_checkout_com_taxa_da_plataforma(self, create):
         create.return_value = FakeStripeSession('cs_test_1', 'https://checkout.stripe.com/c/pay/cs_test_1')
         self.client.force_authenticate(self.contratante)
 
@@ -87,18 +87,59 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['checkout_required'])
         self.assertEqual(create.call_args.kwargs['mode'], 'payment')
+        # Valor do anúncio (R$ 1250) + taxa da plataforma de 10% (R$ 125) = R$ 1375.
         self.assertEqual(
             create.call_args.kwargs['line_items'][0]['price_data']['unit_amount'],
-            125000,
+            137500,
         )
+        self.assertIn('taxa de serviço da plataforma (10%)', create.call_args.kwargs['line_items'][0]['price_data']['product_data']['description'])
         self.assertEqual(response.data['init_point'], 'https://checkout.stripe.com/c/pay/cs_test_1')
         pagamento = Pagamento.objects.get(acordo=self.acordo)
-        self.assertEqual(pagamento.valor, Decimal('1250.00'))
+        self.assertEqual(pagamento.valor, Decimal('1375.00'))
         self.assertEqual(pagamento.status, 'pendente')
 
         history = self.client.get('/api/pagamentos/historico/')
         self.assertEqual(history.status_code, 200)
-        self.assertEqual(history.data, [])
+        self.assertEqual(history.data['results'], [])
+        self.assertEqual(history.data['count'], 0)
+
+    def test_historico_pagamentos_e_paginado(self):
+        for i in range(17):
+            Pagamento.objects.create(
+                usuario=self.contratante,
+                tipo='acordo',
+                status='pago',
+                valor=Decimal('100.00'),
+                referencia_externa=f'acordo:historico:{i}',
+                acordo=self.acordo,
+            )
+        self.client.force_authenticate(self.contratante)
+
+        first_page = self.client.get('/api/pagamentos/historico/')
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(first_page.data['count'], 17)
+        self.assertEqual(len(first_page.data['results']), 15)
+        self.assertIsNotNone(first_page.data['next'])
+        self.assertIsNone(first_page.data['previous'])
+
+        second_page = self.client.get('/api/pagamentos/historico/?page=2')
+        self.assertEqual(len(second_page.data['results']), 2)
+        self.assertIsNone(second_page.data['next'])
+        self.assertIsNotNone(second_page.data['previous'])
+
+    def test_taxa_plataforma_e_valor_total_do_acordo(self):
+        self.assertEqual(self.acordo.taxa_plataforma, Decimal('125.00'))
+        self.assertEqual(self.acordo.valor_total_com_taxa, Decimal('1375.00'))
+
+    def test_taxa_plataforma_arredonda_para_duas_casas(self):
+        acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Pendente Pagamento',
+            valor_acordado=99.99,
+            titulo_anuncio='Serviço com centavos',
+        )
+        self.assertEqual(acordo.taxa_plataforma, Decimal('10.00'))
+        self.assertEqual(acordo.valor_total_com_taxa, Decimal('109.99'))
 
     def test_freelancer_nao_pode_pagar_como_contratante(self):
         self.client.force_authenticate(self.freelancer)
@@ -151,7 +192,7 @@ class PagamentoAPITests(TestCase):
 
         self.client.force_authenticate(self.contratante)
         history = self.client.get('/api/pagamentos/historico/')
-        self.assertEqual(len(history.data), 1)
+        self.assertEqual(len(history.data['results']), 1)
 
     @patch.dict('core.views.PLANOS_PAGOS', FAKE_PLANOS_PAGOS)
     @patch('core.views.stripe.api_key', 'sk_test_fake')
@@ -182,7 +223,9 @@ class PagamentoAPITests(TestCase):
     @patch.dict('core.views.PLANOS_PAGOS', FAKE_PLANOS_PAGOS)
     @patch('core.views.stripe.api_key', 'sk_test_fake')
     @patch('core.views.stripe.checkout.Session.create')
-    def test_checkout_academico_aprova_assinatura_ao_criar_link(self, create):
+    def test_checkout_assinatura_nao_aprova_automaticamente(self, create):
+        """Mesmo com DEBUG=True e a antiga flag de teste setada, o pagamento só
+        pode ser concluído quando o usuário terminar o checkout de verdade."""
         create.return_value = FakeStripeSession('cs_test_3', 'https://checkout.stripe.com/c/pay/cs_test_3')
         self.client.force_authenticate(self.contratante)
 
@@ -193,19 +236,20 @@ class PagamentoAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data['test_approved'])
+        self.assertNotIn('test_approved', response.data)
         self.assertEqual(create.call_args.kwargs['customer_email'], self.contratante.email)
         self.contratante.profile.refresh_from_db()
-        self.assertEqual(self.contratante.profile.subscription_plan, 'Platinum')
+        self.assertEqual(self.contratante.profile.subscription_plan, 'Gratuito')
         pagamento = Pagamento.objects.get(usuario=self.contratante)
-        self.assertEqual(pagamento.status, 'pago')
-        self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
+        self.assertEqual(pagamento.status, 'pendente')
 
     @override_settings(DEBUG=True)
     @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
     @patch('core.views.stripe.api_key', 'sk_test_fake')
     @patch('core.views.stripe.checkout.Session.create')
-    def test_checkout_academico_registra_pagamento_e_inicia_acordo(self, create):
+    def test_checkout_acordo_nao_aprova_automaticamente(self, create):
+        """Mesmo com DEBUG=True e a antiga flag de teste setada, o freela só
+        entra 'Em andamento' quando o pagamento for confirmado pelo webhook."""
         create.return_value = FakeStripeSession('cs_test_4', 'https://checkout.stripe.com/c/pay/cs_test_4')
         self.client.force_authenticate(self.contratante)
 
@@ -216,16 +260,26 @@ class PagamentoAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data['test_approved'])
+        self.assertNotIn('test_approved', response.data)
         self.acordo.refresh_from_db()
-        self.assertEqual(self.acordo.status_acordo, 'Ativo')
+        self.assertEqual(self.acordo.status_acordo, 'Pendente Pagamento')
         pagamento = Pagamento.objects.get(acordo=self.acordo)
-        self.assertEqual(pagamento.status, 'pago')
-        self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
+        self.assertEqual(pagamento.status, 'pendente')
         self.assertEqual(
             response.data['init_point'],
             'https://checkout.stripe.com/c/pay/cs_test_4',
         )
+
+    def test_endpoint_de_simular_pagamento_nao_existe_mais(self):
+        self.client.force_authenticate(self.contratante)
+
+        response = self.client.post(
+            f'/api/pagamentos/acordo/{self.acordo.id}/simular/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_plano_gratuito_nao_exige_checkout(self):
         self.contratante.profile.subscription_plan = 'Gold'
@@ -369,8 +423,11 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 409)
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
     def test_acordo_ativo_legado_pode_ser_concluido_no_ambiente_local(self):
+        """Compatibilidade apenas para acordos antigos que ficaram 'Ativo' sem
+        nenhum pagamento registrado. Depende só de DEBUG=True, não de nenhuma
+        flag de teste — essa é a única forma de registrar um pagamento sem
+        checkout real que ainda existe no sistema."""
         self.acordo.status_acordo = 'Ativo'
         self.acordo.save(update_fields=['status_acordo'])
         self.client.force_authenticate(self.freelancer)
@@ -388,9 +445,23 @@ class PagamentoAPITests(TestCase):
             Pagamento.objects.filter(
                 acordo=self.acordo,
                 status='pago',
-                forma_pagamento='simulacao_pagamento',
+                forma_pagamento='registro_legado',
             ).exists(),
         )
+
+    @override_settings(DEBUG=False)
+    def test_acordo_ativo_legado_nao_pode_ser_concluido_fora_do_debug(self):
+        self.acordo.status_acordo = 'Ativo'
+        self.acordo.save(update_fields=['status_acordo'])
+        self.client.force_authenticate(self.freelancer)
+
+        response = self.client.post(
+            f'/api/acordos/{self.acordo.id}/concluir/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 409)
 
     def test_cancelamento_precisa_de_admin_e_move_acordo_para_cancelados(self):
         self.acordo.status_acordo = 'Ativo'
@@ -602,25 +673,6 @@ class PagamentoAPITests(TestCase):
         self.acordo.refresh_from_db()
         self.assertTrue(self.acordo.tem_solicitacao)
         self.assertEqual(self.acordo.valor_acordado, 1250)
-
-    @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
-    def test_simulacao_local_aprova_pagamento_e_ativa_acordo(self):
-        self.client.force_authenticate(self.contratante)
-
-        response = self.client.post(
-            f'/api/pagamentos/acordo/{self.acordo.id}/simular/',
-            {},
-            format='json',
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.acordo.refresh_from_db()
-        self.assertEqual(self.acordo.status_acordo, 'Ativo')
-        pagamento = Pagamento.objects.get(acordo=self.acordo)
-        self.assertEqual(pagamento.status, 'pago')
-        self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
-        self.assertTrue(pagamento.mp_payment_id.startswith('LOCAL-TEST-'))
 
     def test_denuncias_sao_filtradas_e_decididas_apenas_por_admin(self):
         pending = Report.objects.create(

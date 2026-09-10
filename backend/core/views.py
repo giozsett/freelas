@@ -1111,14 +1111,16 @@ class ConcluirAcordoAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
             if not acordo.pagamentos.filter(status='pago').exists():
-                if not _checkout_academico_habilitado() or not contratante:
+                if not settings.DEBUG or not contratante:
                     return Response(
                         {'error': 'O pagamento precisa estar aprovado antes da conclusão.'},
                         status=status.HTTP_409_CONFLICT,
                     )
 
                 # Compatibilidade com acordos locais antigos que foram ativados antes
-                # de o histórico de pagamentos passar a ser obrigatório.
+                # de o histórico de pagamentos passar a ser obrigatório. Não é uma
+                # simulação de pagamento: só existe para não travar registros
+                # legados que nunca passaram por um checkout real.
                 try:
                     amount = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
                 except (InvalidOperation, TypeError):
@@ -1128,10 +1130,10 @@ class ConcluirAcordoAPI(APIView):
                     tipo='acordo',
                     status='pago',
                     valor=amount,
-                    referencia_externa=f'teste:legado:acordo:{acordo.id}:{uuid4().hex}',
+                    referencia_externa=f'legado:acordo:{acordo.id}:{uuid4().hex}',
                     acordo=acordo,
                     mp_payment_id=f'LOCAL-LEGACY-{uuid4().hex}',
-                    forma_pagamento='simulacao_pagamento',
+                    forma_pagamento='registro_legado',
                     detalhe_status='registro_local_compatibilidade',
                     aprovado_em=timezone.now(),
                 )
@@ -1265,11 +1267,6 @@ def _frontend_url(path):
     return f'{base_url}{path}'
 
 
-def _checkout_academico_habilitado():
-    test_mode = os.environ.get('PAGAMENTOS_TEST_MODE', '').strip().lower()
-    return settings.DEBUG and test_mode in {'1', 'true', 'yes', 'on'}
-
-
 def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=None, detalhe_status=None):
     """Marca o pagamento como pago e ativa a assinatura/acordo correspondente."""
     pagamento.status = 'pago'
@@ -1312,22 +1309,6 @@ def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=Non
                 'o acordo permaneceu cancelado e exige análise financeira.',
                 pagamento.acordo_id,
             )
-
-
-def _aprovar_checkout_academico(pagamento):
-    """Confirma localmente logo após criar a Checkout Session, sem depender
-    de completar o checkout de verdade no Stripe."""
-    with transaction.atomic():
-        pagamento = Pagamento.objects.select_for_update().get(pk=pagamento.pk)
-        if pagamento.status == 'pago':
-            return True
-        _aplicar_pagamento_aprovado(
-            pagamento,
-            external_id=f'ACADEMIC-{uuid4().hex}',
-            forma_pagamento='simulacao_pagamento',
-            detalhe_status='aprovado_em_ambiente_local',
-        )
-    return True
 
 
 def _confirmar_pagamento_stripe(session):
@@ -1422,14 +1403,10 @@ class CriarPreferenciaAssinaturaAPI(APIView):
         pagamento.mp_preference_id = session.id
         pagamento.checkout_url = session.url
         pagamento.save(update_fields=['mp_preference_id', 'checkout_url', 'atualizado_em'])
-        test_approved = False
-        if _checkout_academico_habilitado():
-            test_approved = _aprovar_checkout_academico(pagamento)
         return Response({
             'checkout_required': True,
             'init_point': session.url,
             'reference': reference,
-            'test_approved': test_approved,
         })
 
 
@@ -1470,10 +1447,7 @@ class CriarPreferenciaAcordoAPI(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        try:
-            price = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            price = Decimal('0.00')
+        price = acordo.valor_total_com_taxa or Decimal('0.00')
         if price <= 0:
             return Response(
                 {'error': 'O acordo precisa ter um valor maior que zero.'},
@@ -1488,14 +1462,10 @@ class CriarPreferenciaAcordoAPI(APIView):
             checkout_url__isnull=False,
         ).order_by('-criado_em').first()
         if pending_payment:
-            test_approved = False
-            if _checkout_academico_habilitado():
-                test_approved = _aprovar_checkout_academico(pending_payment)
             return Response({
                 'checkout_required': True,
                 'init_point': pending_payment.checkout_url,
                 'reference': pending_payment.referencia_externa,
-                'test_approved': test_approved,
             })
 
         if not _stripe_configurado():
@@ -1514,6 +1484,9 @@ class CriarPreferenciaAcordoAPI(APIView):
             acordo=acordo,
         )
 
+        descricao_base = acordo.descricao_servico or 'Pagamento de serviço freelancer'
+        descricao_checkout = f'{descricao_base[:440]} Inclui taxa de serviço da plataforma (10%).'
+
         try:
             session = stripe.checkout.Session.create(
                 mode='payment',
@@ -1522,7 +1495,7 @@ class CriarPreferenciaAcordoAPI(APIView):
                         'currency': 'brl',
                         'product_data': {
                             'name': f'Serviço freelancer - {acordo.titulo_anuncio}',
-                            'description': (acordo.descricao_servico or 'Pagamento de serviço freelancer')[:500],
+                            'description': descricao_checkout[:500],
                         },
                         'unit_amount': int(price * 100),
                     },
@@ -1547,92 +1520,10 @@ class CriarPreferenciaAcordoAPI(APIView):
         pagamento.mp_preference_id = session.id
         pagamento.checkout_url = session.url
         pagamento.save(update_fields=['mp_preference_id', 'checkout_url', 'atualizado_em'])
-        test_approved = False
-        if _checkout_academico_habilitado():
-            test_approved = _aprovar_checkout_academico(pagamento)
         return Response({
             'checkout_required': True,
             'init_point': session.url,
             'reference': reference,
-            'test_approved': test_approved,
-        })
-
-
-class SimularPagamentoAcordoAPI(APIView):
-    """Aprovação local explícita para testes quando o sandbox externo não conclui."""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, pk):
-        test_mode = os.environ.get('PAGAMENTOS_TEST_MODE', '').strip().lower()
-        if not settings.DEBUG or test_mode not in {'1', 'true', 'yes', 'on'}:
-            return Response(
-                {'error': 'A simulação de pagamento não está habilitada.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        from django.shortcuts import get_object_or_404
-
-        with transaction.atomic():
-            acordo = get_object_or_404(
-                AcordoServico.objects.select_for_update(),
-                pk=pk,
-            )
-            contratante, _ = _partes_do_acordo(acordo)
-            if request.user != contratante:
-                return Response(
-                    {'error': 'Somente o contratante pode simular o pagamento.'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            if acordo.status_acordo != 'Pendente Pagamento':
-                return Response(
-                    {'error': 'O acordo não está aguardando pagamento.'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            if acordo.solicitacoes_cancelamento.filter(status='pendente').exists():
-                return Response(
-                    {'error': 'Existe uma solicitação de cancelamento pendente.'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            try:
-                amount = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
-            except (InvalidOperation, TypeError):
-                amount = Decimal('0.00')
-            if amount <= 0:
-                return Response(
-                    {'error': 'O acordo precisa ter um valor válido.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            pagamento = acordo.pagamentos.filter(
-                usuario=request.user,
-                tipo='acordo',
-                status__in=['pendente', 'falhou', 'pago'],
-            ).order_by('-criado_em').first()
-            if not pagamento:
-                pagamento = Pagamento.objects.create(
-                    usuario=request.user,
-                    tipo='acordo',
-                    status='pendente',
-                    valor=amount,
-                    referencia_externa=f'teste:acordo:{acordo.id}:{uuid4().hex}',
-                    acordo=acordo,
-                )
-
-            pagamento.valor = amount
-            _aplicar_pagamento_aprovado(
-                pagamento,
-                external_id=f'LOCAL-TEST-{uuid4().hex}',
-                forma_pagamento='simulacao_pagamento',
-                detalhe_status='aprovado_em_ambiente_local',
-            )
-            acordo.refresh_from_db()
-
-        return Response({
-            'message': 'Pagamento de teste aprovado e acordo movido para Em Andamento.',
-            'acordo_id': acordo.id,
-            'status_acordo': acordo.status_acordo,
         })
 
 
@@ -1667,9 +1558,16 @@ class StripeWebhookAPI(APIView):
         return Response({'status': 'ignored'})
 
 
+class PagamentoHistoricoPagination(PageNumberPagination):
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+
 class PagamentoHistoricoAPIView(generics.ListAPIView):
     serializer_class = PagamentoSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PagamentoHistoricoPagination
 
     def get_queryset(self):
         # Tentativas pendentes/falhas existem apenas para conciliação e não são
