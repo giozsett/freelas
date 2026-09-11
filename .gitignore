@@ -51,3 +51,4 @@ supabase-migration
 backend/.env.bak
 
 /historico
+backend/.env.bak
