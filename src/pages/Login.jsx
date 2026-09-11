@@ -59,8 +59,15 @@ export default function Login() {
       if (response.ok) {
         login(data.user, data.token);
         navigate('/');
+<<<<<<< HEAD
       } else {
         setErrorMsg(data.error || 'Erro ao entrar com o Google. Tente novamente.');
+=======
+      } else if (response.status === 404 && data.error === 'not_registered') {
+        setErrorMsg('Você ainda não possui cadastro, realize primeiro o cadastro e tente novamente!');
+      } else {
+        setErrorMsg('Erro ao entrar com o Google. Tente novamente.');
+>>>>>>> origin/main
       }
     } catch (err) {
       setErrorMsg('Erro ao entrar com o Google. Tente novamente.');

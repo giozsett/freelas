@@ -51,4 +51,7 @@ supabase-migration
 backend/.env.bak
 
 /historico
+<<<<<<< HEAD
 backend/.env.bak
+=======
+>>>>>>> origin/main

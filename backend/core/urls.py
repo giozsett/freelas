@@ -4,7 +4,11 @@ from .views import (
     ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView,
     AdLimiteMensalAPIView,
     PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView,
+<<<<<<< HEAD
     CandidaturaRetrieveAPIView, GoogleSocialLoginAPI,
+=======
+    CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI,
+>>>>>>> origin/main
     VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI,
     AcordoServicoListCreateAPIView, AcordoServicoRetrieveUpdateAPIView,
     FotoPerfilUploadAPIView, CertificadoListCreateAPIView, CertificadoRetrieveUpdateDestroyAPIView,
@@ -41,6 +45,10 @@ urlpatterns = [
     path('api/candidaturas/', CandidaturaListCreateAPIView.as_view(), name='candidatura-list'),
     path('api/candidaturas/<int:pk>/', CandidaturaUpdateAPIView.as_view(), name='candidatura-detail'),
     path('api/auth/google/', GoogleSocialLoginAPI.as_view(), name='google-login'),
+<<<<<<< HEAD
+=======
+    path('api/auth/google/register/', GoogleSocialRegisterAPI.as_view(), name='google-register'),
+>>>>>>> origin/main
     path('api/auth/enviar-codigo/', EnviarCodigoVerificacaoAPI.as_view(), name='enviar-codigo'),
     path('api/auth/verificar-codigo/', VerificarCodigoAPI.as_view(), name='verificar-codigo'),
     path('api/auth/solicitar-redefinicao/', RedefinicaoSenhaAPI.as_view(), name='solicitar-redefinicao'),

@@ -1,9 +1,16 @@
+<<<<<<< HEAD
 import { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
+=======
+import { createContext, useState, useEffect, useContext, useCallback } from 'react';
+>>>>>>> origin/main
 import PropTypes from 'prop-types';
 import { useAuth } from './ContextoAutenticacao';
 
 const API = 'http://localhost:8000';
+<<<<<<< HEAD
 const WS_BASE = API.replace(/^http/, 'ws');
+=======
+>>>>>>> origin/main
 
 const NotificacaoContext = createContext();
 
@@ -14,6 +21,7 @@ export const NotificacaoProvider = ({ children }) => {
   const [notificacoes, setNotificacoes] = useState([]);
   const [chatNaoLidas, setChatNaoLidas] = useState(0);
 
+<<<<<<< HEAD
   // Aplica um snapshot enviado pelo servidor (conexão inicial ou reconexão).
   const aplicarSnapshot = useCallback((dados) => {
     if (typeof dados.naoLidas === 'number') setNaoLidas(dados.naoLidas);
@@ -23,6 +31,8 @@ export const NotificacaoProvider = ({ children }) => {
 
   // Sincronização manual (um-shot) — mantida para uso externo pontual.
   // O estado normal é mantido pelo WebSocket, sem polling.
+=======
+>>>>>>> origin/main
   const carregar = useCallback(async () => {
     if (!token) {
       setNaoLidas(0);
@@ -53,6 +63,7 @@ export const NotificacaoProvider = ({ children }) => {
     }
   }, [token]);
 
+<<<<<<< HEAD
   // WebSocket único para notificações e chat: entrega instantânea,
   // com reconexão automática (o servidor reenvia o snapshot ao conectar).
   const wsRef = useRef(null);
@@ -136,6 +147,8 @@ export const NotificacaoProvider = ({ children }) => {
     };
   }, [token, aplicarSnapshot]);
 
+=======
+>>>>>>> origin/main
   const carregarLista = useCallback(async () => {
     if (!token) return;
     try {
@@ -149,6 +162,15 @@ export const NotificacaoProvider = ({ children }) => {
     }
   }, [token]);
 
+<<<<<<< HEAD
+=======
+  useEffect(() => {
+    carregar();
+    const id = setInterval(carregar, 8000);
+    return () => clearInterval(id);
+  }, [carregar]);
+
+>>>>>>> origin/main
   const marcarLidas = useCallback(async (tipos = []) => {
     if (!token) return;
     try {
@@ -200,4 +222,8 @@ export const useNotificacoes = () => useContext(NotificacaoContext);
 
 NotificacaoProvider.propTypes = {
   children: PropTypes.node,
+<<<<<<< HEAD
 };
+=======
+};
+>>>>>>> origin/main

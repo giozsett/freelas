@@ -9,6 +9,12 @@ from rest_framework import status
 from django.contrib.auth.models import User
 import os
 from .serializers import UserSerializer, RegisterSerializer
+<<<<<<< HEAD
+=======
+from google.oauth2 import id_token
+import os
+from google.auth.transport import requests as google_requests
+>>>>>>> origin/main
 from .serializers import UserProfileSerializer, FotoPerfilSerializer
 from .models import UserProfile
 from .serializers import CandidaturaSerializer
@@ -22,9 +28,12 @@ from django.shortcuts import redirect
 from .models import VerificacaoEmail
 from .serializers import CertificadoSerializer, InstituicaoEnsinoSerializer, ExperienciaSerializer
 from .models import Certificado, InstituicaoEnsino, Experiencia
+<<<<<<< HEAD
 from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.models import SocialAccount
+=======
+>>>>>>> origin/main
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -35,6 +44,10 @@ class RegisterAPI(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+<<<<<<< HEAD
+=======
+        token, created = Token.objects.get_or_create(user=user)
+>>>>>>> origin/main
         # Cria o UserProfile imediatamente no cadastro comum
         UserProfile.objects.get_or_create(
             user=user,
@@ -43,6 +56,7 @@ class RegisterAPI(generics.GenericAPIView):
                 'email': user.email,
             }
         )
+<<<<<<< HEAD
         # Gera e envia o código de confirmação do email
         verificacao, _ = VerificacaoEmail.objects.get_or_create(usuario=user)
         verificacao.verificado = False
@@ -58,6 +72,8 @@ class RegisterAPI(generics.GenericAPIView):
             # Se falhar, o usuário pode solicitar um novo código na tela de verificação
             pass
         # Nenhum token emitido: o acesso só é liberado após confirmar o email
+=======
+>>>>>>> origin/main
         return Response({
             'message': 'Cadastro realizado. Confirme seu email para entrar.',
             'email': user.email,
@@ -595,9 +611,12 @@ class NotificacaoMarcarLidaAPIView(APIView):
         )
         notificacao.lida = True
         notificacao.save(update_fields=['lida'])
+<<<<<<< HEAD
         from .notificacoes import publicar_resumo_notificacoes
 
         publicar_resumo_notificacoes(request.user)
+=======
+>>>>>>> origin/main
         return Response({'ok': True})
 
 
@@ -613,14 +632,18 @@ class NotificacaoMarcarLidasAPIView(APIView):
         if tipos:
             queryset = queryset.filter(tipo__in=tipos)
         quantidade = queryset.update(lida=True)
+<<<<<<< HEAD
         from .notificacoes import publicar_resumo_notificacoes
 
         publicar_resumo_notificacoes(request.user)
+=======
+>>>>>>> origin/main
         return Response({'count': quantidade})
 
 
 ### autenticação com conta google ###
 class GoogleSocialLoginAPI(APIView):
+<<<<<<< HEAD
     """
     Login/cadastro unificado via Google.
     Recebe o id_token do Google Identity Services, verifica com allauth
@@ -685,12 +708,79 @@ class GoogleSocialLoginAPI(APIView):
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
+=======
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        token = request.data.get('id_token')
+        if not token:
+            return Response({'error': 'Token não fornecido'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Valida o token diretamente com o Google
+            idinfo = id_token.verify_oauth2_token(
+                token,
+                google_requests.Request(),
+                os.environ.get('GOOGLE_CLIENT_ID')
+            )
+            email = idinfo.get('email')
+            first_name = idinfo.get('given_name', '')
+            last_name = idinfo.get('family_name', '')
+
+            # Cria ou pega o usuário
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+            # Usuário não cadastrado, retorna erro para o frontend redirecionar
+                return Response(
+                    {'error': 'not_registered', 'email': email},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            auth_token, _ = Token.objects.get_or_create(user=user)
+
+            return Response({
+                'token': auth_token.key,
+                'user': UserSerializer(user).data,
+})
+
+        except ValueError:
+            return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+## cadastro google ###
+class GoogleSocialRegisterAPI(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        token = request.data.get('id_token')
+        if not token:
+            return Response({'error': 'Token não fornecido'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                token,
+                google_requests.Request(),
+                os.environ.get('GOOGLE_CLIENT_ID')
+            )
+            email = idinfo.get('email')
+            first_name = idinfo.get('given_name', '')
+            last_name = idinfo.get('family_name', '')
+
+            # Se já existe, não deixa cadastrar de novo
+            if User.objects.filter(email=email).exists():
+                return Response(
+                    {'error': 'already_registered'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Cria o usuário
+>>>>>>> origin/main
             user = User.objects.create_user(
                 username=email,
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
             )
+<<<<<<< HEAD
             SocialAccount.objects.create(
                 provider='google',
                 uid=email,
@@ -714,6 +804,18 @@ class GoogleSocialLoginAPI(APIView):
             'token': auth_token.key,
             'user': UserSerializer(user).data,
         })
+=======
+
+            auth_token, _ = Token.objects.get_or_create(user=user)
+
+            return Response({
+                'token': auth_token.key,
+                'user': UserSerializer(user).data,
+            })
+
+        except ValueError:
+            return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
+>>>>>>> origin/main
         
 
 class EnviarCodigoVerificacaoAPI(APIView):
@@ -1872,6 +1974,7 @@ def _mes_inicio(data):
     return data.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
+<<<<<<< HEAD
 def _corte_dashboard():
     """Data de corte: a dashboard contabiliza somente usuários registrados a
     partir da migração do login social para django-allauth (era atual)."""
@@ -1879,6 +1982,8 @@ def _corte_dashboard():
     return timezone.make_aware(datetime(2026, 9, 9))
 
 
+=======
+>>>>>>> origin/main
 def _variacao(atual, anterior):
     if not anterior:
         return 100 if atual else 0
@@ -1966,22 +2071,32 @@ class DashboardAdminAPIView(APIView):
         def serie_usuarios(qs):
             return _contagem_por_periodo(qs, 'date_joined', inicio_atual, fim_atual, inicio_anterior)
 
+<<<<<<< HEAD
         # Com a migração do login para django-allauth, a estatística começa a
         # contabilizar apenas os usuários registrados a partir de hoje.
         corte = _corte_dashboard()
         usuarios_atual, usuarios_anterior = serie_usuarios(
             User.objects.filter(date_joined__gte=corte),
         )
+=======
+        usuarios_atual, usuarios_anterior = serie_usuarios(User.objects.all())
+>>>>>>> origin/main
 
         autores_freelancer = User.objects.filter(
             ads__role='freelancer',
             ads__deletado=False,
+<<<<<<< HEAD
             date_joined__gte=corte,
+=======
+>>>>>>> origin/main
         ).distinct()
         autores_contratante = User.objects.filter(
             ads__role__in=['contractor', 'contratante'],
             ads__deletado=False,
+<<<<<<< HEAD
             date_joined__gte=corte,
+=======
+>>>>>>> origin/main
         ).distinct()
 
         freelancer_atual, freelancer_anterior = serie_usuarios(autores_freelancer)
@@ -1995,16 +2110,23 @@ class DashboardAdminAPIView(APIView):
         )
         ids_freela_acordo_periodo = set(
             acordos_do_periodo.exclude(candidatura__user=None)
+<<<<<<< HEAD
             .exclude(candidatura__user__date_joined__lt=corte)
+=======
+>>>>>>> origin/main
             .values_list('candidatura__user_id', flat=True),
         )
         ids_contratante_acordo_periodo = set(
             acordos_do_periodo.exclude(candidatura__ad__author=None)
+<<<<<<< HEAD
             .exclude(candidatura__ad__author__date_joined__lt=corte)
+=======
+>>>>>>> origin/main
             .values_list('candidatura__ad__author_id', flat=True),
         )
         pessoas_fecharam_acordo_periodo = len(ids_freela_acordo_periodo | ids_contratante_acordo_periodo)
 
+<<<<<<< HEAD
         # Indicador mensal fixo: quantos usuários manuais fecharam acordo no
         # mês calendário atual, independentemente do filtro de período.
         agora = timezone.now()
@@ -2024,6 +2146,8 @@ class DashboardAdminAPIView(APIView):
         )
         pessoas_fecharam_acordo_mes = len(ids_freela_acordo_mes | ids_contratante_acordo_mes)
 
+=======
+>>>>>>> origin/main
         denuncias_atual, denuncias_anterior = _contagem_por_periodo(
             Report.objects.all(), 'created_at', inicio_atual, fim_atual, inicio_anterior,
         )
@@ -2068,7 +2192,10 @@ class DashboardAdminAPIView(APIView):
                 'freelas': {
                     **_item_contagem(freelas_atual, freelas_anterior),
                     'fecharam_acordo_periodo': pessoas_fecharam_acordo_periodo,
+<<<<<<< HEAD
                     'fecharam_acordo_mes': pessoas_fecharam_acordo_mes,
+=======
+>>>>>>> origin/main
                 },
                 'denuncias': _item_contagem(denuncias_atual, denuncias_anterior),
                 'cancelamentos_planos': _item_contagem(cancelamentos_atual, cancelamentos_anterior),
