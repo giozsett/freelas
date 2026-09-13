@@ -16,10 +16,7 @@ from .models import (
     SolicitacaoAlteracaoAcordo,
     SolicitacaoCancelamentoAcordo,
     UserProfile,
-<<<<<<< HEAD
     VerificacaoEmail,
-=======
->>>>>>> origin/main
 )
 
 
@@ -811,7 +808,6 @@ class DashboardAdminAPITests(TestCase):
 
         freelas = response.data['geral']['freelas']
         self.assertEqual(freelas['fecharam_acordo_mes'], 2)
-<<<<<<< HEAD
 
 
 class CadastroConflitoEmailTests(TestCase):
@@ -933,5 +929,3 @@ class VerificacaoEmailTests(TestCase):
             'password': 'senha12345',
         }, format='json')
         self.assertEqual(login.status_code, 200)
-=======
->>>>>>> origin/main

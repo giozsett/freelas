@@ -155,7 +155,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await sync_to_async(_marcar_lidas_sync)(
                 self.acordo_id, self.scope['user'].id
             )
-<<<<<<< HEAD
 
 
 class NotificacaoConsumer(AsyncJsonWebsocketConsumer):
@@ -258,5 +257,3 @@ class NotificacaoConsumer(AsyncJsonWebsocketConsumer):
             if parte.startswith('token='):
                 return parte.split('=', 1)[1]
         return ''
-=======
->>>>>>> origin/main
