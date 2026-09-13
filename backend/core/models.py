@@ -623,6 +623,11 @@ class Notificacao(models.Model):
     tipo = models.CharField(max_length=20, choices=TIPOS)
     titulo = models.CharField(max_length=255)
     mensagem = models.TextField(blank=True, default='')
+    # Permite exibir o título atual do anúncio (via placeholder "{ad_titulo}"
+    # em `mensagem`) mesmo que ele seja renomeado depois da notificação criada.
+    ad = models.ForeignKey(
+        'Ad', on_delete=models.SET_NULL, null=True, blank=True, related_name='notificacoes',
+    )
     link = models.CharField(max_length=255, blank=True, default='')
     lida = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)

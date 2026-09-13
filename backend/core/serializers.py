@@ -987,10 +987,19 @@ from .models import Pagamento
 from .models import Notificacao
 
 class NotificacaoSerializer(serializers.ModelSerializer):
+    mensagem = serializers.SerializerMethodField()
+
     class Meta:
         model = Notificacao
         fields = ('id', 'tipo', 'titulo', 'mensagem', 'link', 'lida', 'criado_em')
         read_only_fields = fields
+
+    def get_mensagem(self, obj):
+        mensagem = obj.mensagem
+        if '{ad_titulo}' in mensagem:
+            titulo_atual = (obj.ad.title or obj.ad.titulo) if obj.ad else None
+            mensagem = mensagem.replace('{ad_titulo}', titulo_atual or 'anúncio removido')
+        return mensagem
 
 
 class PagamentoSerializer(serializers.ModelSerializer):

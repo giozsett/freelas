@@ -6,6 +6,7 @@ import {
   Briefcase, HandCoins, FileText, LineChart,
 } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
+import LimitePlano from '../components/LimitePlano';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
 import { DIAS_SEMANA, PERIODOS, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
@@ -39,6 +40,7 @@ export default function AdDetails() {
   const [hasApplied, setHasApplied] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [applicationsCount, setApplicationsCount] = useState(null);
+  const [candidaturaLimiteAtingido, setCandidaturaLimiteAtingido] = useState(false);
 
   const [ad, setAd] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +57,15 @@ export default function AdDetails() {
            const applied = data.some(app => String(app.anuncio_id) === String(id));
            setHasApplied(applied);
         }
+      })
+      .catch(err => console.error(err));
+
+      fetch('http://localhost:8000/api/candidaturas/limite/', {
+        headers: { 'Authorization': `Token ${token}` }
+      })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.atingiu_limite) setCandidaturaLimiteAtingido(true);
       })
       .catch(err => console.error(err));
     }
@@ -387,12 +398,23 @@ export default function AdDetails() {
               </div>
               <button
                 className="ad-cta"
-                onClick={() => !hasApplied && !isExpired && setIsModalOpen(true)}
-                disabled={hasApplied || isExpired}
+                onClick={() => !hasApplied && !isExpired && !candidaturaLimiteAtingido && setIsModalOpen(true)}
+                disabled={hasApplied || isExpired || candidaturaLimiteAtingido}
               >
                 <Star size={18} fill="currentColor" />
-                {isExpired ? 'Anúncio expirado' : hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
+                {isExpired
+                  ? 'Anúncio expirado'
+                  : hasApplied
+                  ? 'Candidatura Pendente'
+                  : candidaturaLimiteAtingido
+                  ? 'Limite de candidaturas atingido'
+                  : 'Candidatar-se'}
               </button>
+              {candidaturaLimiteAtingido && !hasApplied && !isExpired && (
+                <p style={{ fontSize: '0.8rem', color: 'var(--danger-color)', marginTop: '0.6rem', marginBottom: 0 }}>
+                  Você atingiu o limite de candidaturas do seu plano este mês. <Link to="/plans" style={{ color: 'inherit', fontWeight: 600 }}>Ver planos</Link>
+                </p>
+              )}
             </div>
           )}
 
@@ -439,9 +461,11 @@ export default function AdDetails() {
 
               <h2 style={{ fontSize: '1.8rem', marginBottom: '1.5rem', paddingRight: '2rem' }}>Enviar Proposta</h2>
 
-              <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem' }}>
+              <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '1.5rem' }}>
                 Apresente-se ao autor do anúncio e descreva por que você é a escolha certa. Se desejar, faça uma contra-proposta de valor.
               </p>
+
+              <LimitePlano recurso="candidaturas" />
 
               <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                  <div>

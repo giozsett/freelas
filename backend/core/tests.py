@@ -10,6 +10,8 @@ from .models import (
     AcordoServico,
     Avaliacao,
     Candidatura,
+    MensagemChat,
+    Notificacao,
     Pagamento,
     Report,
     SolicitacaoAlteracaoAcordo,
@@ -728,6 +730,213 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(Report.objects.get(pk=response.data['id']).status, 'pending')
 
 
+class LimitesPlanoAPITests(TestCase):
+    """Cada plano de assinatura limita quantos anúncios e candidaturas o
+    usuário pode enviar por mês (Gratuito: 3 anúncios / 5 candidaturas,
+    Gold: 6 anúncios / 20 candidaturas, Platinum: ilimitado)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='limite@example.com',
+            email='limite@example.com',
+            password='secret123',
+        )
+        self.outro_anunciante = User.objects.create_user(
+            username='outroanunciante@example.com',
+            email='outroanunciante@example.com',
+            password='secret123',
+        )
+
+    def _criar_ads_do_outro_anunciante(self, quantidade):
+        return [
+            Ad.objects.create(
+                author=self.outro_anunciante,
+                title=f'Serviço {i}',
+                description='Descrição',
+                price='100.00',
+            )
+            for i in range(quantidade)
+        ]
+
+    def _payload_anuncio(self, titulo):
+        return {
+            'title': titulo,
+            'description': 'Descrição do serviço.',
+            'price': '100.00',
+            'category': 'Tecnologia',
+            'role': 'contractor',
+        }
+
+    def test_endpoint_limite_anuncios_reflete_plano_gold_com_seis_por_mes(self):
+        self.user.profile.subscription_plan = 'Gold'
+        self.user.profile.save(update_fields=['subscription_plan'])
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get('/api/ads/limite/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['plano'], 'Gold')
+        self.assertEqual(response.data['limite'], 6)
+        self.assertEqual(response.data['usados'], 0)
+        self.assertFalse(response.data['atingiu_limite'])
+
+    def test_plano_gratuito_bloqueia_quarto_anuncio_no_mes(self):
+        self.client.force_authenticate(self.user)
+        for i in range(3):
+            response = self.client.post('/api/ads/', self._payload_anuncio(f'Anúncio {i}'), format='json')
+            self.assertEqual(response.status_code, 201, response.data)
+
+        bloqueado = self.client.post('/api/ads/', self._payload_anuncio('Anúncio extra'), format='json')
+
+        self.assertEqual(bloqueado.status_code, 400)
+        self.assertEqual(Ad.objects.filter(author=self.user).count(), 3)
+
+    def test_endpoint_limite_candidaturas_reflete_plano_gratuito_com_cinco_por_mes(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get('/api/candidaturas/limite/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['plano'], 'Gratuito')
+        self.assertEqual(response.data['limite'], 5)
+        self.assertEqual(response.data['usados'], 0)
+        self.assertFalse(response.data['atingiu_limite'])
+
+    def test_plano_gratuito_bloqueia_sexta_candidatura_no_mes(self):
+        ads = self._criar_ads_do_outro_anunciante(6)
+        self.client.force_authenticate(self.user)
+
+        for ad in ads[:5]:
+            response = self.client.post(
+                '/api/candidaturas/',
+                {'ad': ad.id, 'mensagem': 'Tenho interesse.'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+
+        bloqueado = self.client.post(
+            '/api/candidaturas/',
+            {'ad': ads[5].id, 'mensagem': 'Tenho interesse.'},
+            format='json',
+        )
+
+        self.assertEqual(bloqueado.status_code, 400)
+        self.assertEqual(Candidatura.objects.filter(user=self.user).count(), 5)
+
+    def test_plano_platinum_nao_tem_limite_de_candidaturas(self):
+        ads = self._criar_ads_do_outro_anunciante(6)
+        self.user.profile.subscription_plan = 'Platinum'
+        self.user.profile.save(update_fields=['subscription_plan'])
+        self.client.force_authenticate(self.user)
+
+        for ad in ads:
+            response = self.client.post(
+                '/api/candidaturas/',
+                {'ad': ad.id, 'mensagem': 'Tenho interesse.'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+
+        status_limite = self.client.get('/api/candidaturas/limite/')
+        self.assertIsNone(status_limite.data['limite'])
+        self.assertFalse(status_limite.data['atingiu_limite'])
+
+
+class ChatSegurancaAPITests(TestCase):
+    """Admins (is_staff) não participantes de um acordo não podem ler nem
+    enviar mensagens no chat entre as partes — só os próprios envolvidos."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = User.objects.create_user(
+            username='contratante-chat@example.com',
+            email='contratante-chat@example.com',
+            password='secret123',
+        )
+        self.freelancer = User.objects.create_user(
+            username='freelancer-chat@example.com',
+            email='freelancer-chat@example.com',
+            password='secret123',
+        )
+        self.admin = User.objects.create_user(
+            username='admin-chat@example.com',
+            email='admin-chat@example.com',
+            password='secret123',
+            is_staff=True,
+        )
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Criação de logo',
+            description='Logo para a empresa',
+            price='500.00',
+        )
+        self.candidatura = Candidatura.objects.create(
+            user=self.freelancer,
+            ad=self.ad,
+            status='pendente',
+        )
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Ativo',
+            valor_acordado=500,
+            titulo_anuncio='Criação de logo',
+            descricao_servico='Logo para a empresa',
+        )
+
+    def test_admin_nao_pode_ver_mensagens_de_conversa_alheia(self):
+        self.client.force_authenticate(self.freelancer)
+        self.client.post(f'/api/chat/{self.acordo.id}/messages/', {'texto': 'Oi, tudo bem?'}, format='json')
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(f'/api/chat/{self.acordo.id}/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_nao_pode_enviar_mensagem_em_conversa_alheia(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            f'/api/chat/{self.acordo.id}/messages/',
+            {'texto': 'Mensagem indevida de um admin.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(MensagemChat.objects.filter(acordo=self.acordo).count(), 0)
+
+    def test_admin_nao_pode_marcar_conversa_alheia_como_lida(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(f'/api/chat/{self.acordo.id}/ler/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_nao_ve_conversas_alheias_na_listagem(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/chat/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_admin_nao_conta_nao_lidas_de_conversas_alheias(self):
+        self.client.force_authenticate(self.freelancer)
+        self.client.post(f'/api/chat/{self.acordo.id}/messages/', {'texto': 'Mensagem não lida'}, format='json')
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/chat/nao-lidas/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['total'], 0)
+
+    def test_partes_continuam_conversando_normalmente(self):
+        self.client.force_authenticate(self.contratante)
+        envio = self.client.post(
+            f'/api/chat/{self.acordo.id}/messages/',
+            {'texto': 'Olá, freelancer!'},
+            format='json',
+        )
+        self.assertEqual(envio.status_code, 201)
+
+        self.client.force_authenticate(self.freelancer)
+        detalhe = self.client.get(f'/api/chat/{self.acordo.id}/')
+        self.assertEqual(detalhe.status_code, 200)
+        self.assertEqual(len(detalhe.data['messages']), 1)
+
+
 class DashboardAdminAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -1210,3 +1419,66 @@ class PerfilBioEReputacaoAPITests(TestCase):
         self.assertIn('contratante', response.data['reputacao'])
         self.assertEqual(response.data['reputacao']['freelancer']['total_avaliacoes'], 0)
         self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)
+
+
+class NotificacaoAPITests(TestCase):
+    """
+    Cobre o bug em que a notificação de candidatura continuava exibindo o
+    título antigo do anúncio depois que o contratante o renomeava, e o novo
+    endpoint de limpar notificações.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = User.objects.create_user(
+            username='contratante@example.com',
+            email='contratante@example.com',
+            password='secret123',
+        )
+        self.freelancer = User.objects.create_user(
+            username='freelancer@example.com',
+            email='freelancer@example.com',
+            password='secret123',
+        )
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Criação de site',
+            description='Site institucional',
+            price='1250.00',
+        )
+
+    def test_mensagem_da_notificacao_acompanha_renomeacao_do_anuncio(self):
+        self.client.force_authenticate(self.freelancer)
+        response = self.client.post(
+            '/api/candidaturas/',
+            {'ad': self.ad.id, 'mensagem': 'Tenho interesse'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+
+        self.ad.title = 'Criação de site institucional completo'
+        self.ad.save()
+
+        notificacao = Notificacao.objects.get(usuario=self.contratante)
+        self.client.force_authenticate(self.contratante)
+        listagem = self.client.get('/api/notificacoes/')
+
+        self.assertEqual(listagem.status_code, 200)
+        mensagem = next(n['mensagem'] for n in listagem.data if n['id'] == notificacao.id)
+        self.assertIn('Criação de site institucional completo', mensagem)
+        self.assertNotIn('"Criação de site"', mensagem)
+
+    def test_limpar_notificacoes_remove_todas_do_usuario(self):
+        Notificacao.objects.create(usuario=self.contratante, tipo='sistema', titulo='Teste', mensagem='Oi')
+        Notificacao.objects.create(usuario=self.contratante, tipo='sistema', titulo='Teste 2', mensagem='Oi 2')
+        outro_usuario_notificacao = Notificacao.objects.create(
+            usuario=self.freelancer, tipo='sistema', titulo='Não deve sumir', mensagem='Oi 3',
+        )
+
+        self.client.force_authenticate(self.contratante)
+        response = self.client.delete('/api/notificacoes/limpar/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 2)
+        self.assertFalse(Notificacao.objects.filter(usuario=self.contratante).exists())
+        self.assertTrue(Notificacao.objects.filter(pk=outro_usuario_notificacao.pk).exists())

@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useNotificacoes } from '../context/ContextoNotificacao';
 import useScrollEdges from '../hooks/useScrollEdges';
+import LimitePlano from '../components/LimitePlano';
 
 const STATUS_CONFIG = {
   aprovada: {
@@ -190,6 +191,8 @@ export default function MinhasCandidaturas() {
           </div>
         </div>
       </div>
+
+      <LimitePlano recurso="candidaturas" />
 
       {/* ── Barra de resumo ── */}
       {applications.length > 0 && (

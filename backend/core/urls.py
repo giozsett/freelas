@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView,
     ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView,
-    AdLimiteMensalAPIView,
+    AdLimiteMensalAPIView, CandidaturaLimiteMensalAPIView,
     PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView,
     CandidaturaRetrieveAPIView, GoogleSocialLoginAPI, GoogleSocialRegisterAPI,
     VerificarCodigoAPI, RedefinicaoSenhaAPI, RedefinirSenhaAPI,
@@ -16,7 +16,7 @@ from .views import (
     SolicitacaoCancelamentoAdminListAPIView,
     AvaliacaoListCreateAPIView, AvaliacoesPendentesAPIView, DashboardAdminAPIView,
     NotificacaoListAPIView, NotificacaoNaoLidasAPIView, NotificacaoMarcarLidaAPIView,
-    NotificacaoMarcarLidasAPIView,
+    NotificacaoMarcarLidasAPIView, NotificacaoLimparAPIView,
     ChatListAPIView, ChatDetailAPIView, ChatEnviarMensagemAPIView,
     ChatMarcarLidaAPIView, ChatNaoLidasAPIView,
 )
@@ -39,6 +39,7 @@ urlpatterns = [
     path('api/ads/<int:pk>/', AdRetrieveAPIView.as_view(), name='ad-detail'),
     path('api/users/<int:pk>/', PublicProfileAPIView.as_view(), name='public-profile'),
     path('api/candidaturas/', CandidaturaListCreateAPIView.as_view(), name='candidatura-list'),
+    path('api/candidaturas/limite/', CandidaturaLimiteMensalAPIView.as_view(), name='candidatura-limite'),
     path('api/candidaturas/<int:pk>/', CandidaturaUpdateAPIView.as_view(), name='candidatura-detail'),
     path('api/auth/google/', GoogleSocialLoginAPI.as_view(), name='google-login'),
     path('api/auth/google/register/', GoogleSocialRegisterAPI.as_view(), name='google-register'),
@@ -64,6 +65,7 @@ urlpatterns = [
     path('api/notificacoes/nao-lidas/', NotificacaoNaoLidasAPIView.as_view(), name='notificacao-nao-lidas'),
     path('api/notificacoes/ler-todas/', NotificacaoMarcarLidasAPIView.as_view(), name='notificacao-marcar-lidas'),
     path('api/notificacoes/<int:pk>/ler/', NotificacaoMarcarLidaAPIView.as_view(), name='notificacao-marcar-lida'),
+    path('api/notificacoes/limpar/', NotificacaoLimparAPIView.as_view(), name='notificacao-limpar'),
     path('api/chat/', ChatListAPIView.as_view(), name='chat-list'),
     path('api/chat/nao-lidas/', ChatNaoLidasAPIView.as_view(), name='chat-nao-lidas'),
     path('api/chat/<int:pk>/', ChatDetailAPIView.as_view(), name='chat-detail'),

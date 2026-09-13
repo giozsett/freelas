@@ -250,11 +250,16 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
         return Response(self.get_serializer(report).data)
 
 
-# Limite de anúncios que cada plano de assinatura pode publicar por mês.
-# None = sem limite (plano Platinum).
+# Limites mensais de cada plano de assinatura. None = sem limite (Platinum).
 LIMITE_ANUNCIOS_MENSAL = {
     'Gratuito': 3,
-    'Gold': 10,
+    'Gold': 6,
+    'Platinum': None,
+}
+
+LIMITE_CANDIDATURAS_MENSAL = {
+    'Gratuito': 5,
+    'Gold': 20,
     'Platinum': None,
 }
 
@@ -263,19 +268,24 @@ MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO = (
     'atualize seu plano para postar mais anúncios.'
 )
 
+MENSAGEM_LIMITE_CANDIDATURAS_ATINGIDO = (
+    'Você já atingiu seu limite de candidaturas enviadas esse mês, '
+    'atualize seu plano para se candidatar a mais anúncios.'
+)
 
-def _status_limite_anuncios(user):
+
+def _plano_usuario(user):
     profile = getattr(user, 'profile', None)
-    plano = (profile.subscription_plan if profile else None) or 'Gratuito'
-    limite = LIMITE_ANUNCIOS_MENSAL.get(plano, LIMITE_ANUNCIOS_MENSAL['Gratuito'])
+    return (profile.subscription_plan if profile else None) or 'Gratuito'
+
+
+def _status_limite_mensal(user, limites_por_plano, queryset_usados):
+    plano = _plano_usuario(user)
+    limite = limites_por_plano.get(plano, limites_por_plano['Gratuito'])
 
     usados = 0
     if limite is not None:
-        inicio_mes = _mes_inicio(timezone.now())
-        usados = Ad.objects.exclude(deletado=True).filter(
-            author=user,
-            created_at__gte=inicio_mes,
-        ).count()
+        usados = queryset_usados.count()
 
     return {
         'plano': plano,
@@ -285,11 +295,36 @@ def _status_limite_anuncios(user):
     }
 
 
+def _status_limite_anuncios(user):
+    inicio_mes = _mes_inicio(timezone.now())
+    queryset = Ad.objects.exclude(deletado=True).filter(
+        author=user,
+        created_at__gte=inicio_mes,
+    )
+    return _status_limite_mensal(user, LIMITE_ANUNCIOS_MENSAL, queryset)
+
+
+def _status_limite_candidaturas(user):
+    inicio_mes = _mes_inicio(timezone.now())
+    queryset = Candidatura.objects.filter(
+        user=user,
+        enviado_em__gte=inicio_mes,
+    )
+    return _status_limite_mensal(user, LIMITE_CANDIDATURAS_MENSAL, queryset)
+
+
 class AdLimiteMensalAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         return Response(_status_limite_anuncios(request.user))
+
+
+class CandidaturaLimiteMensalAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response(_status_limite_candidaturas(request.user))
 
 
 class AdListCreateAPIView(generics.ListCreateAPIView):
@@ -442,6 +477,8 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             raise ValidationError('Este anúncio já possui uma candidatura aprovada.')
         if ad.candidaturas.filter(user=self.request.user).exists():
             raise ValidationError('Você já se candidatou a este anúncio.')
+        if _status_limite_candidaturas(self.request.user)['atingiu_limite']:
+            raise ValidationError(MENSAGEM_LIMITE_CANDIDATURAS_ATINGIDO)
 
         try:
             usuario_id = self.request.user.profile.id
@@ -460,8 +497,9 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
                 usuario=ad.author,
                 tipo='candidatura',
                 titulo='Nova candidatura no seu anúncio',
-                mensagem=f'{nome} se candidatou ao anúncio "{ad.title or ad.titulo}".',
+                mensagem=f'{nome} se candidatou ao anúncio "{{ad_titulo}}".',
                 link=f'/my-ads/manage/{ad.id}',
+                ad=ad,
             )
 
 class CandidaturaUpdateAPIView(generics.UpdateAPIView):
@@ -513,22 +551,23 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
             candidatura.status = new_status
             candidatura.save()
 
-            ad_titulo = candidatura.ad.title or candidatura.ad.titulo
             if new_status == 'aprovada':
                 criar_notificacao(
                     usuario=candidatura.user,
                     tipo='acordo',
                     titulo='Candidatura aprovada!',
-                    mensagem=f'Sua candidatura ao anúncio "{ad_titulo}" foi aprovada. Um acordo foi iniciado.',
+                    mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi aprovada. Um acordo foi iniciado.',
                     link='/my-freelas',
+                    ad=candidatura.ad,
                 )
             else:
                 criar_notificacao(
                     usuario=candidatura.user,
                     tipo='candidatura',
                     titulo='Candidatura recusada',
-                    mensagem=f'Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
+                    mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
                     link='/my-applications',
+                    ad=candidatura.ad,
                 )
 
         return Response(self.get_serializer(candidatura).data)
@@ -557,7 +596,7 @@ class NotificacaoListAPIView(generics.ListAPIView):
     def get_queryset(self):
         return Notificacao.objects.filter(
             usuario=self.request.user,
-        ).order_by('-criado_em')[:50]
+        ).select_related('ad').order_by('-criado_em')[:50]
 
 
 class NotificacaoNaoLidasAPIView(APIView):
@@ -608,6 +647,14 @@ class NotificacaoMarcarLidasAPIView(APIView):
         if tipos:
             queryset = queryset.filter(tipo__in=tipos)
         quantidade = queryset.update(lida=True)
+        return Response({'count': quantidade})
+
+
+class NotificacaoLimparAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        quantidade, _ = Notificacao.objects.filter(usuario=request.user).delete()
         return Response({'count': quantidade})
 
 
@@ -1842,7 +1889,8 @@ from .serializers import ChatConversaSerializer, _info_usuario_com_papel
 
 
 def _acordo_do_chat(pk, user):
-    """Retorna o acordo se o usuário participa dele (ou é moderador)."""
+    """Retorna o acordo se o usuário for uma das partes (contratante ou
+    freelancer). O chat é privado entre as partes — nem admins têm acesso."""
     from django.shortcuts import get_object_or_404
 
     acordo = get_object_or_404(
@@ -1853,8 +1901,6 @@ def _acordo_do_chat(pk, user):
         pk=pk,
     )
     contratante, freelancer = _partes_chat(acordo)
-    if user.is_staff or user.is_superuser:
-        return acordo
     if user not in {contratante, freelancer}:
         return None
     return acordo
@@ -1867,12 +1913,9 @@ class ChatListAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        if user.is_staff or user.is_superuser:
-            acordos = AcordoServico.objects.all()
-        else:
-            acordos = AcordoServico.objects.filter(
-                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
-            )
+        acordos = AcordoServico.objects.filter(
+            _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+        )
         acordos = acordos.select_related(
             'candidatura__user__profile',
             'candidatura__ad__author__profile',
@@ -1978,11 +2021,8 @@ class ChatNaoLidasAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        if user.is_staff or user.is_superuser:
-            acordos = AcordoServico.objects.all()
-        else:
-            acordos = AcordoServico.objects.filter(
-                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
-            )
+        acordos = AcordoServico.objects.filter(
+            _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+        )
         total = total_nao_lidas(acordos.values_list('id', flat=True), user.id)
         return Response({'total': total})

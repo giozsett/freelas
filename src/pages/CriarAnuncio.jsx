@@ -5,6 +5,7 @@ import { useRole } from '../context/ContextoPapel';
 import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
 import DisponibilidadeSemanal, { disponibilidadeVazia } from '../components/DisponibilidadeSemanal';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
+import LimitePlano from '../components/LimitePlano';
 
 export default function CreateAd() {
   const limiteDescricao = 1000;
@@ -162,6 +163,7 @@ export default function CreateAd() {
           {role === 'freelancer' ? 'Criar anúncio como freelancer' : 'Criar anúncio como contratante'}
         </span>
       </div>
+      <LimitePlano recurso="anuncios" />
       <div className="card ad-form-card">
         <form className="ad-form" onSubmit={handleSubmit}>
           

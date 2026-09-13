@@ -92,6 +92,24 @@ export const NotificacaoProvider = ({ children }) => {
     }
   }, [token, carregar]);
 
+  const limparNotificacoes = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API}/api/notificacoes/limpar/`, {
+        method: 'DELETE',
+        headers: { Authorization: `Token ${token}` },
+      });
+      if (!res.ok) throw new Error('Não foi possível limpar as notificações.');
+
+      setNotificacoes([]);
+      setNaoLidas(0);
+      setPorTipo({});
+    } catch {
+      carregar();
+      carregarLista();
+    }
+  }, [token, carregar, carregarLista]);
+
   return (
     <NotificacaoContext.Provider
       value={{
@@ -102,6 +120,7 @@ export const NotificacaoProvider = ({ children }) => {
         carregar,
         carregarLista,
         marcarLidas,
+        limparNotificacoes,
       }}
     >
       {children}

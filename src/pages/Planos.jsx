@@ -16,6 +16,7 @@ export default function Plans() {
       name: 'Gratuito',
       price: 'R$ 0/mês',
       ads: 3,
+      candidaturas: 5,
       color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
@@ -24,7 +25,8 @@ export default function Plans() {
       id: 'gold',
       name: 'Gold',
       price: 'R$ 29,90/mês',
-      ads: 10,
+      ads: 6,
+      candidaturas: 20,
       color: 'var(--holo-gradient-gold)',
       badge: 'Mais Popular',
       icon: <Star size={32} />
@@ -34,6 +36,7 @@ export default function Plans() {
       name: 'Platinum',
       price: 'R$ 79,90/mês',
       ads: 'Ilimitados',
+      candidaturas: 'Ilimitadas',
       color: 'var(--holo-gradient-platinum)',
       badge: 'Profissional',
       icon: <Gem size={32} />
@@ -115,6 +118,10 @@ export default function Plans() {
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                 <CheckCircle size={20} />
                 <span style={{ fontWeight: '500' }}>{plan.ads} anúncios por mês</span>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                <CheckCircle size={20} />
+                <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês</span>
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                 <CheckCircle size={20} />

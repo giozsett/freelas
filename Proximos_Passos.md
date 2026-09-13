@@ -1,16 +1,13 @@
 # Etapas que devem ser implementadas a seguir no projeto
 
-    - Trocar a API de pagamento pelo Stripe.
+    - Criar uma landing page.
 
-    - Sistema de reputação. Verificar quantos pontos são somados ou diminuídos com base nas denúncias que o usuário recebeu que foram julgadas como procedentes. Nas solicitações de cancelamento que ele enviou e foram aprovadas. E das avaliações negativas recebidas.
-    Crie um arquivo 'Reputacao.md' sugerindo como pode ser o funcionamento do termômetro de reputação considerando a estrutura atual do projeto e os critérios de avaliação. A ideia inicial é que quando um usuário recebe denúncias que são julgadas como procedentes ele perde pontos de reputação.
-    Quando um usuário solicita o cancelamento de um freela/acordo e essa solicitação é aprovada, ele também perde ponstos de reputação.
-    Quando um usuário recebe uma avaliação 2 ou 1 estrelas em algum critério ele também perde pontos. Mas uma avaliação baixa tem um peso um pouco menor do que denúncias ou cancelamentos.
-    O que eu gostaria de saber é: como ficaria a "matemática" disso? Quantos pontos deduzir em cada infração citada acima? A reputação pode ser renovada após um tempo em que, por exemplo, o usuário não solicitou mais nenhum cancelamento, ou essa renovação não faria sentido? Como avisar ao usuário, como uma espécie de "strike" que ele está com a reputação baixa e que a conta dele corre risco de ser banida após muitas denúncias.
-    A ideia é fazer com o que existe de recursos e ferramentas no projeto.
+    - Verificar responsividade em todas as páginas.
 
+    - Anúncios que foram alterados não estão aparecendo com as informações atualizadas em outros locais do site em que são mencionados. Por exemplo, na barra de notificações aparece o títutlo antigo do anúncio.
 
-    - Sistema de reputação
-    A reputação dos usuário será medida através de acordo com as avaliações, variando de 1 a 5, sendo 1 a mais baixa, e, 5 a mais alta. 
-A plataforma também contará com um sistema de pontuação de infrações, através do qual usuários perderão pontos ao serem denunciados, receberem avaliações negativas válidas, cancelarem muitos acordos. A acumulação excessiva de pontos de infração resulta em banimento permanente da plataforma.
-Se um usuário acumular 5 ou mais denúncias improcedentes dentro de uma janela de 30 dias corridos e a taxa de improcedência dessas denúncias for igual ou superior a 50% do total de denúncias que ele enviou no mesmo período, ele receberá um soft ban de denúncias: perderá o direito de enviar novas denúncias pelos próximos 15 dias.
+    - Na página 'minhas candidaturas' aparecem as opções 'aprovar' 'recusar' e 'conversar'. Esse botão de conversar não deve existir pois os chats de mensagens só existem após a aprovação da candidatura.
+
+    - Opção de visualizar senha deve estar dentro do campo de senha do formulário e não acima.
+
+    - Melhorias nos modais de denúncia.
