@@ -24,6 +24,7 @@ import EsqueciSenha from './pages/EsqueciSenha';
 import LinkedinCallback from './components/LinkedinCallback';
 import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
+import Configuracoes from './pages/Configuracoes';
 import { ProvedorDialogo } from './context/ContextoDialogo';
 
 function App() {
@@ -56,6 +57,7 @@ function App() {
           <Route path="/my-payments" element={<RotaPrivada><MeusPagamentos /></RotaPrivada>} />
           <Route path="/my-freelas" element={<RotaPrivada><MeusFreelas /></RotaPrivada>} />
           <Route path="/my-reviews" element={<RotaPrivada><MinhasAvaliacoes /></RotaPrivada>} />
+          <Route path="/settings" element={<RotaPrivada><Configuracoes /></RotaPrivada>} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         </Routes>
       </div>

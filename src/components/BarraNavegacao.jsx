@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   Star,
   CreditCard,
+  CircleDollarSign,
   Wallet,
   LogOut,
   Settings,
@@ -41,7 +42,8 @@ function montarSecoesMenu(porTipo, role) {
       titulo: 'Conta',
       itens: [
         { icon: UserRound, to: '/profile', label: 'Meu perfil', tipos: [] },
-        { icon: Settings, to: '/plans', label: 'Planos e assinatura', tipos: [] },
+        { icon: CircleDollarSign, to: '/plans', label: 'Planos e assinatura', tipos: [] },
+        { icon: Settings, to: '/settings', label: 'Configurações', tipos: [] },
       ],
     },
     {

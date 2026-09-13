@@ -89,6 +89,37 @@ class LoginAPI(APIView):
             })
         return Response({"error": "Wrong Credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
+class ExcluirContaAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        senha = request.data.get('senha', '')
+        if not request.user.check_password(senha):
+            return Response({"error": "Senha incorreta."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            profile = request.user.profile
+            profile.deletado = True
+            profile.nome_completo = "Usuário removido"
+            profile.email = f"deletado_{request.user.id}@freelas.local"
+            profile.bio = ""
+            profile.foto_perfil = None
+            profile.banner = None
+            profile.save()
+
+            user = request.user
+            user.is_active = False
+            user.save()
+
+            Token.objects.filter(user=request.user).delete()
+
+            return Response({"mensagem": "Conta excluída com sucesso."}, status=status.HTTP_200_OK)
+        except Exception:
+            logger.exception("Erro inesperado ao excluir a conta do usuário %s", request.user.id)
+            return Response(
+                {"error": "Erro interno ao excluir a conta. Tente novamente mais tarde."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 class UserAPI(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = UserSerializer
