@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Notificações do usuário + publicador WebSocket (Redis Pub/Sub).
 
 Quando uma notificação é criada ou lida, um evento é publicado no canal
@@ -76,17 +75,6 @@ def criar_notificacao(usuario, tipo, titulo, mensagem='', link=''):
         return None
     try:
         notificacao = Notificacao.objects.create(
-=======
-from .models import Notificacao
-
-
-def criar_notificacao(usuario, tipo, titulo, mensagem='', link=''):
-    """Cria um registro de notificação para um usuário (sem lançar erro)."""
-    if not usuario:
-        return None
-    try:
-        return Notificacao.objects.create(
->>>>>>> origin/main
             usuario=usuario,
             tipo=tipo,
             titulo=titulo[:255],
@@ -95,7 +83,6 @@ def criar_notificacao(usuario, tipo, titulo, mensagem='', link=''):
         )
     except Exception:
         return None
-<<<<<<< HEAD
 
     _publicar(usuario.id, {
         'tipo': 'nova_notificacao',
@@ -111,5 +98,3 @@ def criar_notificacao(usuario, tipo, titulo, mensagem='', link=''):
         **resumo_nao_lidas(usuario),
     })
     return notificacao
-=======
->>>>>>> origin/main

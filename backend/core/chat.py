@@ -104,7 +104,6 @@ def _serializar_mensagem(msg):
     }
 
 
-<<<<<<< HEAD
 def total_nao_lidas_usuario(user):
     """Total de mensagens não lidas do usuário em todas as conversas."""
     from django.db.models import Q
@@ -133,18 +132,13 @@ def _publicar_nao_lidas_da_outra_parte(acordo, remetente):
             )
 
 
-=======
->>>>>>> origin/main
 def enviar_mensagem(acordo, remetente, texto):
     from .models import MensagemChat
 
     msg = MensagemChat.objects.create(acordo=acordo, remetente=remetente, texto=texto)
     mensagem = _serializar_mensagem(msg)
     _notificar_websocket(acordo.id, mensagem)
-<<<<<<< HEAD
     _publicar_nao_lidas_da_outra_parte(acordo, remetente)
-=======
->>>>>>> origin/main
     return mensagem
 
 
@@ -195,7 +189,6 @@ def marcar_lidas(acordo_id, user_id):
     MensagemChat.objects.filter(acordo_id=acordo_id, lida=False).exclude(
         remetente_id=user_id
     ).update(lida=True)
-<<<<<<< HEAD
     # Atualiza o badge de mensagens do usuário via WebSocket.
     from django.contrib.auth.models import User
 
@@ -206,5 +199,3 @@ def marcar_lidas(acordo_id, user_id):
     except User.DoesNotExist:
         return
     publicar_chat_nao_lidas(user_id, total_nao_lidas_usuario(user))
-=======
->>>>>>> origin/main

@@ -8,6 +8,21 @@ from rest_framework import serializers
 from .models import UserProfile
 from .notificacoes import criar_notificacao
 
+
+def _destruir_imagem_cloudinary(url):
+    """Apaga um asset do Cloudinary a partir da URL salva no banco (best-effort)."""
+    if not url or 'res.cloudinary.com' not in url:
+        return
+    import cloudinary.uploader
+    try:
+        public_id = url.split('/image/upload/')[-1].split('?')[0]
+        if '.' in public_id.rsplit('/', 1)[-1]:
+            public_id = public_id.rsplit('.', 1)[0]
+        cloudinary.uploader.destroy(public_id, resource_type='image', invalidate=True)
+    except Exception:
+        pass
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
     experiencias = serializers.SerializerMethodField()
@@ -42,11 +57,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     folder='banners',
                     resource_type='image',
                 )
-                instance.banner = resposta.get('secure_url') or resposta.get('url')
             except Exception:
                 raise serializers.ValidationError({'banner': 'Não foi possível enviar a imagem do banner.'})
+            _destruir_imagem_cloudinary(instance.banner)
+            instance.banner = resposta.get('secure_url') or resposta.get('url')
             instance.save(update_fields=['banner', 'atualizado_em'])
         elif 'banner' in self.initial_data and banner_val in (None, ''):
+            _destruir_imagem_cloudinary(instance.banner)
             instance.banner = None
             instance.save(update_fields=['banner', 'atualizado_em'])
 
