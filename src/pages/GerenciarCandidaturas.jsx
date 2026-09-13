@@ -146,14 +146,14 @@ export default function ManageAdApplications() {
           <div key={app.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                   <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--holo-gradient-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '1.1rem', textTransform: 'uppercase', flexShrink: 0 }}>
                     {(app.applicant_name || '?').charAt(0)}
                   </div>
                   <div>
-                     <h3 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {app.applicant_name} 
-                        <Link to={`/user/${app.user}`} className="link-hover-card" style={{ fontSize: '0.85rem' }}>Ver perfil</Link>
+                     <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.25rem' }}>Candidato</div>
+                     <h3 style={{ fontSize: '1.25rem', margin: 0 }}>
+                        <Link to={`/user/${app.user}`} className="link-hover-card">{app.applicant_name}</Link>
                      </h3>
                      <div style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.25rem' }}>
                        Valor proposto do anúncio: <strong>R$ {ad.price}</strong>
@@ -187,9 +187,6 @@ export default function ManageAdApplications() {
                  <button className="btn btn-secondary" style={{ flex: 1, borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }} onClick={() => handleUpdateStatus(app.id, 'recusada')}>
                    <X size={18} /> Recusar
                  </button>
-                 <Link to={app.acordo_id ? `/chat/${app.acordo_id}` : '/chat'} className="btn btn-secondary" style={{ flex: 1 }}>
-                   Conversar
-                 </Link>
               </div>
             )}
 

@@ -21,6 +21,7 @@ import PainelModeracao from './pages/PainelModeracao';
 import ConfigurarAssinatura from './pages/ConfigurarAssinatura';
 import MeusPagamentos from './pages/MeusPagamentos';
 import EsqueciSenha from './pages/EsqueciSenha';
+import LinkedinCallback from './components/LinkedinCallback';
 import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
 import { ProvedorDialogo } from './context/ContextoDialogo';
@@ -35,6 +36,7 @@ function App() {
         <Routes>
           <Route path="/" element={<RotaPrivada><Inicio /></RotaPrivada>} />
           <Route path="/login" element={<Login />} />
+          <Route path="/linkedin-callback" element={<LinkedinCallback />} />
           <Route path="/register" element={<Cadastro />} />
           <Route path="/profile" element={<RotaPrivada><Perfil /></RotaPrivada>} />
           <Route path="/profile/edit" element={<RotaPrivada><EditarPerfil /></RotaPrivada>} />

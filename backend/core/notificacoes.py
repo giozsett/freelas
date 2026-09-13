@@ -68,9 +68,14 @@ def publicar_chat_nao_lidas(user_id, total):
     _publicar(user_id, {'tipo': 'chat_nao_lidas', 'total': total})
 
 
-def criar_notificacao(usuario, tipo, titulo, mensagem='', link=''):
+def criar_notificacao(usuario, tipo, titulo, mensagem='', link='', ad=None):
     """Cria um registro de notificação para um usuário (sem lançar erro)
-    e publica o evento no WebSocket pessoal do usuário."""
+    e publica o evento no WebSocket pessoal do usuário.
+
+    Se `mensagem` contiver o placeholder "{ad_titulo}" e `ad` for informado,
+    o título do anúncio é resolvido dinamicamente na leitura (ver
+    NotificacaoSerializer), refletindo edições futuras do título.
+    """
     if not usuario:
         return None
     try:
@@ -80,6 +85,7 @@ def criar_notificacao(usuario, tipo, titulo, mensagem='', link=''):
             titulo=titulo[:255],
             mensagem=mensagem or '',
             link=link or '',
+            ad=ad,
         )
     except Exception:
         return None

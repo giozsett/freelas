@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useNotificacoes } from '../context/ContextoNotificacao';
+import useScrollEdges from '../hooks/useScrollEdges';
+import LimitePlano from '../components/LimitePlano';
 
 const STATUS_CONFIG = {
   aprovada: {
@@ -41,21 +43,25 @@ const STATUS_CONFIG = {
   },
 };
 
-const EXPIRADA_MOTIVO = 'Anúncio expirado.';
+// Mesma mensagem usada no backend (serializers.CandidaturaSerializer) tanto para
+// anúncio excluído (soft delete) quanto vencido — para quem se candidatou, os
+// dois casos significam a mesma coisa: o anúncio não existe mais pra ninguém decidir.
+const ANUNCIO_INDISPONIVEL_MOTIVO =
+  'Este anúncio não está mais disponível. Provavelmente foi removido pelo anunciante ou expirou.';
 
-function isExpirada(app) {
-  return app.indisponivel === true && app.motivo_indisponibilidade === EXPIRADA_MOTIVO;
+function isAnuncioIndisponivel(app) {
+  return app.indisponivel === true && app.motivo_indisponibilidade === ANUNCIO_INDISPONIVEL_MOTIVO;
 }
 
 function getStatusInfo(app) {
-  if (isExpirada(app)) {
+  if (isAnuncioIndisponivel(app)) {
     return {
       badgeBg: 'var(--pending-card)',
       badgeColor: 'var(--text-secondary)',
-      label: 'Anúncio expirado',
+      label: 'Anúncio indisponível',
       icon: Archive,
       sideColor: 'var(--pending-accent)',
-      description: 'O prazo do anúncio terminou antes da seleção da sua proposta.',
+      description: ANUNCIO_INDISPONIVEL_MOTIVO,
     };
   }
   if (app.indisponivel || app.status === 'encerrada') {
@@ -71,13 +77,14 @@ function getStatusInfo(app) {
   return STATUS_CONFIG[app.status] || STATUS_CONFIG.pendente;
 }
 
-// Candidaturas finalizadas: recusadas, aprovadas, expiradas (anúncio vencido) e encerradas.
+// Candidaturas finalizadas: recusadas, aprovadas, encerradas e com anúncio
+// indisponível (excluído pelo anunciante ou vencido).
 function isFinalizada(app) {
   return (
     app.status === 'aprovada' ||
     app.status === 'recusada' ||
     app.status === 'encerrada' ||
-    isExpirada(app)
+    isAnuncioIndisponivel(app)
   );
 }
 
@@ -128,6 +135,7 @@ export default function MinhasCandidaturas() {
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('em-andamento');
+  const tabsScrollRef = useScrollEdges();
 
   useEffect(() => {
     marcarLidas(['candidatura']);
@@ -162,7 +170,7 @@ export default function MinhasCandidaturas() {
   const pendentes = emAndamento.filter((a) => a.status === 'pendente');
   const aprovadas = applications.filter((a) => a.status === 'aprovada');
   const naoSelecionadas = applications.filter(
-    (a) => a.status === 'recusada' || a.status === 'encerrada' || isExpirada(a)
+    (a) => a.status === 'recusada' || a.status === 'encerrada' || isAnuncioIndisponivel(a)
   );
 
   const visibleApplications = activeTab === 'em-andamento' ? emAndamento : finalizadas;
@@ -183,6 +191,8 @@ export default function MinhasCandidaturas() {
           </div>
         </div>
       </div>
+
+      <LimitePlano recurso="candidaturas" />
 
       {/* ── Barra de resumo ── */}
       {applications.length > 0 && (
@@ -219,7 +229,7 @@ export default function MinhasCandidaturas() {
 
       {/* ── Abas segmentadas ── */}
       {applications.length > 0 && (
-        <div className="mf-tabs" role="tablist" aria-label="Filtrar candidaturas">
+        <div className="mf-tabs" role="tablist" aria-label="Filtrar candidaturas" ref={tabsScrollRef}>
           <button
             type="button"
             role="tab"
@@ -290,7 +300,7 @@ export default function MinhasCandidaturas() {
                       )}
                     </div>
 
-                    {isUnavailable && !isExpirada(app) && (
+                    {isUnavailable && !isAnuncioIndisponivel(app) && (
                       <p
                         style={{
                           margin: '0.5rem 0 0',
@@ -373,7 +383,7 @@ export default function MinhasCandidaturas() {
           <p>
             {activeTab === 'em-andamento'
               ? 'Suas candidaturas pendentes aparecerão aqui.'
-              : 'Candidaturas aprovadas, recusadas ou com anúncio vencido aparecerão aqui.'}
+              : 'Candidaturas aprovadas, recusadas ou com anúncio indisponível aparecerão aqui.'}
           </p>
         </div>
       )}

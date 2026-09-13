@@ -9,8 +9,9 @@ from .models import (
     Ad,
     AcordoServico,
     Avaliacao,
-    CartaoUsuario,
     Candidatura,
+    MensagemChat,
+    Notificacao,
     Pagamento,
     Report,
     SolicitacaoAlteracaoAcordo,
@@ -20,14 +21,26 @@ from .models import (
 )
 
 
-class MercadoPagoResponse:
-    def __init__(self, status_code, data):
-        self.status_code = status_code
-        self._data = data
-        self.content = b'{}'
+class FakeStripeSession(dict):
+    """Simula o objeto retornado por stripe.checkout.Session.create nos testes."""
 
-    def json(self):
-        return self._data
+    def __init__(self, id, url):
+        super().__init__(id=id, url=url)
+        self.id = id
+        self.url = url
+
+
+class FakeStripeObject(dict):
+    """Simula o StripeObject (data.object) dentro de um evento do webhook."""
+
+    def to_dict(self):
+        return dict(self)
+
+
+FAKE_PLANOS_PAGOS = {
+    'gold': {'nome': 'Gold', 'valor': Decimal('29.90'), 'stripe_price': 'price_test_gold'},
+    'platinum': {'nome': 'Platinum', 'valor': Decimal('79.90'), 'stripe_price': 'price_test_platinum'},
+}
 
 
 class PagamentoAPITests(TestCase):
@@ -68,17 +81,10 @@ class PagamentoAPITests(TestCase):
             descricao_servico='Site institucional',
         )
 
-    @override_settings(DEBUG=False)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-    })
-    @patch('core.views.requests.post')
-    def test_contratante_abre_checkout_do_valor_integral(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'pref-1', 'init_point': 'https://mercadopago.com/checkout/1'},
-        )
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_contratante_abre_checkout_com_taxa_da_plataforma(self, create):
+        create.return_value = FakeStripeSession('cs_test_1', 'https://checkout.stripe.com/c/pay/cs_test_1')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -89,27 +95,61 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['checkout_required'])
+        self.assertEqual(create.call_args.kwargs['mode'], 'payment')
+        # Valor do anúncio (R$ 1250) + taxa da plataforma de 10% (R$ 125) = R$ 1375.
         self.assertEqual(
-            post.call_args.kwargs['json']['items'][0]['unit_price'],
-            1250.0,
+            create.call_args.kwargs['line_items'][0]['price_data']['unit_amount'],
+            137500,
         )
-        self.assertEqual(
-            post.call_args.kwargs['json']['back_urls']['success'],
-            'https://teste.ngrok-free.dev/api/pagamentos/retorno/acordo/success/',
-        )
+        self.assertIn('taxa de serviço da plataforma (10%)', create.call_args.kwargs['line_items'][0]['price_data']['product_data']['description'])
+        self.assertEqual(response.data['init_point'], 'https://checkout.stripe.com/c/pay/cs_test_1')
         pagamento = Pagamento.objects.get(acordo=self.acordo)
-        self.assertEqual(pagamento.valor, Decimal('1250.00'))
+        self.assertEqual(pagamento.valor, Decimal('1375.00'))
         self.assertEqual(pagamento.status, 'pendente')
 
         history = self.client.get('/api/pagamentos/historico/')
         self.assertEqual(history.status_code, 200)
-        self.assertEqual(history.data, [])
+        self.assertEqual(history.data['results'], [])
+        self.assertEqual(history.data['count'], 0)
 
-    @override_settings(DEBUG=False)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-    })
+    def test_historico_pagamentos_e_paginado(self):
+        for i in range(17):
+            Pagamento.objects.create(
+                usuario=self.contratante,
+                tipo='acordo',
+                status='pago',
+                valor=Decimal('100.00'),
+                referencia_externa=f'acordo:historico:{i}',
+                acordo=self.acordo,
+            )
+        self.client.force_authenticate(self.contratante)
+
+        first_page = self.client.get('/api/pagamentos/historico/')
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(first_page.data['count'], 17)
+        self.assertEqual(len(first_page.data['results']), 15)
+        self.assertIsNotNone(first_page.data['next'])
+        self.assertIsNone(first_page.data['previous'])
+
+        second_page = self.client.get('/api/pagamentos/historico/?page=2')
+        self.assertEqual(len(second_page.data['results']), 2)
+        self.assertIsNone(second_page.data['next'])
+        self.assertIsNotNone(second_page.data['previous'])
+
+    def test_taxa_plataforma_e_valor_total_do_acordo(self):
+        self.assertEqual(self.acordo.taxa_plataforma, Decimal('125.00'))
+        self.assertEqual(self.acordo.valor_total_com_taxa, Decimal('1375.00'))
+
+    def test_taxa_plataforma_arredonda_para_duas_casas(self):
+        acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Pendente Pagamento',
+            valor_acordado=99.99,
+            titulo_anuncio='Serviço com centavos',
+        )
+        self.assertEqual(acordo.taxa_plataforma, Decimal('10.00'))
+        self.assertEqual(acordo.valor_total_com_taxa, Decimal('109.99'))
+
     def test_freelancer_nao_pode_pagar_como_contratante(self):
         self.client.force_authenticate(self.freelancer)
 
@@ -122,9 +162,9 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Pagamento.objects.exists())
 
-    @patch.dict('os.environ', {'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token'})
-    @patch('core.views.requests.get')
-    def test_webhook_aprova_ativa_acordo_e_registra_cartao(self, get):
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_webhook_aprova_pagamento_e_ativa_acordo(self, construct_event):
         pagamento = Pagamento.objects.create(
             usuario=self.contratante,
             tipo='acordo',
@@ -133,26 +173,20 @@ class PagamentoAPITests(TestCase):
             referencia_externa='acordo:test:1',
             acordo=self.acordo,
         )
-        get.return_value = MercadoPagoResponse(200, {
-            'id': 987654,
-            'status': 'approved',
-            'status_detail': 'accredited',
-            'external_reference': pagamento.referencia_externa,
-            'transaction_amount': 1250,
-            'currency_id': 'BRL',
-            'payment_method_id': 'visa',
-            'card': {
-                'id': 'card-123',
-                'last_four_digits': '4242',
-                'expiration_month': 12,
-                'expiration_year': 2030,
-                'cardholder': {'name': 'CLIENTE TESTE'},
-            },
-        })
+        construct_event.return_value = {
+            'type': 'checkout.session.completed',
+            'data': {'object': FakeStripeObject({
+                'client_reference_id': pagamento.referencia_externa,
+                'amount_total': 125000,
+                'currency': 'brl',
+                'payment_status': 'paid',
+                'payment_intent': 'pi_teste123',
+            })},
+        }
 
         response = self.client.post(
             '/api/pagamentos/webhook/',
-            {'type': 'payment', 'data': {'id': '987654'}},
+            {},
             format='json',
         )
 
@@ -161,30 +195,19 @@ class PagamentoAPITests(TestCase):
         pagamento.refresh_from_db()
         self.acordo.refresh_from_db()
         self.assertEqual(pagamento.status, 'pago')
+        self.assertEqual(pagamento.mp_payment_id, 'pi_teste123')
         self.assertIsNotNone(pagamento.aprovado_em)
         self.assertEqual(self.acordo.status_acordo, 'Ativo')
-        card = CartaoUsuario.objects.get(usuario=self.contratante)
-        self.assertEqual(card.bandeira, 'visa')
-        self.assertEqual(card.ultimos_quatro, '4242')
 
         self.client.force_authenticate(self.contratante)
         history = self.client.get('/api/pagamentos/historico/')
-        cards = self.client.get('/api/pagamentos/cartoes/')
-        self.assertEqual(len(history.data), 1)
-        self.assertEqual(len(cards.data), 1)
-        self.assertNotIn('mp_card_id', cards.data[0])
+        self.assertEqual(len(history.data['results']), 1)
 
-    @override_settings(DEBUG=False)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-    })
-    @patch('core.views.requests.post')
-    def test_plano_pago_abre_checkout_recorrente_sem_alterar_perfil(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'subscription-1', 'init_point': 'https://mercadopago.com/subscription/1'},
-        )
+    @patch.dict('core.views.PLANOS_PAGOS', FAKE_PLANOS_PAGOS)
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_plano_pago_abre_checkout_recorrente_sem_alterar_perfil(self, create):
+        create.return_value = FakeStripeSession('cs_test_2', 'https://checkout.stripe.com/c/pay/cs_test_2')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -196,36 +219,23 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.contratante.profile.refresh_from_db()
         self.assertEqual(self.contratante.profile.subscription_plan, 'Gratuito')
-        self.assertEqual(
-            post.call_args.kwargs['json']['items'][0]['unit_price'],
-            29.9,
-        )
-        self.assertEqual(
-            post.call_args.kwargs['json']['back_urls']['success'],
-            'https://teste.ngrok-free.dev/api/pagamentos/retorno/assinatura/success/',
-        )
-        self.assertEqual(
-            post.call_args.args[0],
-            'https://api.mercadopago.com/checkout/preferences',
-        )
+        self.assertEqual(create.call_args.kwargs['mode'], 'subscription')
+        self.assertEqual(create.call_args.kwargs['line_items'][0]['price'], 'price_test_gold')
+        self.assertEqual(create.call_args.kwargs['customer_email'], self.contratante.email)
         self.assertEqual(
             Pagamento.objects.get(usuario=self.contratante).status,
             'pendente',
         )
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-        'MERCADO_PAGO_TEST_MODE': 'true',
-        'MERCADO_PAGO_TEST_PAYER_EMAIL': 'comprador@testuser.com',
-    })
-    @patch('core.views.requests.post')
-    def test_checkout_academico_aprova_assinatura_ao_criar_link(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'subscription-test', 'init_point': 'https://mercadopago.com/subscription/test'},
-        )
+    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
+    @patch.dict('core.views.PLANOS_PAGOS', FAKE_PLANOS_PAGOS)
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_checkout_assinatura_nao_aprova_automaticamente(self, create):
+        """Mesmo com DEBUG=True e a antiga flag de teste setada, o pagamento só
+        pode ser concluído quando o usuário terminar o checkout de verdade."""
+        create.return_value = FakeStripeSession('cs_test_3', 'https://checkout.stripe.com/c/pay/cs_test_3')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -235,29 +245,21 @@ class PagamentoAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data['test_approved'])
-        self.assertEqual(
-            post.call_args.kwargs['json']['payer']['email'],
-            'comprador@testuser.com',
-        )
+        self.assertNotIn('test_approved', response.data)
+        self.assertEqual(create.call_args.kwargs['customer_email'], self.contratante.email)
         self.contratante.profile.refresh_from_db()
-        self.assertEqual(self.contratante.profile.subscription_plan, 'Platinum')
+        self.assertEqual(self.contratante.profile.subscription_plan, 'Gratuito')
         pagamento = Pagamento.objects.get(usuario=self.contratante)
-        self.assertEqual(pagamento.status, 'pago')
-        self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
+        self.assertEqual(pagamento.status, 'pendente')
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {
-        'MERCADO_PAGO_ACCESS_TOKEN': 'TEST-token',
-        'BACKEND_PUBLIC_URL': 'https://teste.ngrok-free.dev',
-        'MERCADO_PAGO_TEST_MODE': 'true',
-    })
-    @patch('core.views.requests.post')
-    def test_checkout_academico_registra_pagamento_e_inicia_acordo(self, post):
-        post.return_value = MercadoPagoResponse(
-            201,
-            {'id': 'preference-test', 'init_point': 'https://mercadopago.com/checkout/test'},
-        )
+    @patch.dict('os.environ', {'PAGAMENTOS_TEST_MODE': 'true'})
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.checkout.Session.create')
+    def test_checkout_acordo_nao_aprova_automaticamente(self, create):
+        """Mesmo com DEBUG=True e a antiga flag de teste setada, o freela só
+        entra 'Em andamento' quando o pagamento for confirmado pelo webhook."""
+        create.return_value = FakeStripeSession('cs_test_4', 'https://checkout.stripe.com/c/pay/cs_test_4')
         self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
@@ -267,16 +269,26 @@ class PagamentoAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data['test_approved'])
+        self.assertNotIn('test_approved', response.data)
         self.acordo.refresh_from_db()
-        self.assertEqual(self.acordo.status_acordo, 'Ativo')
+        self.assertEqual(self.acordo.status_acordo, 'Pendente Pagamento')
         pagamento = Pagamento.objects.get(acordo=self.acordo)
-        self.assertEqual(pagamento.status, 'pago')
-        self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
+        self.assertEqual(pagamento.status, 'pendente')
         self.assertEqual(
             response.data['init_point'],
-            'https://mercadopago.com/checkout/test',
+            'https://checkout.stripe.com/c/pay/cs_test_4',
         )
+
+    def test_endpoint_de_simular_pagamento_nao_existe_mais(self):
+        self.client.force_authenticate(self.contratante)
+
+        response = self.client.post(
+            f'/api/pagamentos/acordo/{self.acordo.id}/simular/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_plano_gratuito_nao_exige_checkout(self):
         self.contratante.profile.subscription_plan = 'Gold'
@@ -420,8 +432,11 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(response.status_code, 409)
 
     @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {'MERCADO_PAGO_TEST_MODE': 'true'})
     def test_acordo_ativo_legado_pode_ser_concluido_no_ambiente_local(self):
+        """Compatibilidade apenas para acordos antigos que ficaram 'Ativo' sem
+        nenhum pagamento registrado. Depende só de DEBUG=True, não de nenhuma
+        flag de teste — essa é a única forma de registrar um pagamento sem
+        checkout real que ainda existe no sistema."""
         self.acordo.status_acordo = 'Ativo'
         self.acordo.save(update_fields=['status_acordo'])
         self.client.force_authenticate(self.freelancer)
@@ -439,9 +454,23 @@ class PagamentoAPITests(TestCase):
             Pagamento.objects.filter(
                 acordo=self.acordo,
                 status='pago',
-                forma_pagamento='simulacao_pagamento',
+                forma_pagamento='registro_legado',
             ).exists(),
         )
+
+    @override_settings(DEBUG=False)
+    def test_acordo_ativo_legado_nao_pode_ser_concluido_fora_do_debug(self):
+        self.acordo.status_acordo = 'Ativo'
+        self.acordo.save(update_fields=['status_acordo'])
+        self.client.force_authenticate(self.freelancer)
+
+        response = self.client.post(
+            f'/api/acordos/{self.acordo.id}/concluir/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 409)
 
     def test_cancelamento_precisa_de_admin_e_move_acordo_para_cancelados(self):
         self.acordo.status_acordo = 'Ativo'
@@ -654,33 +683,6 @@ class PagamentoAPITests(TestCase):
         self.assertTrue(self.acordo.tem_solicitacao)
         self.assertEqual(self.acordo.valor_acordado, 1250)
 
-    def test_retorno_publico_redireciona_para_frontend_local(self):
-        response = self.client.get('/api/pagamentos/retorno/acordo/success/')
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            response.url,
-            'http://localhost:5173/my-freelas?checkout=success',
-        )
-
-    @override_settings(DEBUG=True)
-    @patch.dict('os.environ', {'MERCADO_PAGO_TEST_MODE': 'true'})
-    def test_simulacao_local_aprova_pagamento_e_ativa_acordo(self):
-        self.client.force_authenticate(self.contratante)
-
-        response = self.client.post(
-            f'/api/pagamentos/acordo/{self.acordo.id}/simular/',
-            {},
-            format='json',
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.acordo.refresh_from_db()
-        self.assertEqual(self.acordo.status_acordo, 'Ativo')
-        pagamento = Pagamento.objects.get(acordo=self.acordo)
-        self.assertEqual(pagamento.status, 'pago')
-        self.assertEqual(pagamento.forma_pagamento, 'simulacao_pagamento')
-        self.assertTrue(pagamento.mp_payment_id.startswith('LOCAL-TEST-'))
-
     def test_denuncias_sao_filtradas_e_decididas_apenas_por_admin(self):
         pending = Report.objects.create(
             type='user',
@@ -733,6 +735,213 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Report.objects.get(pk=response.data['id']).status, 'pending')
+
+
+class LimitesPlanoAPITests(TestCase):
+    """Cada plano de assinatura limita quantos anúncios e candidaturas o
+    usuário pode enviar por mês (Gratuito: 3 anúncios / 5 candidaturas,
+    Gold: 6 anúncios / 20 candidaturas, Platinum: ilimitado)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='limite@example.com',
+            email='limite@example.com',
+            password='secret123',
+        )
+        self.outro_anunciante = User.objects.create_user(
+            username='outroanunciante@example.com',
+            email='outroanunciante@example.com',
+            password='secret123',
+        )
+
+    def _criar_ads_do_outro_anunciante(self, quantidade):
+        return [
+            Ad.objects.create(
+                author=self.outro_anunciante,
+                title=f'Serviço {i}',
+                description='Descrição',
+                price='100.00',
+            )
+            for i in range(quantidade)
+        ]
+
+    def _payload_anuncio(self, titulo):
+        return {
+            'title': titulo,
+            'description': 'Descrição do serviço.',
+            'price': '100.00',
+            'category': 'Tecnologia',
+            'role': 'contractor',
+        }
+
+    def test_endpoint_limite_anuncios_reflete_plano_gold_com_seis_por_mes(self):
+        self.user.profile.subscription_plan = 'Gold'
+        self.user.profile.save(update_fields=['subscription_plan'])
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get('/api/ads/limite/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['plano'], 'Gold')
+        self.assertEqual(response.data['limite'], 6)
+        self.assertEqual(response.data['usados'], 0)
+        self.assertFalse(response.data['atingiu_limite'])
+
+    def test_plano_gratuito_bloqueia_quarto_anuncio_no_mes(self):
+        self.client.force_authenticate(self.user)
+        for i in range(3):
+            response = self.client.post('/api/ads/', self._payload_anuncio(f'Anúncio {i}'), format='json')
+            self.assertEqual(response.status_code, 201, response.data)
+
+        bloqueado = self.client.post('/api/ads/', self._payload_anuncio('Anúncio extra'), format='json')
+
+        self.assertEqual(bloqueado.status_code, 400)
+        self.assertEqual(Ad.objects.filter(author=self.user).count(), 3)
+
+    def test_endpoint_limite_candidaturas_reflete_plano_gratuito_com_cinco_por_mes(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get('/api/candidaturas/limite/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['plano'], 'Gratuito')
+        self.assertEqual(response.data['limite'], 5)
+        self.assertEqual(response.data['usados'], 0)
+        self.assertFalse(response.data['atingiu_limite'])
+
+    def test_plano_gratuito_bloqueia_sexta_candidatura_no_mes(self):
+        ads = self._criar_ads_do_outro_anunciante(6)
+        self.client.force_authenticate(self.user)
+
+        for ad in ads[:5]:
+            response = self.client.post(
+                '/api/candidaturas/',
+                {'ad': ad.id, 'mensagem': 'Tenho interesse.'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+
+        bloqueado = self.client.post(
+            '/api/candidaturas/',
+            {'ad': ads[5].id, 'mensagem': 'Tenho interesse.'},
+            format='json',
+        )
+
+        self.assertEqual(bloqueado.status_code, 400)
+        self.assertEqual(Candidatura.objects.filter(user=self.user).count(), 5)
+
+    def test_plano_platinum_nao_tem_limite_de_candidaturas(self):
+        ads = self._criar_ads_do_outro_anunciante(6)
+        self.user.profile.subscription_plan = 'Platinum'
+        self.user.profile.save(update_fields=['subscription_plan'])
+        self.client.force_authenticate(self.user)
+
+        for ad in ads:
+            response = self.client.post(
+                '/api/candidaturas/',
+                {'ad': ad.id, 'mensagem': 'Tenho interesse.'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+
+        status_limite = self.client.get('/api/candidaturas/limite/')
+        self.assertIsNone(status_limite.data['limite'])
+        self.assertFalse(status_limite.data['atingiu_limite'])
+
+
+class ChatSegurancaAPITests(TestCase):
+    """Admins (is_staff) não participantes de um acordo não podem ler nem
+    enviar mensagens no chat entre as partes — só os próprios envolvidos."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = User.objects.create_user(
+            username='contratante-chat@example.com',
+            email='contratante-chat@example.com',
+            password='secret123',
+        )
+        self.freelancer = User.objects.create_user(
+            username='freelancer-chat@example.com',
+            email='freelancer-chat@example.com',
+            password='secret123',
+        )
+        self.admin = User.objects.create_user(
+            username='admin-chat@example.com',
+            email='admin-chat@example.com',
+            password='secret123',
+            is_staff=True,
+        )
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Criação de logo',
+            description='Logo para a empresa',
+            price='500.00',
+        )
+        self.candidatura = Candidatura.objects.create(
+            user=self.freelancer,
+            ad=self.ad,
+            status='pendente',
+        )
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Ativo',
+            valor_acordado=500,
+            titulo_anuncio='Criação de logo',
+            descricao_servico='Logo para a empresa',
+        )
+
+    def test_admin_nao_pode_ver_mensagens_de_conversa_alheia(self):
+        self.client.force_authenticate(self.freelancer)
+        self.client.post(f'/api/chat/{self.acordo.id}/messages/', {'texto': 'Oi, tudo bem?'}, format='json')
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(f'/api/chat/{self.acordo.id}/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_nao_pode_enviar_mensagem_em_conversa_alheia(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            f'/api/chat/{self.acordo.id}/messages/',
+            {'texto': 'Mensagem indevida de um admin.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(MensagemChat.objects.filter(acordo=self.acordo).count(), 0)
+
+    def test_admin_nao_pode_marcar_conversa_alheia_como_lida(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(f'/api/chat/{self.acordo.id}/ler/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_nao_ve_conversas_alheias_na_listagem(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/chat/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_admin_nao_conta_nao_lidas_de_conversas_alheias(self):
+        self.client.force_authenticate(self.freelancer)
+        self.client.post(f'/api/chat/{self.acordo.id}/messages/', {'texto': 'Mensagem não lida'}, format='json')
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/chat/nao-lidas/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['total'], 0)
+
+    def test_partes_continuam_conversando_normalmente(self):
+        self.client.force_authenticate(self.contratante)
+        envio = self.client.post(
+            f'/api/chat/{self.acordo.id}/messages/',
+            {'texto': 'Olá, freelancer!'},
+            format='json',
+        )
+        self.assertEqual(envio.status_code, 201)
+
+        self.client.force_authenticate(self.freelancer)
+        detalhe = self.client.get(f'/api/chat/{self.acordo.id}/')
+        self.assertEqual(detalhe.status_code, 200)
+        self.assertEqual(len(detalhe.data['messages']), 1)
 
 
 class DashboardAdminAPITests(TestCase):
@@ -834,7 +1043,7 @@ class CadastroConflitoEmailTests(TestCase):
         resp = self.client.post('/api/auth/register/', {
             'username': 'novo_usuario',
             'email': self.fake_identity['email'],
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Novo',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -845,7 +1054,7 @@ class CadastroConflitoEmailTests(TestCase):
         resp = self.client.post('/api/auth/register/', {
             'username': 'outro_usuario',
             'email': self.fake_identity['email'],
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Outro',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -881,7 +1090,7 @@ class VerificacaoEmailTests(TestCase):
         return self.client.post('/api/auth/register/', {
             'username': 'novo@example.com',
             'email': 'novo@example.com',
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Novo',
         }, format='json')
 
@@ -898,7 +1107,7 @@ class VerificacaoEmailTests(TestCase):
         self._registrar()
         resp = self.client.post('/api/auth/login/', {
             'username': 'novo@example.com',
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
         self.assertIn('Confirme seu email', str(resp.data))
@@ -926,6 +1135,479 @@ class VerificacaoEmailTests(TestCase):
 
         login = self.client.post('/api/auth/login/', {
             'username': 'novo@example.com',
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
         }, format='json')
         self.assertEqual(login.status_code, 200)
+
+
+class AutenticacaoSenhaAPITests(TestCase):
+    """
+    Testes dos requisitos de senha na autenticação:
+    - mínimo de 8 caracteres
+    - pelo menos 1 letra maiúscula
+    - pelo menos 1 número
+    - pelo menos 1 caractere especial (@, #, *, etc.)
+
+    Cobrem os endpoints que recebem senha em texto claro:
+    RegisterAPI (/api/auth/register/) e RedefinirSenhaAPI (/api/auth/redefinir-senha/).
+    """
+
+    SENHA_VALIDA = 'Abcdef1@'
+
+    def setUp(self):
+        self.client = APIClient()
+
+    # ---------- Cadastro (RegisterAPI) ----------
+
+    def test_cadastro_recusa_senha_menor_que_8_caracteres(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'curta@example.com',
+                'email': 'curta@example.com',
+                'password': 'Ab1@xyz',  # 7 caracteres
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='curta@example.com').exists())
+
+    def test_cadastro_recusa_senha_sem_letra_maiuscula(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'semmaiuscula@example.com',
+                'email': 'semmaiuscula@example.com',
+                'password': 'abcdef1@',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='semmaiuscula@example.com').exists())
+
+    def test_cadastro_recusa_senha_sem_numero(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'semnumero@example.com',
+                'email': 'semnumero@example.com',
+                'password': 'Abcdefg@',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='semnumero@example.com').exists())
+
+    def test_cadastro_recusa_senha_sem_caractere_especial(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'semespecial@example.com',
+                'email': 'semespecial@example.com',
+                'password': 'Abcdefg1',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='semespecial@example.com').exists())
+
+    def test_cadastro_aceita_senha_que_atende_todos_os_requisitos(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'valida@example.com',
+                'email': 'valida@example.com',
+                'password': self.SENHA_VALIDA,
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('token', response.data)
+        user = User.objects.get(username='valida@example.com')
+        self.assertTrue(user.check_password(self.SENHA_VALIDA))
+        self.assertTrue(VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists())
+
+    # ---------- Redefinição de senha (RedefinirSenhaAPI) ----------
+
+    def _criar_usuario_com_codigo(self, email, codigo='123456'):
+        user = User.objects.create_user(username=email, email=email, password='SenhaAntiga1@')
+        VerificacaoEmail.objects.create(usuario=user, codigo=codigo)
+        return user
+
+    def test_redefinicao_recusa_senha_menor_que_8_caracteres(self):
+        user = self._criar_usuario_com_codigo('redef-curta@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'Ab1@xyz'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('Ab1@xyz'))
+
+    def test_redefinicao_recusa_senha_sem_letra_maiuscula(self):
+        user = self._criar_usuario_com_codigo('redef-semmaiuscula@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'abcdef1@'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('abcdef1@'))
+
+    def test_redefinicao_recusa_senha_sem_numero(self):
+        user = self._criar_usuario_com_codigo('redef-semnumero@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'Abcdefg@'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('Abcdefg@'))
+
+    def test_redefinicao_recusa_senha_sem_caractere_especial(self):
+        user = self._criar_usuario_com_codigo('redef-semespecial@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': 'Abcdefg1'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        user.refresh_from_db()
+        self.assertFalse(user.check_password('Abcdefg1'))
+
+    def test_redefinicao_aceita_senha_que_atende_todos_os_requisitos(self):
+        user = self._criar_usuario_com_codigo('redef-valida@example.com')
+        response = self.client.post(
+            '/api/auth/redefinir-senha/',
+            {'email': user.email, 'codigo': '123456', 'nova_senha': self.SENHA_VALIDA},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(self.SENHA_VALIDA))
+
+    # ---------- Login (LoginAPI) ----------
+
+    def test_login_com_credenciais_corretas_retorna_token(self):
+        User.objects.create_user(
+            username='login-ok@example.com',
+            email='login-ok@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        response = self.client.post(
+            '/api/auth/login/',
+            {'username': 'login-ok@example.com', 'password': self.SENHA_VALIDA},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('token', response.data)
+
+    def test_login_com_senha_incorreta_e_recusado(self):
+        User.objects.create_user(
+            username='login-errado@example.com',
+            email='login-errado@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        response = self.client.post(
+            '/api/auth/login/',
+            {'username': 'login-errado@example.com', 'password': 'SenhaTotalmenteErrada9#'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class CriteriosAvaliacaoAPITests(TestCase):
+    """
+    Cobre os critérios descritos em Criterios_Novos.md:
+    - comentário da avaliação é opcional;
+    - o anúncio expõe author_reputation (score/label/tags) calculado a
+      partir das avaliações recebidas pelo autor, consumido pelo frontend
+      em DetalhesAnuncio.jsx no lugar do mock antigo.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = User.objects.create_user(
+            username='contratante-crit@example.com',
+            email='contratante-crit@example.com',
+            password='secret123',
+        )
+        self.freelancer = User.objects.create_user(
+            username='freelancer-crit@example.com',
+            email='freelancer-crit@example.com',
+            password='secret123',
+        )
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Criação de identidade visual',
+            description='Logo e material de papelaria',
+            price='800.00',
+            role='contractor',
+            location_type='remoto',
+        )
+        self.candidatura = Candidatura.objects.create(
+            user=self.freelancer,
+            ad=self.ad,
+            status='pendente',
+        )
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Concluído',
+            valor_acordado=800,
+            titulo_anuncio='Criação de identidade visual',
+            descricao_servico='Logo e material de papelaria',
+        )
+
+    def test_avaliacao_sem_comentario_e_aceita(self):
+        self.client.force_authenticate(self.contratante)
+
+        response = self.client.post(
+            '/api/avaliacoes/',
+            {
+                'acordo': self.acordo.id,
+                'criterios': {
+                    'qualidade_tecnica': 5,
+                    'cumprimento_prazos': 5,
+                    'comunicacao_remota': 5,
+                },
+                # 'comentario' propositalmente omitido: deve ser opcional.
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['comentario'], '')
+        avaliacao = Avaliacao.objects.get(acordo=self.acordo, avaliador=self.contratante.profile)
+        self.assertEqual(avaliacao.comentario, '')
+
+    def test_avaliacao_com_comentario_em_branco_e_aceita(self):
+        self.client.force_authenticate(self.contratante)
+
+        response = self.client.post(
+            '/api/avaliacoes/',
+            {
+                'acordo': self.acordo.id,
+                'criterios': {
+                    'qualidade_tecnica': 4,
+                    'cumprimento_prazos': 4,
+                    'comunicacao_remota': 4,
+                },
+                'comentario': '   ',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['comentario'], '')
+
+    def test_anuncio_expoe_author_reputation_calculada_das_avaliacoes(self):
+        # O anúncio foi publicado pelo contratante (role='contractor'), então
+        # author_reputation reflete as avaliações que ELE recebeu como
+        # contratante — quem avalia é o freelancer do acordo.
+        self.client.force_authenticate(self.freelancer)
+        self.client.post(
+            '/api/avaliacoes/',
+            {
+                'acordo': self.acordo.id,
+                'criterios': {
+                    'clareza_escopo': 5,
+                    'comunicacao_feedback': 5,
+                    'pagamento_compromisso': 5,
+                },
+            },
+            format='json',
+        )
+
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        reputacao = response.data['author_reputation']
+        self.assertIsNotNone(reputacao)
+        self.assertEqual(reputacao['total_avaliacoes'], 1)
+        self.assertEqual(reputacao['score'], 100)
+        self.assertEqual(reputacao['label'], 'Excelente')
+        self.assertTrue(any(tag['tone'] == 'positivo' for tag in reputacao['tags']))
+
+    def test_anuncio_sem_avaliacoes_expoe_reputacao_padrao(self):
+        # Sem avaliações e sem nenhuma seção do perfil preenchida, o score
+        # parte de uma base neutra (40) em vez do antigo "Excelente" fixo.
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        reputacao = response.data['author_reputation']
+        self.assertIsNotNone(reputacao)
+        self.assertEqual(reputacao['total_avaliacoes'], 0)
+        self.assertEqual(reputacao['score'], 40)
+        self.assertEqual(reputacao['label'], 'Baixa')
+        self.assertEqual(reputacao['completude_perfil'], 0)
+
+    def test_perfil_completo_aumenta_reputacao_mesmo_sem_avaliacoes(self):
+        # Preencher as seções do perfil deve somar pontos na reputação,
+        # mesmo antes de qualquer avaliação (bônus de completude "estilo
+        # Tinder").
+        profile = self.contratante.profile
+        profile.foto_perfil = 'https://exemplo.com/foto.jpg'
+        profile.bio = 'Contratante de projetos de tecnologia há alguns anos.'
+        profile.cidade = 'São Paulo'
+        profile.telefone = '11999999999'
+        profile.telefone_visivel = True
+        profile.categories = ['Desenvolvimento Web']
+        profile.skills = [{'name': 'Gestão de Projetos', 'level': 'avancado'}]
+        profile.save()
+
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        reputacao = response.data['author_reputation']
+        self.assertEqual(reputacao['completude_perfil'], 100)
+        self.assertEqual(reputacao['score'], 70)  # 40 base + 30 (bônus máximo)
+        self.assertEqual(reputacao['label'], 'Regular')
+
+    def test_completude_perfil_detalha_itens_atendidos_e_faltantes(self):
+        # Reproduz o caso real que gerou a duvida: foto, cidade e categorias
+        # preenchidas, mas bio com menos de 20 caracteres e telefone com a
+        # visibilidade desligada - o detalhamento precisa apontar exatamente
+        # esses dois itens como pendentes, nao só o total agregado.
+        profile = self.contratante.profile
+        profile.foto_perfil = 'https://exemplo.com/foto.jpg'
+        profile.bio = 'Bio curta'
+        profile.cidade = 'São Paulo'
+        profile.telefone = '11999999999'
+        profile.telefone_visivel = False
+        profile.categories = ['Desenvolvimento Web']
+        profile.save()
+
+        response = self.client.get(f'/api/ads/{self.ad.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        itens = response.data['author_reputation']['completude_perfil_detalhe']
+        por_chave = {item['chave']: item for item in itens}
+
+        self.assertTrue(por_chave['foto']['atendido'])
+        self.assertEqual(por_chave['foto']['pontos'], 15)
+        self.assertFalse(por_chave['bio']['atendido'])
+        self.assertEqual(por_chave['bio']['pontos'], 20)
+        self.assertTrue(por_chave['cidade']['atendido'])
+        self.assertFalse(por_chave['contato']['atendido'])
+        self.assertTrue(por_chave['categorias']['atendido'])
+        self.assertFalse(por_chave['portfolio']['atendido'])
+        self.assertEqual(por_chave['portfolio']['pontos'], 30)
+
+
+class PerfilBioEReputacaoAPITests(TestCase):
+    """
+    Cobre a correção do bug da bio padrão (perfis novos não devem herdar o
+    texto fixo de exemplo) e a exposição do termômetro de reputação
+    (freelancer + contratante) no endpoint /api/auth/user/, usado pelas
+    telas de perfil.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_cadastro_novo_nao_recebe_bio_padrao(self):
+        response = self.client.post(
+            '/api/auth/register/',
+            {
+                'username': 'sembio@example.com',
+                'email': 'sembio@example.com',
+                'password': 'Abcdef1@',
+                'first_name': 'Teste',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user = User.objects.get(username='sembio@example.com')
+        profile = UserProfile.objects.get(user=user)
+        self.assertEqual(profile.bio, '')
+        self.assertNotIn('adestrador', profile.bio.lower())
+
+    def test_endpoint_user_expoe_reputacao_freelancer_e_contratante(self):
+        user = User.objects.create_user(
+            username='reputacao@example.com',
+            email='reputacao@example.com',
+            password='secret123',
+        )
+        UserProfile.objects.get_or_create(user=user)
+        self.client.force_authenticate(user)
+
+        response = self.client.get('/api/auth/user/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('reputacao', response.data)
+        self.assertIn('freelancer', response.data['reputacao'])
+        self.assertIn('contratante', response.data['reputacao'])
+        self.assertEqual(response.data['reputacao']['freelancer']['total_avaliacoes'], 0)
+        self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)
+
+
+class NotificacaoAPITests(TestCase):
+    """
+    Cobre o bug em que a notificação de candidatura continuava exibindo o
+    título antigo do anúncio depois que o contratante o renomeava, e o novo
+    endpoint de limpar notificações.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = User.objects.create_user(
+            username='contratante@example.com',
+            email='contratante@example.com',
+            password='secret123',
+        )
+        self.freelancer = User.objects.create_user(
+            username='freelancer@example.com',
+            email='freelancer@example.com',
+            password='secret123',
+        )
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Criação de site',
+            description='Site institucional',
+            price='1250.00',
+        )
+
+    def test_mensagem_da_notificacao_acompanha_renomeacao_do_anuncio(self):
+        self.client.force_authenticate(self.freelancer)
+        response = self.client.post(
+            '/api/candidaturas/',
+            {'ad': self.ad.id, 'mensagem': 'Tenho interesse'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+
+        self.ad.title = 'Criação de site institucional completo'
+        self.ad.save()
+
+        notificacao = Notificacao.objects.get(usuario=self.contratante)
+        self.client.force_authenticate(self.contratante)
+        listagem = self.client.get('/api/notificacoes/')
+
+        self.assertEqual(listagem.status_code, 200)
+        mensagem = next(n['mensagem'] for n in listagem.data if n['id'] == notificacao.id)
+        self.assertIn('Criação de site institucional completo', mensagem)
+        self.assertNotIn('"Criação de site"', mensagem)
+
+    def test_limpar_notificacoes_remove_todas_do_usuario(self):
+        Notificacao.objects.create(usuario=self.contratante, tipo='sistema', titulo='Teste', mensagem='Oi')
+        Notificacao.objects.create(usuario=self.contratante, tipo='sistema', titulo='Teste 2', mensagem='Oi 2')
+        outro_usuario_notificacao = Notificacao.objects.create(
+            usuario=self.freelancer, tipo='sistema', titulo='Não deve sumir', mensagem='Oi 3',
+        )
+
+        self.client.force_authenticate(self.contratante)
+        response = self.client.delete('/api/notificacoes/limpar/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 2)
+        self.assertFalse(Notificacao.objects.filter(usuario=self.contratante).exists())
+        self.assertTrue(Notificacao.objects.filter(pk=outro_usuario_notificacao.pk).exists())

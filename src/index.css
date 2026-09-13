@@ -118,6 +118,18 @@ a { color: var(--text-color); text-decoration: none; }
 .btn-secondary:hover { background: var(--bg-color); color: var(--text-color); }
 [data-theme='dark'] .btn-secondary { border-color: var(--border-color); color: var(--text-color); }
 [data-theme='dark'] .btn-secondary:hover { color: var(--text-color); }
+.btn-social {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 368px; height: 40px; padding: 0;
+  font-family: 'Poppins', sans-serif; font-weight: 500; font-size: 0.95rem;
+  background: #fff; color: #333; border: 1px solid rgba(0, 0, 0, 0.12); border-radius: 4px;
+  cursor: pointer; transition: background 0.15s ease;
+}
+.btn-social:hover { background: #f7f7f7; }
+[data-theme='dark'] .btn-social { background: #fff; color: #333; }
+
+.btn-danger-ghost { background: transparent; color: var(--danger-color); border: 1px solid color-mix(in srgb, var(--danger-color) 35%, transparent); box-shadow: none; }
+.btn-danger-ghost:hover { background: var(--danger-soft); transform: none; box-shadow: none; }
 
 /* Cards */
 .card {
@@ -459,6 +471,10 @@ a { color: var(--text-color); text-decoration: none; }
 .profile-tab-option:hover { border-color: var(--primary); color: var(--primary); }
 .profile-tab-option.selected { border-color: var(--primary); background: var(--secondary); color: var(--primary); }
 .profile-tab-content { border: 1px solid var(--border-color); border-radius: 10px; padding: 1.1rem; min-width: 0; }
+@media (max-width: 640px) {
+  .profile-tabs, .edit-profile-tabs { display: flex; grid-template-columns: none; overflow-x: auto; width: 100%; }
+  .profile-tab-option { flex: 0 0 auto; white-space: nowrap; }
+}
 .edit-profile-form { display: flex; flex-direction: column; gap: 1.25rem; }
 .edit-profile-form > [data-section] { animation: tabContentIn 0.28s ease both; }
 .edit-profile-form[data-active-tab="identidade"] > [data-section]:not([data-section="identidade"]),
@@ -486,8 +502,13 @@ a { color: var(--text-color); text-decoration: none; }
 }
 .moderation-expanded-content { transform-origin: top; animation: moderationExpand 0.25s ease both; }
 @keyframes moderationExpand { from { opacity: 0; transform: translateY(-6px) scaleY(0.97); } to { opacity: 1; transform: translateY(0) scaleY(1); } }
-.chat-layout { display: grid; grid-template-columns: 300px 1fr; gap: 2rem; height: 75vh; }
-.chat-contacts { display: flex; flex-direction: column; gap: 0.4rem; }
+/* Layout de 3 colunas: lista de conversas · conversa · detalhes do acordo.
+   Altura fixa (não "auto") para que a lista e as mensagens rolem por dentro
+   de cada painel, em vez da página inteira rolar. */
+.chat-shell {
+  display: grid; grid-template-columns: 320px 1fr 180px; gap: 1.25rem;
+  height: calc(100vh - 170px); min-height: 520px;
+}
 
 /* ─── Chat (freelancer × contratante) ─── */
 .chat-tabs {
@@ -512,31 +533,123 @@ a { color: var(--text-color); text-decoration: none; }
 }
 .chat-tab--active .chat-tab__count { background: var(--primary); color: var(--role-contrast); }
 
-.chat-contacts-scroll {
-  overflow-y: auto; padding-right: 0.25rem; min-height: 0;
-  display: flex; flex-direction: column; gap: 0.4rem;
+.chat-tab-note {
+  display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--text-secondary);
+  padding: 0.5rem 0.15rem 0.75rem; border-bottom: 1px dashed var(--border-color); margin-bottom: 0.6rem;
+}
+
+/* Lista com altura fixa por item, sem paginação: cresce e rola por dentro. */
+.chat-list {
+  flex: 1; overflow-y: auto; padding-right: 0.25rem; min-height: 0;
+  display: flex; flex-direction: column; gap: 0.45rem;
   scrollbar-width: thin; scrollbar-color: var(--border-color) transparent;
 }
-.chat-contacts-scroll::-webkit-scrollbar { width: 5px; }
-.chat-contacts-scroll::-webkit-scrollbar-track { background: transparent; }
-.chat-contacts-scroll::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-.chat-contact-item {
+.chat-list::-webkit-scrollbar { width: 5px; }
+.chat-list::-webkit-scrollbar-track { background: transparent; }
+.chat-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+/* Sombra de borda para containers com scroll horizontal sem outra indicação
+   (tabelas e barras de abas). --bg usa var(--bg-color) para containers que
+   ficam sobre esse fundo (tabs); o padrão usa var(--surface-color) (tabelas
+   dentro de .card). */
+.scroll-fade { position: relative; }
+.scroll-fade::before,
+.scroll-fade::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 28px;
+  pointer-events: none; z-index: 2; opacity: 0; transition: opacity 0.2s ease;
+}
+.scroll-fade::before { left: 0; background: linear-gradient(90deg, var(--surface-color), transparent); }
+.scroll-fade::after  { right: 0; background: linear-gradient(270deg, var(--surface-color), transparent); }
+.scroll-fade:not([data-at-start='true'])::before { opacity: 1; }
+.scroll-fade:not([data-at-end='true'])::after { opacity: 1; }
+.scroll-fade--bg::before { background: linear-gradient(90deg, var(--bg-color), transparent); }
+.scroll-fade--bg::after  { background: linear-gradient(270deg, var(--bg-color), transparent); }
+
+/* ══ Tabela responsiva sem scroll horizontal (ex.: Meus Pagamentos) ══
+   Em telas largas é uma tabela normal; abaixo de 640px cada linha vira um
+   mini-card empilhado (rótulo + valor), usando o atributo data-label. */
+.responsive-table { width: 100%; border-collapse: collapse; text-align: left; }
+.responsive-table th {
+  padding: 1rem 0.5rem; border-bottom: 2px solid var(--border-color);
+  opacity: 0.8; font-size: 0.85rem; font-weight: 600;
+}
+.responsive-table td {
+  padding: 1rem 0.5rem; border-bottom: 1px solid var(--border-color);
+  vertical-align: top; font-size: 0.9rem;
+}
+.responsive-table th:last-child, .responsive-table td:last-child { text-align: right; }
+.responsive-table__secondary {
+  display: block; margin-top: 0.15rem; font-size: 0.78rem;
+  color: var(--text-secondary); font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .responsive-table thead { display: none; }
+  .responsive-table, .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
+  .responsive-table tr {
+    border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 0.7rem 0.9rem; margin-bottom: 0.75rem;
+  }
+  .responsive-table tr:last-child { margin-bottom: 0; }
+  .responsive-table td {
+    border-bottom: none; padding: 0.3rem 0; text-align: right !important;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  }
+  .responsive-table td::before {
+    content: attr(data-label); font-weight: 600; color: var(--text-secondary);
+    font-size: 0.78rem; text-align: left; flex-shrink: 0;
+  }
+}
+
+/* Paginação simples de página numerada */
+.pagination-controls {
+  display: flex; align-items: center; justify-content: center; gap: 1rem;
+  margin-top: 1.25rem; font-size: 0.88rem; color: var(--text-secondary);
+}
+.pagination-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Bolinhas de carrossel para fileiras de cards com scroll horizontal */
+.carrossel-indicador {
+  display: flex; justify-content: center; align-items: center; gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.carrossel-indicador__dot {
+  appearance: none; border: none; padding: 0; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-color); cursor: pointer; transition: background 0.2s ease, transform 0.2s ease;
+}
+.carrossel-indicador__dot--active { background: var(--primary); transform: scale(1.3); }
+
+.chat-item {
+  /* flex-shrink:0 é essencial: .chat-list é uma coluna flex com overflow-y
+     auto, e este item tem overflow:hidden (p/ o texto truncar em ellipsis) —
+     overflow diferente de "visible" zera o tamanho mínimo automático do item
+     no flexbox, então sem flex-shrink:0 o navegador ESPREME todos os cards
+     pra caber no espaço (em vez de deixar a lista rolar) assim que a soma das
+     alturas passa da altura do painel. É isso que causava os cards
+     "achatados" na aba Finalizadas quando há muitas conversas. */
+  flex: 0 0 auto;
   display: flex; align-items: center; gap: 0.6rem; width: 100%; min-width: 0;
   text-align: left; overflow: hidden;
   padding: 0.55rem 0.7rem; border: var(--border-width) solid var(--border-color);
   border-radius: 10px; background: var(--surface-color); color: var(--text-color);
-  cursor: pointer; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  cursor: pointer; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s, filter 0.2s ease;
 }
-.chat-contact-item:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 4px 12px var(--shadow-color); }
-.chat-contact-item.ativo { background: var(--secondary); border-color: var(--primary); }
-.chat-contact-item > * { min-width: 0; }
-.chat-contact-item .chat-status-chip,
-.chat-contact-item .chat-papel-tag { flex-shrink: 0; }
-.chat-contact-avatar {
-  width: 42px; height: 42px; border-radius: 50%; background: var(--primary-gradient);
-  color: var(--role-contrast); display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 1rem; flex-shrink: 0; text-transform: uppercase;
-}
+.chat-item:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 4px 12px var(--shadow-color); }
+.chat-item.ativo { background: var(--secondary); border-color: var(--primary); }
+.chat-item > * { min-width: 0; }
+.chat-item .chat-status-chip,
+.chat-item .chat-papel-tag { flex-shrink: 0; }
+/* Finalizadas: filtro "sem cor" para indicar visualmente que o chat está
+   encerrado. Some quase por completo no hover/seleção, pra não atrapalhar a
+   leitura de quem está ali de propósito revisando o histórico. No tema
+   escuro o mesmo grau de cinza "some" mais (fundo já é escuro), então lá o
+   filtro fica mais forte que no claro (onde ficava cinza demais). */
+.chat-item.locked { filter: grayscale(0.5) opacity(0.88); }
+.chat-item.locked:hover { filter: grayscale(0.1) opacity(1); }
+.chat-item.locked.ativo { filter: grayscale(0.15) opacity(1); }
+[data-theme='dark'] .chat-item.locked { filter: grayscale(0.8) opacity(0.82); }
+[data-theme='dark'] .chat-item.locked:hover { filter: grayscale(0.15) opacity(1); }
+[data-theme='dark'] .chat-item.locked.ativo { filter: grayscale(0.25) opacity(1); }
 .chat-unread-badge {
   min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
   background: var(--primary); color: var(--role-contrast); font-size: 0.7rem;
@@ -547,8 +660,11 @@ a { color: var(--text-color); text-decoration: none; }
 .chat-status-chip.warning { background: var(--warning-soft); color: var(--warning-color); }
 .chat-status-chip.done { background: var(--success-soft); color: var(--success-color); }
 .chat-status-chip.cancelled { background: var(--danger-soft); color: var(--danger-color); }
+/* Chip neutro (sem cor de status) usado só na lista para as finalizadas —
+   soma-se ao filtro cinza do card inteiro para reforçar o estado encerrado. */
+.chat-status-chip.locked-chip { background: var(--bg-color); color: var(--text-secondary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; gap: 0.25rem; }
 .chat-mensagem-dia {
-  align-self: center; background: var(--bg-color); color: var(--text-secondary);
+  align-self: center; background: var(--surface-color); color: var(--text-secondary);
   font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 999px;
   border: 1px solid var(--border-color);
 }
@@ -556,7 +672,7 @@ a { color: var(--text-color); text-decoration: none; }
   display: flex; align-items: center; gap: 0.5rem;
   background: var(--warning-soft); color: var(--warning-color);
   border: 1px solid color-mix(in srgb, var(--warning-color) 40%, transparent);
-  border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.85rem; margin: 0.75rem 1rem 0;
+  border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.85rem; margin: 0.85rem 1.25rem 0;
 }
 .chat-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; opacity: 0.75; text-align: center; gap: 0.5rem; padding: 2rem; }
 .chat-header-sub { font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -565,13 +681,62 @@ a { color: var(--text-color); text-decoration: none; }
   background: var(--secondary); color: var(--primary); border: 1px solid var(--border-color);
   font-weight: 600; white-space: nowrap;
 }
-.chat-back-btn {
+.chat-back-btn, .chat-info-btn {
   display: none; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: 50%;
   border: 1px solid var(--border-color); background: var(--bg-color);
   color: var(--text-color); cursor: pointer; flex-shrink: 0;
 }
-.chat-back-btn:hover { border-color: var(--primary); color: var(--primary); }
+.chat-back-btn:hover, .chat-info-btn:hover { border-color: var(--primary); color: var(--primary); }
+.chat-info-btn { margin-left: auto; }
+
+/* ── Mensagens da conversa ── */
+.chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.6rem; background: var(--bg-color); transition: filter 0.2s ease; }
+/* Conversa encerrada: mesmo filtro "sem cor" da lista, aplicado também ao
+   histórico de mensagens — reforça visualmente que o chat está finalizado
+   em qualquer lugar da tela em que ele apareça. */
+.chat-messages.locked { filter: grayscale(0.45) opacity(0.95); }
+[data-theme='dark'] .chat-messages.locked { filter: grayscale(0.78) opacity(0.92); }
+
+/* ── Painel de detalhes do acordo (3ª coluna) ── */
+/* Painel-resumo: nunca rola. É um resumo curto do acordo (não uma lista que
+   cresce como as conversas ou as mensagens), então o conteúdo é mantido
+   compacto o bastante para sempre caber na altura do .chat-shell. */
+.chat-details { padding: 0.9rem 0.7rem; gap: 0.65rem; overflow: hidden; transition: filter 0.2s ease; }
+.chat-details.locked { filter: grayscale(0.22) opacity(0.97); }
+[data-theme='dark'] .chat-details.locked { filter: grayscale(0.45) opacity(0.95); }
+.chat-details__close { display: none; align-self: flex-end; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.chat-details__avatar { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; text-align: center; }
+.chat-details__avatar h3 { font-size: 0.88rem; line-height: 1.2; margin: 0; word-break: break-word; }
+.chat-details__section { border-top: 1px solid var(--border-color); padding-top: 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.chat-details__label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); font-weight: 700; }
+.chat-details__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; font-size: 0.74rem; gap: 0.2rem 0.4rem; }
+.chat-details__row span:first-child { color: var(--text-secondary); flex-shrink: 0; }
+.chat-details__row span:last-child { font-weight: 600; text-align: right; word-break: break-word; }
+.chat-details__value { font-size: 1.02rem; font-weight: 800; font-family: 'Poppins', sans-serif; color: var(--success-color); word-break: break-word; }
+.chat-details__actions { display: flex; flex-direction: column; gap: 0.4rem; }
+.chat-details__actions .btn { width: 100%; padding: 0.5rem 0.5rem; font-size: 0.74rem; white-space: normal; text-align: center; line-height: 1.2; }
+
+.details-backdrop { display: none; }
+
+/* Empilha em 1 coluna (a 3ª coluna precisa de mais espaço que o breakpoint
+   geral de 768px do app costuma sobrar, por isso um ponto de corte próprio). */
+@media (max-width: 900px) {
+  .chat-shell { grid-template-columns: 1fr; gap: 0; height: calc(100vh - 150px); }
+  .chat-shell:not(.chat-selecionado) .chat-main { display: none; }
+  .chat-shell.chat-selecionado .chat-sidebar { display: none; }
+
+  .chat-back-btn, .chat-info-btn { display: flex; }
+
+  .chat-details {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 88vw); z-index: 600;
+    border-radius: 0; transform: translateX(100%); transition: transform 0.25s ease;
+    box-shadow: -12px 0 30px var(--shadow-color);
+  }
+  .chat-details.open { transform: translateX(0); }
+  .chat-details__close { display: flex; }
+  .details-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 550; }
+}
 
 .form-row { display: flex; gap: 1rem; width: 100%; }
 .profile-header { display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; }
@@ -705,8 +870,16 @@ a { color: var(--text-color); text-decoration: none; }
   padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); position: sticky; top: 0;
   background: var(--surface-color);
 }
+.fn-panel__notif-actions { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; justify-content: flex-end; }
 .fn-panel__mark-read { appearance: none; border: 0; background: transparent; color: var(--primary); font: inherit; font-size: 0.75rem; cursor: pointer; }
 .fn-panel__mark-read:hover { text-decoration: underline; }
+.fn-panel__clear {
+  appearance: none; border: 0; background: transparent; color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  width: 1.6rem; height: 1.6rem; border-radius: 6px; flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.fn-panel__clear:hover { color: var(--danger-color); background: var(--danger-soft); }
 .fn-panel__empty { padding: 1.5rem 1rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem; }
 .fn-panel__notif-item {
   display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.7rem 1rem;
@@ -717,7 +890,7 @@ a { color: var(--text-color); text-decoration: none; }
 .fn-panel__notif-dot { flex-shrink: 0; margin-top: 0.3rem; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
 
 /* ── Menu do usuário ── */
-.fn-panel--user { width: 300px; padding: 0.6rem; }
+.fn-panel--user { width: 300px; padding: 0.6rem; max-height: min(560px, calc(100vh - 6.5rem)); overflow-y: auto; }
 .fn-panel__caret {
   position: absolute; top: -7px; right: 16px; width: 14px; height: 14px;
   background: var(--surface-color); border-left: 1px solid var(--border-color); border-top: 1px solid var(--border-color);
@@ -827,12 +1000,6 @@ a { color: var(--text-color); text-decoration: none; }
 }
 
 @media (max-width: 768px) {
-  .chat-layout { grid-template-columns: 1fr; height: auto; display: flex; flex-direction: column; }
-  .chat-layout.chat-selecionado > aside { display: none; }
-  .chat-back-btn { display: flex; }
-  .chat-contacts { flex-direction: row; overflow-x: auto; padding-bottom: 0.5rem; }
-  .chat-contacts > div, .chat-contacts > button { flex: 0 0 240px; white-space: normal; }
-
   .form-row { flex-direction: column; }
   .profile-header { flex-direction: column; text-align: center; justify-content: center; }
   .availability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -867,8 +1034,11 @@ a { color: var(--text-color); text-decoration: none; }
   .location-number-field label { white-space: normal; }
   .filters-sidebar { padding: 0.75rem; }
   .filter-group { padding: 0.65rem; }
-  .profile-tabs, .edit-profile-tabs { overflow: hidden; }
-  .profile-tab-option { font-size: 0.64rem; }
+  .rs-plataforma-select { flex: 1 1 140px; }
+  .rs-nome-input { flex: 1 1 120px; }
+  .ep-estado-select { flex: 0 0 150px; }
+  .rep-score-row { flex-wrap: wrap; }
+  .rep-score-label { white-space: normal; }
   h1 { font-size: 1.5rem !important; }
   h2 { font-size: 1.25rem !important; }
 }
@@ -932,8 +1102,19 @@ ul { list-style-type: none; }
 .mf-summary__icon--muted { background: var(--pending-card); color: var(--pending-accent); }
 .mf-summary__value { font-size: 1.35rem; font-weight: 700; line-height: 1.1; font-family: 'Poppins', sans-serif; }
 .mf-summary__label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+.mf-budget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 480px) { .mf-budget-grid { grid-template-columns: 1fr; } }
 
 /* Segmented tabs */
+.mf-tabs::before,
+.mf-tabs::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 24px;
+  pointer-events: none; z-index: 2; opacity: 0; transition: opacity 0.2s ease; border-radius: 12px;
+}
+.mf-tabs::before { left: 0; background: linear-gradient(90deg, var(--bg-color), transparent); }
+.mf-tabs::after  { right: 0; background: linear-gradient(270deg, var(--bg-color), transparent); }
+.mf-tabs:not([data-at-start='true'])::before { opacity: 1; }
+.mf-tabs:not([data-at-end='true'])::after { opacity: 1; }
 .mf-tabs {
   position: relative; display: flex; gap: 0.35rem; padding: 0.25rem;
   background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px;

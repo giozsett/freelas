@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 
@@ -13,13 +13,27 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const LinkedinIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="#0A66C2">
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z" />
+  </svg>
+);
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const location = useLocation();
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  useEffect(() => {
+    if (location.state?.linkedinError) {
+      setErrorMsg(location.state.linkedinError);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -67,17 +81,38 @@ export default function Login() {
     }
   };
 
+  const handleLinkedinLogin = () => {
+    setErrorMsg('');
+    const clientId = import.meta.env.VITE_LINKEDIN_CLIENT_ID;
+    if (!clientId) {
+      setErrorMsg('Login com LinkedIn não configurado. Tente novamente.');
+      return;
+    }
+    const redirectUri = `${window.location.origin}/linkedin-callback`;
+    const state = crypto.randomUUID();
+    sessionStorage.setItem('linkedinOAuthState', state);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: 'openid profile email',
+      state,
+    });
+    window.location.href = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
+  };
+
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-      <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
-        <div className="card fade-in">
-          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ maxWidth: '400px', margin: '1.5rem auto' }}>
+        <div className="card fade-in" style={{ padding: '1.25rem' }}>
+          <h1 style={{ fontSize: '1.4rem', marginBottom: '1rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail</label>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.4rem' }}>E-mail</label>
               <input
                 type="email"
                 className="input"
+                style={{ padding: '0.6rem 0.9rem' }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -85,7 +120,7 @@ export default function Login() {
               />
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                 <label style={{ fontWeight: '500' }}>Senha</label>
                 <button
                   type="button"
@@ -98,6 +133,7 @@ export default function Login() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 className="input"
+                style={{ padding: '0.6rem 0.9rem' }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -108,28 +144,65 @@ export default function Login() {
               </Link>
             </div>
             {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
-            <button type="submit" className="btn dark-text" style={{ marginTop: '1rem', width: '100%' }}>
+            <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
               Entrar
             </button>
           </form>
 
-          <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
+          <div style={{ margin: '1rem 0', textAlign: 'center', position: 'relative' }}>
             <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
             <span style={{ position: 'relative', zIndex: 2, background: 'var(--surface-color)', padding: '0 1rem', fontWeight: 'bold', fontSize: '0.8rem' }}>OU</span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => setErrorMsg('Erro ao entrar com o Google. Tente novamente.')}
-              text="signin_with"
-              shape="rectangular"
-              logo_alignment="left"
-              width="368"
-            />
+                    <div style={{ maxWidth: '340px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setErrorMsg('Erro ao entrar com o Google. Tente novamente.')}
+                text="signin_with"
+                shape="rectangular"
+                logo_alignment="left"
+                width="340"
+              />
+            </div>
+
+            <button
+  type="button"
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    width: '100%',
+    height: '40px',
+    minHeight: '40px',
+    padding: '0 1rem',
+    marginTop: '0.75rem',
+    background: '#fff',
+    backgroundImage: 'none',
+    color: '#333',
+    border: '1px solid rgba(0, 0, 0, 0.12)',
+    borderRadius: '0',
+    fontFamily: 'var(--font-family)',
+    fontSize: '0.95rem',
+    fontWeight: '500',
+    letterSpacing: '0.25px',
+    cursor: 'pointer',
+    transition: 'background-color 0.1s, box-shadow 0.2s',
+    whiteSpace: 'nowrap',
+  }}
+  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f8f8f8'; }}
+  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#fff'; }}
+  onClick={handleLinkedinLogin}
+>
+  <span style={{ position: 'absolute', left: '1rem', display: 'flex', alignItems: 'center' }}>
+    <LinkedinIcon />
+  </span>
+  <span>Fazer login com o LinkedIn</span>
+</button>
           </div>
 
-          <p style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <p style={{ marginTop: '1rem', textAlign: 'center' }}>
             Não tem uma conta? <Link to="/register" style={{ fontWeight: 'bold', textDecoration: 'underline' }}>Cadastre-se</Link>
           </p>
         </div>

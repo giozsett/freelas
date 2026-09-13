@@ -1,20 +1,59 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import { Camera, User, Plus, Trash2, Upload, ToggleLeft, ToggleRight, Briefcase, Pencil, Check } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useRole } from '../context/ContextoPapel';
 import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
 import { calcularTempo } from '../utils/calcularTempo';
 import ModalCrop from '../components/ModalCrop';
 import { useDialogo } from '../context/ContextoDialogo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 const API = 'http://localhost:8000';
 
+const BIO_PLACEHOLDER = {
+  freelancer: 'Faça um resumo sobre sua trajetória profissional: suas principais habilidades, experiências e o que você pode oferecer aos contratantes...',
+  contractor: 'Conte um pouco sobre você ou sua empresa: que tipo de profissionais você costuma contratar, como funciona o seu processo de seleção e o que espera de quem vai trabalhar com você...',
+};
+
+/**
+ * Selo de pontos de completude do perfil (estilo Tinder), usado ao lado do
+ * rótulo de cada campo que soma pontos na reputação — ver
+ * `_completude_perfil_itens` em backend/core/serializers.py e a seção
+ * "Checklist de completude do perfil" no skill freelas-design. Cinza
+ * enquanto o campo não atende o critério, verde com check quando atende.
+ */
+function PontosBadge({ pontos, atendido }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
+      fontSize: '0.72rem', fontWeight: 600, lineHeight: 1,
+      padding: '0.15rem 0.45rem', borderRadius: '999px', marginLeft: '0.5rem',
+      color: atendido ? 'var(--success-color)' : 'var(--text-secondary)',
+      background: atendido ? 'var(--success-soft)' : 'var(--bg-color)',
+      border: `1px solid ${atendido ? 'var(--success-color)' : 'var(--border-color)'}`,
+      verticalAlign: 'middle',
+    }}>
+      {atendido && <Check size={11} />}
+      +{pontos}
+    </span>
+  );
+}
+
+PontosBadge.propTypes = {
+  pontos: PropTypes.number.isRequired,
+  atendido: PropTypes.bool.isRequired,
+};
+
 export default function EditProfile() {
   const { user: authUser, token, login } = useAuth();
+  const { role } = useRole();
   const { alerta } = useDialogo();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [activeEditTab, setActiveEditTab] = useState('identidade');
+  const tabsScrollRef = useScrollEdges();
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState([{ name: '', level: 'iniciante' }]);
   const [categories, setCategories] = useState(['']);
@@ -159,6 +198,25 @@ export default function EditProfile() {
       });
   }, [estado]);
 
+  // Espelha, no cliente, as mesmas regras de _completude_perfil_itens
+  // (backend/core/serializers.py) para os selos de pontos atualizarem na
+  // hora, sem precisar salvar o formulário primeiro.
+  const fotoAtendida = Boolean(fotoPreview) && !fotoRemovido;
+  const bioAtendida = bio.trim().length >= 20;
+  const cidadeAtendida = Boolean(cidade);
+  const contatoAtendido = useMemo(
+    () => Boolean((telefone && telefoneVisivel) || redesSociais.some(r => (r.url || '').trim() !== '')),
+    [telefone, telefoneVisivel, redesSociais],
+  );
+  const categoriasAtendidas = useMemo(
+    () => categories.some(c => (c || '').trim() !== ''),
+    [categories],
+  );
+  const portfolioAtendido = useMemo(
+    () => skills.some(s => (s.name || '').trim() !== '') || certificadosExistentes.length > 0 || experiencias.length > 0,
+    [skills, certificadosExistentes, experiencias],
+  );
+
   const instituicoesFiltradas = instituicoes.filter(i =>
     i.nome.toLowerCase().includes(filtroInstituicao.toLowerCase())
   ).slice(0, 10);
@@ -261,11 +319,16 @@ export default function EditProfile() {
       if (fotoPerfil) {
         const fotoData = new FormData();
         fotoData.append('foto_perfil', fotoPerfil);
-        await fetch(`${API}/api/auth/profile/foto/`, {
+        const fotoRes = await fetch(`${API}/api/auth/profile/foto/`, {
           method: 'PATCH',
           headers: { 'Authorization': `Token ${token}` },
           body: fotoData
         });
+        if (!fotoRes.ok) {
+          const errData = await fotoRes.json().catch(() => ({}));
+          console.error('Erro ao enviar foto de perfil:', fotoRes.status, errData);
+          throw new Error(errData.error || 'Erro ao enviar a foto de perfil');
+        }
       } else if (fotoRemovido) {
         await fetch(`${API}/api/auth/profile/foto/`, {
           method: 'PATCH',
@@ -498,7 +561,7 @@ export default function EditProfile() {
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Editar Perfil</h1>
       <div className="card">
-        <div className="edit-profile-tabs" role="tablist" aria-label="Seções da edição do perfil">
+        <div className="edit-profile-tabs scroll-fade scroll-fade--bg" role="tablist" aria-label="Seções da edição do perfil" ref={tabsScrollRef}>
           {[
             ['identidade', 'Identidade e perfil'],
             ['contato', 'Localização e contato'],
@@ -595,6 +658,9 @@ export default function EditProfile() {
 
           {/* Profile Picture */}
           <div data-section="identidade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontWeight: '500', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+              Foto de perfil <PontosBadge pontos={15} atendido={fotoAtendida} />
+            </span>
             <div className="avatar-clickable" style={{
               position: 'relative',
               width: '120px',
@@ -776,10 +842,12 @@ export default function EditProfile() {
 
           {/* Estado e Cidade */}
           <div data-section="contato">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Localização</label>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Localização <PontosBadge pontos={10} atendido={cidadeAtendida} />
+            </label>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <select
-                className="input"
+                className="input ep-estado-select"
                 value={estado}
                 onChange={(e) => { setEstado(e.target.value); setCidade(''); }}
                 style={{ flex: '0 0 200px', minWidth: 0 }}
@@ -806,7 +874,12 @@ export default function EditProfile() {
 
           {/* Telefone + Visibilidade */}
           <div data-section="contato">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Telefone</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Telefone <PontosBadge pontos={10} atendido={contatoAtendido} />
+            </label>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '-0.25rem 0 0.5rem' }}>
+              Vale ponto se estiver visível no perfil, ou se você tiver alguma rede social cadastrada.
+            </p>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input className="input" type="tel" placeholder="(11) 99999-9999" value={telefone} onChange={(e) => setTelefone(e.target.value)} style={{ flex: 1 }} />
               <button type="button" onClick={() => setTelefoneVisivel(!telefoneVisivel)} title={telefoneVisivel ? 'Visível no perfil' : 'Oculto no perfil'} style={{ background: 'none', border: 'none', cursor: 'pointer', color: telefoneVisivel ? '#2ecc71' : '#e74c3c', display: 'flex', alignItems: 'center', padding: '0.25rem' }}>
@@ -829,12 +902,17 @@ export default function EditProfile() {
 
           {/* Redes Sociais */}
           <div data-section="contato">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Redes Sociais <span style={{ fontWeight: '400', fontSize: '0.85rem', opacity: 0.6 }}>(máx. 4)</span></label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Redes Sociais <span style={{ fontWeight: '400', fontSize: '0.85rem', opacity: 0.6 }}>(máx. 4)</span> <PontosBadge pontos={10} atendido={contatoAtendido} />
+            </label>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '-0.25rem 0 0.5rem' }}>
+              Mesmo ponto do telefone visível — basta um dos dois.
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {redesSociais.map((item, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <select
-                    className="input"
+                    className="input rs-plataforma-select"
                     value={item.plataforma}
                     onChange={(e) => {
                       const nova = [...redesSociais];
@@ -851,7 +929,7 @@ export default function EditProfile() {
                   </select>
                   {item.plataforma === 'outro' && (
                     <input
-                      className="input"
+                      className="input rs-nome-input"
                       type="text"
                       placeholder="Nome da rede"
                       value={item.nome || ''}
@@ -891,13 +969,29 @@ export default function EditProfile() {
 
           {/* Bio */}
           <div data-section="atuacao">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Biografia</label>
-            <textarea className="input" rows="5" value={bio} onChange={(e) => setBio(e.target.value)} style={{ resize: 'none' }}></textarea>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Biografia <PontosBadge pontos={20} atendido={bioAtendida} />
+              {!bioAtendida && (
+                <span style={{ fontWeight: '400', fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
+                  mínimo 20 caracteres
+                </span>
+              )}
+            </label>
+            <textarea
+              className="input"
+              rows="5"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder={BIO_PLACEHOLDER[role] || BIO_PLACEHOLDER.freelancer}
+              style={{ resize: 'none' }}
+            ></textarea>
           </div>
 
           {/* Categories */}
           <div data-section="atuacao">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categorias de Serviço</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Categorias de Serviço <PontosBadge pontos={15} atendido={categoriasAtendidas} />
+            </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {categories.map((cat, index) => (
                 <div key={index} className="form-row" style={{ display: 'flex', gap: '0.5rem' }}>
@@ -918,7 +1012,12 @@ export default function EditProfile() {
 
           {/* Skills */}
           <div data-section="atuacao">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades e Expertise</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Habilidades e Expertise <PontosBadge pontos={30} atendido={portfolioAtendido} />
+            </label>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '-0.25rem 0 0.5rem' }}>
+              Mesmo bônus de Formação Acadêmica e Experiência Profissional — basta um dos três.
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {skills.map((skill, index) => (
                 <div key={index} className="form-row" style={{ display: 'flex', gap: '0.5rem' }}>
@@ -945,7 +1044,12 @@ export default function EditProfile() {
 
           {/* Certificates Section */}
           <div data-section="historico">
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Formação Acadêmica</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Formação Acadêmica <PontosBadge pontos={30} atendido={portfolioAtendido} />
+            </label>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '-0.25rem 0 0.5rem' }}>
+              Mesmo bônus de Habilidades e Experiência Profissional — basta um dos três.
+            </p>
 
             {certificadosExistentes.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -1146,8 +1250,10 @@ export default function EditProfile() {
 
           {/* Experience Section */}
           <div data-section="historico">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <label style={{ fontWeight: '500', display: 'block' }}>Experiência Profissional</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+              <label style={{ fontWeight: '500', display: 'block' }}>
+                Experiência Profissional <PontosBadge pontos={30} atendido={portfolioAtendido} />
+              </label>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -1160,6 +1266,9 @@ export default function EditProfile() {
                 <Plus size={14} /> {showExperienciaForm || editandoExperiencia ? 'Cancelar' : 'Adicionar'}
               </button>
             </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem' }}>
+              Mesmo bônus de Habilidades e Formação Acadêmica — basta um dos três.
+            </p>
 
             {experiencias.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>

@@ -5,6 +5,7 @@ import { useRole } from '../context/ContextoPapel';
 import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
 import DisponibilidadeSemanal, { disponibilidadeVazia } from '../components/DisponibilidadeSemanal';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
+import LimitePlano from '../components/LimitePlano';
 
 export default function CreateAd() {
   const limiteDescricao = 1000;
@@ -162,6 +163,7 @@ export default function CreateAd() {
           {role === 'freelancer' ? 'Criar anúncio como freelancer' : 'Criar anúncio como contratante'}
         </span>
       </div>
+      <LimitePlano recurso="anuncios" />
       <div className="card ad-form-card">
         <form className="ad-form" onSubmit={handleSubmit}>
           
@@ -217,11 +219,12 @@ export default function CreateAd() {
 
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5)</label>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <select 
-                className="input" 
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <select
+                className="input"
                 value={currentSkill}
                 onChange={(e) => setCurrentSkill(e.target.value)}
+                style={{ flex: 1, minWidth: 0 }}
               >
                 <option value="">Selecione uma habilidade...</option>
                 {habilidadesDisponiveis.map(skill => (

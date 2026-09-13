@@ -89,10 +89,10 @@ export default function MinhasAvaliacoes() {
   const submitReview = async (pending) => {
     const form = getForm(pending.acordo_id);
     const hasAllScores = pending.criterios.every(item => form.criterios[item.chave]);
-    if (!hasAllScores || form.comentario.trim().length < 5) {
+    if (!hasAllScores) {
       setMessage({
         type: 'error',
-        text: 'Avalie todos os critérios e escreva um comentário com pelo menos 5 caracteres.',
+        text: 'Por favor, atribua as 3 notas em estrelas para os critérios avaliados.',
       });
       return;
     }
@@ -195,11 +195,16 @@ export default function MinhasAvaliacoes() {
             const form = getForm(pending.acordo_id);
             return (
               <div id={`avaliacao-${pending.acordo_id}`} key={pending.acordo_id} className="card" style={{ borderLeft: '5px solid var(--primary)' }}>
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <span className="badge purple" style={{ color: 'white' }}>
-                    Avaliação como {pending.papel_avaliado === 'freelancer' ? 'Freelancer' : 'Contratante'}
-                  </span>
-                  <h2 style={{ margin: '0.6rem 0 0.25rem', fontSize: '1.4rem' }}>{pending.titulo_acordo}</h2>
+                <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span className="badge purple" style={{ color: 'white' }}>
+                      Avaliação como {pending.papel_avaliado === 'freelancer' ? 'Freelancer' : 'Contratante'}
+                    </span>
+                    <span className="badge" style={{ background: 'var(--surface-color)', border: '1px solid var(--border-color)' }}>
+                      {pending.modalidade === 'presencial' ? 'Serviço Presencial' : 'Serviço Remoto'}
+                    </span>
+                  </div>
+                  <h2 style={{ margin: '0.4rem 0 0.15rem', fontSize: '1.4rem' }}>{pending.titulo_acordo}</h2>
                   <p style={{ margin: 0, opacity: 0.75 }}>
                     Avaliando <strong>{pending.avaliado_nome}</strong>
                   </p>
@@ -208,7 +213,14 @@ export default function MinhasAvaliacoes() {
                 <div style={{ display: 'grid', gap: '1rem' }}>
                   {pending.criterios.map(criterion => (
                     <div key={criterion.chave} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', padding: '0.85rem 1rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                      <span style={{ fontWeight: 600 }}>{criterion.rotulo}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: 600 }}>{criterion.rotulo}</span>
+                        {criterion.descricao && (
+                          <span style={{ fontSize: '0.82rem', opacity: 0.75, marginTop: '0.15rem' }}>
+                            {criterion.descricao}
+                          </span>
+                        )}
+                      </div>
                       <div role="radiogroup" aria-label={criterion.rotulo} style={{ display: 'flex', gap: '0.25rem' }}>
                         {[1, 2, 3, 4, 5].map(score => {
                           const selected = score <= (form.criterios[criterion.chave] || 0);
@@ -233,7 +245,7 @@ export default function MinhasAvaliacoes() {
                 </div>
 
                 <label style={{ display: 'block', fontWeight: 600, marginTop: '1.25rem', marginBottom: '0.45rem' }}>
-                  Comentário geral sobre o serviço
+                  Comentário sobre o serviço (opcional)
                 </label>
                 <textarea
                   className="input"
@@ -241,7 +253,7 @@ export default function MinhasAvaliacoes() {
                   maxLength={2000}
                   value={form.comentario}
                   onChange={event => setComment(pending.acordo_id, event.target.value)}
-                  placeholder="Conte como foi sua experiência com a outra parte..."
+                  placeholder="Conte opcionalmente como foi trabalhar com esta pessoa..."
                   style={{ resize: 'vertical' }}
                 />
 
@@ -285,10 +297,16 @@ export default function MinhasAvaliacoes() {
                   <span key={label} className="badge">{label}: {score}/5</span>
                 ))}
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                <MessageCircle size={18} style={{ opacity: 0.55, marginTop: '0.15rem' }} />
-                <p style={{ margin: 0, fontStyle: 'italic' }}>“{review.comentario}”</p>
-              </div>
+              {review.comentario ? (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                  <MessageCircle size={18} style={{ opacity: 0.55, marginTop: '0.15rem' }} />
+                  <p style={{ margin: 0, fontStyle: 'italic' }}>“{review.comentario}”</p>
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.55, fontStyle: 'italic' }}>
+                  Nenhum comentário adicional escrito.
+                </p>
+              )}
             </div>
           )) : (
             <div className="empty-state">

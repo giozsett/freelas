@@ -1,3 +1,6 @@
+import logging
+import requests
+import os
 from django.conf import settings
 from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
@@ -18,13 +21,15 @@ from .models import Ad
 from .serializers import ReportSerializer
 from .models import Report
 from django.core.mail import send_mail
-from django.shortcuts import redirect
 from .models import VerificacaoEmail
 from .serializers import CertificadoSerializer, InstituicaoEnsinoSerializer, ExperienciaSerializer
 from .models import Certificado, InstituicaoEnsino, Experiencia
 from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.models import SocialAccount
+from .validacao_senha import validar_forca_senha
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -149,6 +154,7 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
             )
             return resposta.get('secure_url') or resposta.get('url')
         except Exception:
+            logger.exception('Falha ao enviar imagem para o Cloudinary (pasta=%s)', pasta)
             return None
 
     @staticmethod
@@ -270,11 +276,16 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
         return Response(self.get_serializer(report).data)
 
 
-# Limite de anúncios que cada plano de assinatura pode publicar por mês.
-# None = sem limite (plano Platinum).
+# Limites mensais de cada plano de assinatura. None = sem limite (Platinum).
 LIMITE_ANUNCIOS_MENSAL = {
     'Gratuito': 3,
-    'Gold': 10,
+    'Gold': 6,
+    'Platinum': None,
+}
+
+LIMITE_CANDIDATURAS_MENSAL = {
+    'Gratuito': 5,
+    'Gold': 20,
     'Platinum': None,
 }
 
@@ -283,19 +294,24 @@ MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO = (
     'atualize seu plano para postar mais anúncios.'
 )
 
+MENSAGEM_LIMITE_CANDIDATURAS_ATINGIDO = (
+    'Você já atingiu seu limite de candidaturas enviadas esse mês, '
+    'atualize seu plano para se candidatar a mais anúncios.'
+)
 
-def _status_limite_anuncios(user):
+
+def _plano_usuario(user):
     profile = getattr(user, 'profile', None)
-    plano = (profile.subscription_plan if profile else None) or 'Gratuito'
-    limite = LIMITE_ANUNCIOS_MENSAL.get(plano, LIMITE_ANUNCIOS_MENSAL['Gratuito'])
+    return (profile.subscription_plan if profile else None) or 'Gratuito'
+
+
+def _status_limite_mensal(user, limites_por_plano, queryset_usados):
+    plano = _plano_usuario(user)
+    limite = limites_por_plano.get(plano, limites_por_plano['Gratuito'])
 
     usados = 0
     if limite is not None:
-        inicio_mes = _mes_inicio(timezone.now())
-        usados = Ad.objects.exclude(deletado=True).filter(
-            author=user,
-            created_at__gte=inicio_mes,
-        ).count()
+        usados = queryset_usados.count()
 
     return {
         'plano': plano,
@@ -305,11 +321,36 @@ def _status_limite_anuncios(user):
     }
 
 
+def _status_limite_anuncios(user):
+    inicio_mes = _mes_inicio(timezone.now())
+    queryset = Ad.objects.exclude(deletado=True).filter(
+        author=user,
+        created_at__gte=inicio_mes,
+    )
+    return _status_limite_mensal(user, LIMITE_ANUNCIOS_MENSAL, queryset)
+
+
+def _status_limite_candidaturas(user):
+    inicio_mes = _mes_inicio(timezone.now())
+    queryset = Candidatura.objects.filter(
+        user=user,
+        enviado_em__gte=inicio_mes,
+    )
+    return _status_limite_mensal(user, LIMITE_CANDIDATURAS_MENSAL, queryset)
+
+
 class AdLimiteMensalAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         return Response(_status_limite_anuncios(request.user))
+
+
+class CandidaturaLimiteMensalAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response(_status_limite_candidaturas(request.user))
 
 
 class AdListCreateAPIView(generics.ListCreateAPIView):
@@ -357,8 +398,8 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
         from django.db.models import Q, Avg
 
         Ad.atualizar_vencidos()
-        return (
-            Ad.objects.exclude(deletado=True)
+        queryset = (
+            Ad.objects
             .select_related('author', 'author__profile')
             .annotate(
                 _media_freelancer=Avg(
@@ -371,6 +412,22 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
                 ),
             )
         )
+
+        if self.request.method != 'GET':
+            # Editar/excluir um anúncio já excluído não faz sentido: mantém a
+            # exclusão simples de sempre para essas ações.
+            return queryset.exclude(deletado=True)
+
+        # Um anúncio vencido ou excluído (soft delete) deixa de ser "público":
+        # só quem publicou ou quem já se candidatou a ele pode continuar
+        # visualizando os detalhes. Para todo mundo, ele deixa de existir.
+        indisponivel = Q(deletado=True) | Q(status_anuncio='Vencido')
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return queryset.exclude(indisponivel)
+        return queryset.filter(
+            ~indisponivel | Q(author=user) | Q(candidaturas__user=user)
+        ).distinct()
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -446,6 +503,8 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             raise ValidationError('Este anúncio já possui uma candidatura aprovada.')
         if ad.candidaturas.filter(user=self.request.user).exists():
             raise ValidationError('Você já se candidatou a este anúncio.')
+        if _status_limite_candidaturas(self.request.user)['atingiu_limite']:
+            raise ValidationError(MENSAGEM_LIMITE_CANDIDATURAS_ATINGIDO)
 
         try:
             usuario_id = self.request.user.profile.id
@@ -464,8 +523,9 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
                 usuario=ad.author,
                 tipo='candidatura',
                 titulo='Nova candidatura no seu anúncio',
-                mensagem=f'{nome} se candidatou ao anúncio "{ad.title or ad.titulo}".',
+                mensagem=f'{nome} se candidatou ao anúncio "{{ad_titulo}}".',
                 link=f'/my-ads/manage/{ad.id}',
+                ad=ad,
             )
 
 class CandidaturaUpdateAPIView(generics.UpdateAPIView):
@@ -517,22 +577,23 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
             candidatura.status = new_status
             candidatura.save()
 
-            ad_titulo = candidatura.ad.title or candidatura.ad.titulo
             if new_status == 'aprovada':
                 criar_notificacao(
                     usuario=candidatura.user,
                     tipo='acordo',
                     titulo='Candidatura aprovada!',
-                    mensagem=f'Sua candidatura ao anúncio "{ad_titulo}" foi aprovada. Um acordo foi iniciado.',
+                    mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi aprovada. Um acordo foi iniciado.',
                     link='/my-freelas',
+                    ad=candidatura.ad,
                 )
             else:
                 criar_notificacao(
                     usuario=candidatura.user,
                     tipo='candidatura',
                     titulo='Candidatura recusada',
-                    mensagem=f'Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
+                    mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
                     link='/my-applications',
+                    ad=candidatura.ad,
                 )
 
         return Response(self.get_serializer(candidatura).data)
@@ -561,7 +622,7 @@ class NotificacaoListAPIView(generics.ListAPIView):
     def get_queryset(self):
         return Notificacao.objects.filter(
             usuario=self.request.user,
-        ).order_by('-criado_em')[:50]
+        ).select_related('ad').order_by('-criado_em')[:50]
 
 
 class NotificacaoNaoLidasAPIView(APIView):
@@ -618,6 +679,14 @@ class NotificacaoMarcarLidasAPIView(APIView):
         from .notificacoes import publicar_resumo_notificacoes
 
         publicar_resumo_notificacoes(request.user)
+        return Response({'count': quantidade})
+
+
+class NotificacaoLimparAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        quantidade, _ = Notificacao.objects.filter(usuario=request.user).delete()
         return Response({'count': quantidade})
 
 
@@ -716,7 +785,143 @@ class GoogleSocialLoginAPI(APIView):
             'token': auth_token.key,
             'user': UserSerializer(user).data,
         })
-        
+
+
+### autenticação com conta linkedin ###
+class LinkedInSocialLoginAPI(APIView):
+    """
+    Login/cadastro unificado via LinkedIn (Sign In with LinkedIn / OpenID Connect).
+
+    Diferente do Google (que usa id_token no navegador), o LinkedIn usa o fluxo
+    de "authorization code": o frontend redireciona o usuário para o LinkedIn,
+    que redireciona de volta com um `code`. Este endpoint troca o `code` por um
+    `id_token` (mantendo o client_secret no servidor) e unifica login/cadastro
+    com a MESMA lógica do Google.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        code = request.data.get('code')
+        redirect_uri = request.data.get('redirect_uri')
+        client_id = os.environ.get('LINKEDIN_CLIENT_ID', '')
+        client_secret = os.environ.get('LINKEDIN_CLIENT_SECRET', '')
+
+        if not code or not redirect_uri:
+            return Response(
+                {'error': 'Código de autorização não fornecido'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Troca o authorization code por id_token no LinkedIn ---
+        try:
+            resp = requests.post(
+                'https://www.linkedin.com/oauth/v2/accessToken',
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': redirect_uri,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                },
+                timeout=20,
+            )
+            payload = resp.json()
+        except requests.RequestException:
+            return Response(
+                {'error': 'Não foi possível conectar com o LinkedIn'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        id_token = payload.get('id_token')
+        if not id_token:
+            return Response(
+                {'error': 'Falha na autenticação com o LinkedIn. Tente novamente.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Verifica o JWT do LinkedIn usando as JWKs públicas (OIDC) ---
+        try:
+            from allauth.socialaccount.internal import jwtkit
+
+            identity = jwtkit.verify_and_decode(
+                credential=id_token,
+                keys_url='https://www.linkedin.com/oauth/openid/jwks',
+                issuer='https://www.linkedin.com/oauth',
+                audience=[client_id],
+                lookup_kid=jwtkit.lookup_kid_jwk,
+            )
+        except Exception:
+            return Response(
+                {'error': 'Token do LinkedIn inválido ou expirado'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = identity.get('email', '').strip().lower()
+        first_name = identity.get('given_name', '')
+        last_name = identity.get('family_name', '')
+        uid = str(identity.get('sub', ''))
+
+        if not email:
+            return Response(
+                {'error': 'Não foi possível obter o email do LinkedIn'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cadastro/login unificado com verificação de conflito de email:
+        #  - sem usuário com esse email        → cria conta nova (cadastro)
+        #  - email vinculado ao mesmo LinkedIn → login da conta existente
+        #  - email já usado por outra conta    → conflito
+        conta_linkedin = SocialAccount.objects.filter(
+            provider='linkedin', uid__iexact=uid,
+        ).select_related('user').first()
+
+        if conta_linkedin:
+            user = conta_linkedin.user
+            conta_linkedin.extra_data = identity
+            conta_linkedin.save(update_fields=['extra_data'])
+            if (not user.first_name and first_name) or (not user.last_name and last_name):
+                user.first_name = user.first_name or first_name
+                user.last_name = user.last_name or last_name
+                user.save(update_fields=['first_name', 'last_name'])
+        else:
+            if User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {
+                        'error': 'Este email já está sendo utilizado.',
+                        'code': 'email_em_uso',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            SocialAccount.objects.create(
+                provider='linkedin',
+                uid=uid,
+                user=user,
+                extra_data=identity,
+            )
+
+        # --- Garante que o UserProfile existe ---
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                'nome_completo': f'{first_name} {last_name}'.strip() or user.username,
+                'email': email,
+            },
+        )
+
+        # --- Retorna DRF Token ---
+        auth_token, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'token': auth_token.key,
+            'user': UserSerializer(user).data,
+        })
+
 
 class EnviarCodigoVerificacaoAPI(APIView):
     permission_classes = [permissions.AllowAny]
@@ -840,6 +1045,10 @@ class RedefinirSenhaAPI(APIView):
 
         if verificacao.codigo != codigo:
             return Response({'error': 'Código incorreto.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        erro_senha = validar_forca_senha(nova_senha)
+        if erro_senha:
+            return Response({'error': erro_senha}, status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(nova_senha)
         user.save()
@@ -1095,7 +1304,7 @@ class SolicitacaoAlteracaoAdminListAPIView(generics.ListAPIView):
 
 
 from .models import Avaliacao
-from .serializers import AvaliacaoSerializer, CRITERIOS_AVALIACAO
+from .serializers import AvaliacaoSerializer, CRITERIOS_AVALIACAO, obter_criterios_definicao
 
 
 def _partes_do_acordo(acordo):
@@ -1134,14 +1343,16 @@ class ConcluirAcordoAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
             if not acordo.pagamentos.filter(status='pago').exists():
-                if not _checkout_academico_habilitado() or not contratante:
+                if not settings.DEBUG or not contratante:
                     return Response(
                         {'error': 'O pagamento precisa estar aprovado antes da conclusão.'},
                         status=status.HTTP_409_CONFLICT,
                     )
 
                 # Compatibilidade com acordos locais antigos que foram ativados antes
-                # de o histórico de pagamentos passar a ser obrigatório.
+                # de o histórico de pagamentos passar a ser obrigatório. Não é uma
+                # simulação de pagamento: só existe para não travar registros
+                # legados que nunca passaram por um checkout real.
                 try:
                     amount = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
                 except (InvalidOperation, TypeError):
@@ -1151,10 +1362,10 @@ class ConcluirAcordoAPI(APIView):
                     tipo='acordo',
                     status='pago',
                     valor=amount,
-                    referencia_externa=f'teste:legado:acordo:{acordo.id}:{uuid4().hex}',
+                    referencia_externa=f'legado:acordo:{acordo.id}:{uuid4().hex}',
                     acordo=acordo,
                     mp_payment_id=f'LOCAL-LEGACY-{uuid4().hex}',
-                    forma_pagamento='simulacao_pagamento',
+                    forma_pagamento='registro_legado',
                     detalhe_status='registro_local_compatibilidade',
                     aprovado_em=timezone.now(),
                 )
@@ -1237,16 +1448,18 @@ class AvaliacoesPendentesAPIView(APIView):
                 if avaliado and hasattr(avaliado, 'profile')
                 else avaliado.get_full_name() or avaliado.username
             )
+            anuncio = acordo.candidatura.ad if (acordo.candidatura and acordo.candidatura.ad) else None
+            modalidade = 'presencial' if (anuncio and getattr(anuncio, 'location_type', None) == 'presencial') else 'remoto'
+            criterios = obter_criterios_definicao(papel_avaliado, modalidade)
+
             pendentes.append({
                 'acordo_id': acordo.id,
                 'titulo_acordo': acordo.titulo_anuncio,
                 'avaliado_id': avaliado.id,
                 'avaliado_nome': nome,
                 'papel_avaliado': papel_avaliado,
-                'criterios': [
-                    {'chave': key, 'rotulo': label}
-                    for key, label in CRITERIOS_AVALIACAO[papel_avaliado].items()
-                ],
+                'modalidade': modalidade,
+                'criterios': criterios,
                 'concluido_em': acordo.concluido_em,
             })
 
@@ -1254,35 +1467,31 @@ class AvaliacoesPendentesAPIView(APIView):
 
 
 import logging
-import requests
+import stripe
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
-from .models import CartaoUsuario, Pagamento
-from .serializers import CartaoUsuarioSerializer, PagamentoSerializer
+from .models import Pagamento
+from .serializers import PagamentoSerializer
 
 
 logger = logging.getLogger(__name__)
-MERCADO_PAGO_API = 'https://api.mercadopago.com'
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY', '').strip()
 PLANOS_PAGOS = {
-    'gold': {'nome': 'Gold', 'valor': Decimal('29.90')},
-    'platinum': {'nome': 'Platinum', 'valor': Decimal('79.90')},
+    'gold': {
+        'nome': 'Gold', 'valor': Decimal('29.90'),
+        'stripe_price': os.environ.get('STRIPE_PRICE_GOLD', '').strip(),
+    },
+    'platinum': {
+        'nome': 'Platinum', 'valor': Decimal('79.90'),
+        'stripe_price': os.environ.get('STRIPE_PRICE_PLATINUM', '').strip(),
+    },
 }
 
 
-def _mercado_pago_headers(reference=None):
-    token = os.environ.get('MERCADO_PAGO_ACCESS_TOKEN', '').strip()
-    if not token or token.startswith('YOUR_'):
-        return None
-
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-    }
-    if reference:
-        headers['X-Idempotency-Key'] = reference
-    return headers
+def _stripe_configurado():
+    return bool(stripe.api_key) and not stripe.api_key.startswith('YOUR_')
 
 
 def _frontend_url(path):
@@ -1290,168 +1499,81 @@ def _frontend_url(path):
     return f'{base_url}{path}'
 
 
-def _notification_url():
-    base_url = os.environ.get('BACKEND_PUBLIC_URL', '').rstrip('/')
-    if base_url.startswith('https://'):
-        return f'{base_url}/api/pagamentos/webhook/'
-    return None
+def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=None, detalhe_status=None):
+    """Marca o pagamento como pago e ativa a assinatura/acordo correspondente."""
+    pagamento.status = 'pago'
+    if external_id:
+        pagamento.mp_payment_id = external_id
+    if forma_pagamento:
+        pagamento.forma_pagamento = forma_pagamento
+    if detalhe_status:
+        pagamento.detalhe_status = detalhe_status
+    pagamento.aprovado_em = pagamento.aprovado_em or timezone.now()
+    pagamento.save()
 
+    if pagamento.tipo == 'assinatura':
+        profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
+        profile.subscription_plan = pagamento.plano
+        profile.save(update_fields=['subscription_plan'])
+        criar_notificacao(
+            usuario=pagamento.usuario,
+            tipo='pagamento',
+            titulo='Plano ativado',
+            mensagem=f'Seu plano {pagamento.plano} foi ativado com sucesso.',
+            link='/my-payments',
+        )
+    elif pagamento.tipo == 'acordo' and pagamento.acordo:
+        if pagamento.acordo.status_acordo != 'Cancelado':
+            pagamento.acordo.status_acordo = 'Ativo'
+            pagamento.acordo.save(update_fields=['status_acordo'])
 
-def _checkout_return_url(flow, result='success'):
-    public_backend = os.environ.get('BACKEND_PUBLIC_URL', '').rstrip('/')
-    if public_backend.startswith('https://'):
-        return f'{public_backend}/api/pagamentos/retorno/{flow}/{result}/'
-
-    frontend = os.environ.get('FRONTEND_URL', '').rstrip('/')
-    if frontend.startswith('https://'):
-        if flow == 'acordo':
-            return f'{frontend}/my-freelas?checkout={result}'
-        return f'{frontend}/my-payments?checkout=subscription'
-    return None
-
-
-class MercadoPagoReturnAPI(APIView):
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-
-    def get(self, request, flow, result):
-        if flow == 'acordo' and result in {'success', 'failure', 'pending'}:
-            path = f'/my-freelas?checkout={result}'
-        elif flow == 'assinatura':
-            path = '/my-payments?checkout=subscription'
+            _, freelancer = _partes_do_acordo(pagamento.acordo)
+            criar_notificacao(
+                usuario=freelancer,
+                tipo='pagamento',
+                titulo='Pagamento recebido',
+                mensagem=f'O pagamento do acordo "{pagamento.acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
+                link='/my-freelas',
+            )
         else:
-            path = '/'
-        return redirect(_frontend_url(path))
+            logger.warning(
+                'Pagamento aprovado após cancelamento do acordo %s; '
+                'o acordo permaneceu cancelado e exige análise financeira.',
+                pagamento.acordo_id,
+            )
 
 
-def _checkout_response_error(response):
-    try:
-        data = response.json()
-        return data.get('message') or data.get('error') or 'Erro não informado pelo Mercado Pago.'
-    except ValueError:
-        return 'Resposta inválida do Mercado Pago.'
-
-
-def _response_json(response):
-    try:
-        return response.json()
-    except ValueError:
-        return {}
-
-
-def _checkout_academico_habilitado():
-    test_mode = os.environ.get('MERCADO_PAGO_TEST_MODE', '').strip().lower()
-    return settings.DEBUG and test_mode in {'1', 'true', 'yes', 'on'}
-
-
-def _aprovar_checkout_academico(pagamento):
-    """Confirma localmente após o MP aceitar a criação do checkout."""
-    return _confirmar_pagamento({
-        'id': f'ACADEMIC-{uuid4().hex}',
-        'external_reference': pagamento.referencia_externa,
-        'transaction_amount': str(pagamento.valor),
-        'currency_id': 'BRL',
-        'status': 'approved',
-        'status_detail': 'checkout_criado_em_modo_academico',
-        'payment_method_id': 'simulacao_pagamento',
-    })
-
-
-def _registrar_cartao(usuario, payment_data):
-    card = payment_data.get('card') or {}
-    last_four = str(card.get('last_four_digits') or '').strip()
-    payment_method = str(payment_data.get('payment_method_id') or '').strip()
-    if not last_four or not payment_method:
-        return
-
-    cardholder = card.get('cardholder') or {}
-    CartaoUsuario.objects.update_or_create(
-        usuario=usuario,
-        bandeira=payment_method,
-        ultimos_quatro=last_four[-4:],
-        defaults={
-            'mp_card_id': str(card.get('id')) if card.get('id') else None,
-            'mes_expiracao': card.get('expiration_month'),
-            'ano_expiracao': card.get('expiration_year'),
-            'nome_titular': cardholder.get('name') or None,
-            'ativo': True,
-        },
-    )
-
-
-def _confirmar_pagamento(payment_data):
-    reference = payment_data.get('external_reference')
+def _confirmar_pagamento_stripe(session):
+    """Processa um evento `checkout.session.completed` do Stripe."""
+    reference = session.get('client_reference_id') or (session.get('metadata') or {}).get('reference')
     if not reference:
         return False
 
+    if session.get('payment_status') not in {'paid', 'no_payment_required'}:
+        return False
+
     try:
-        amount = Decimal(str(payment_data.get('transaction_amount')))
+        amount = (Decimal(session.get('amount_total')) / Decimal('100')).quantize(Decimal('0.01'))
     except (InvalidOperation, TypeError):
         return False
 
     with transaction.atomic():
         try:
-            pagamento = (
-                Pagamento.objects.select_for_update()
-                .get(referencia_externa=reference)
-            )
+            pagamento = Pagamento.objects.select_for_update().get(referencia_externa=reference)
         except Pagamento.DoesNotExist:
             return False
 
-        if amount != pagamento.valor or payment_data.get('currency_id') != 'BRL':
-            logger.warning('Pagamento Mercado Pago divergente para a referência %s.', reference)
-            return False
-
-        mp_status = payment_data.get('status')
-        pagamento.mp_payment_id = str(payment_data.get('id') or '')
-        pagamento.detalhe_status = payment_data.get('status_detail') or None
-        pagamento.forma_pagamento = payment_data.get('payment_method_id') or None
-
-        if mp_status == 'approved':
-            pagamento.status = 'pago'
-            pagamento.aprovado_em = pagamento.aprovado_em or timezone.now()
-            pagamento.save()
-
-            if pagamento.tipo == 'assinatura':
-                profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
-                profile.subscription_plan = pagamento.plano
-                profile.save(update_fields=['subscription_plan'])
-                criar_notificacao(
-                    usuario=pagamento.usuario,
-                    tipo='pagamento',
-                    titulo='Plano ativado',
-                    mensagem=f'Seu plano {pagamento.plano} foi ativado com sucesso.',
-                    link='/my-payments',
-                )
-            elif pagamento.tipo == 'acordo' and pagamento.acordo:
-                if pagamento.acordo.status_acordo != 'Cancelado':
-                    pagamento.acordo.status_acordo = 'Ativo'
-                    pagamento.acordo.save(update_fields=['status_acordo'])
-
-                    _, freelancer = _partes_do_acordo(pagamento.acordo)
-                    criar_notificacao(
-                        usuario=freelancer,
-                        tipo='pagamento',
-                        titulo='Pagamento recebido',
-                        mensagem=f'O pagamento do acordo "{pagamento.acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
-                        link='/my-freelas',
-                    )
-                else:
-                    logger.warning(
-                        'Pagamento aprovado após cancelamento do acordo %s; '
-                        'o acordo permaneceu cancelado e exige análise financeira.',
-                        pagamento.acordo_id,
-                    )
-
-            _registrar_cartao(pagamento.usuario, payment_data)
+        if pagamento.status == 'pago':
             return True
 
-        if mp_status in {'rejected', 'cancelled', 'refunded', 'charged_back'}:
-            pagamento.status = 'cancelado' if mp_status in {'cancelled', 'refunded'} else 'falhou'
-        else:
-            pagamento.status = 'pendente'
-        pagamento.save()
-        return False
+        if amount != pagamento.valor or (session.get('currency') or '').upper() != 'BRL':
+            logger.warning('Pagamento Stripe divergente para a referência %s.', reference)
+            return False
+
+        external_id = session.get('payment_intent') or session.get('subscription') or session.get('id')
+        _aplicar_pagamento_aprovado(pagamento, external_id=external_id, forma_pagamento='stripe')
+        return True
+
 
 class CriarPreferenciaAssinaturaAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1473,24 +1595,13 @@ class CriarPreferenciaAssinaturaAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        headers = _mercado_pago_headers()
-        if not headers:
-            return Response(
-                {'error': 'O checkout do Mercado Pago ainda não está configurado.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        return_urls = {
-            result: _checkout_return_url('assinatura', result)
-            for result in ('success', 'failure', 'pending')
-        }
-        if not all(return_urls.values()):
-            return Response(
-                {'error': 'Configure BACKEND_PUBLIC_URL com a URL HTTPS do ngrok.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
         plan = PLANOS_PAGOS[plano]
+        if not _stripe_configurado() or not plan['stripe_price']:
+            return Response(
+                {'error': 'O checkout do Stripe ainda não está configurado.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         reference = f'sub:{plano}:{request.user.id}:{uuid4().hex}'
         pagamento = Pagamento.objects.create(
             usuario=request.user,
@@ -1501,69 +1612,33 @@ class CriarPreferenciaAssinaturaAPI(APIView):
             plano=plan['nome'],
         )
 
-        payer_email = request.user.email
-        if _checkout_academico_habilitado():
-            payer_email = (
-                os.environ.get('MERCADO_PAGO_TEST_PAYER_EMAIL', '').strip()
-                or payer_email
-            )
-
-        body = {
-            'items': [{
-                'id': f'assinatura-{plano}',
-                'title': f"Assinatura mensal - Plano {plan['nome']}",
-                'description': 'Checkout simbólico de assinatura do projeto acadêmico',
-                'quantity': 1,
-                'unit_price': float(plan['valor']),
-                'currency_id': 'BRL',
-            }],
-            'payer': {'email': payer_email},
-            'back_urls': return_urls,
-            'auto_return': 'approved',
-            'external_reference': reference,
-        }
-        notification_url = _notification_url()
-        if notification_url:
-            body['notification_url'] = notification_url
-
         try:
-            mp_response = requests.post(
-                f'{MERCADO_PAGO_API}/checkout/preferences',
-                json=body,
-                headers={**headers, 'X-Idempotency-Key': reference},
-                timeout=15,
+            session = stripe.checkout.Session.create(
+                mode='subscription',
+                line_items=[{'price': plan['stripe_price'], 'quantity': 1}],
+                customer_email=request.user.email,
+                client_reference_id=reference,
+                metadata={'reference': reference},
+                success_url=_frontend_url('/my-payments?checkout=subscription'),
+                cancel_url=_frontend_url('/my-payments?checkout=cancelled'),
+                idempotency_key=reference,
             )
-        except requests.RequestException:
+        except stripe.error.StripeError as exc:
             pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'mercado_pago_indisponivel'
+            pagamento.detalhe_status = 'stripe_indisponivel'
             pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
             return Response(
-                {'error': 'Não foi possível conectar ao Mercado Pago. Tente novamente.'},
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        data = _response_json(mp_response)
-        checkout_url = data.get('init_point') or data.get('sandbox_init_point')
-        if mp_response.status_code not in (200, 201) or not checkout_url:
-            pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'erro_criacao_checkout'
-            pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
-            return Response(
-                {'error': _checkout_response_error(mp_response)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        pagamento.mp_preference_id = data.get('id')
-        pagamento.checkout_url = checkout_url
+        pagamento.mp_preference_id = session.id
+        pagamento.checkout_url = session.url
         pagamento.save(update_fields=['mp_preference_id', 'checkout_url', 'atualizado_em'])
-        test_approved = False
-        if _checkout_academico_habilitado():
-            test_approved = _aprovar_checkout_academico(pagamento)
         return Response({
             'checkout_required': True,
-            'init_point': checkout_url,
+            'init_point': session.url,
             'reference': reference,
-            'test_approved': test_approved,
         })
 
 
@@ -1604,10 +1679,7 @@ class CriarPreferenciaAcordoAPI(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        try:
-            price = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            price = Decimal('0.00')
+        price = acordo.valor_total_com_taxa or Decimal('0.00')
         if price <= 0:
             return Response(
                 {'error': 'O acordo precisa ter um valor maior que zero.'},
@@ -1622,30 +1694,15 @@ class CriarPreferenciaAcordoAPI(APIView):
             checkout_url__isnull=False,
         ).order_by('-criado_em').first()
         if pending_payment:
-            test_approved = False
-            if _checkout_academico_habilitado():
-                test_approved = _aprovar_checkout_academico(pending_payment)
             return Response({
                 'checkout_required': True,
                 'init_point': pending_payment.checkout_url,
                 'reference': pending_payment.referencia_externa,
-                'test_approved': test_approved,
             })
 
-        headers = _mercado_pago_headers()
-        if not headers:
+        if not _stripe_configurado():
             return Response(
-                {'error': 'O checkout do Mercado Pago ainda não está configurado.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        return_urls = {
-            result: _checkout_return_url('acordo', result)
-            for result in ('success', 'failure', 'pending')
-        }
-        if not all(return_urls.values()):
-            return Response(
-                {'error': 'Configure BACKEND_PUBLIC_URL com a URL HTTPS do ngrok.'},
+                {'error': 'O checkout do Stripe ainda não está configurado.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -1659,196 +1716,90 @@ class CriarPreferenciaAcordoAPI(APIView):
             acordo=acordo,
         )
 
-        body = {
-            'items': [{
-                'id': f'acordo-{acordo.id}',
-                'title': f'Serviço freelancer - {acordo.titulo_anuncio}',
-                'description': acordo.descricao_servico or 'Pagamento de serviço freelancer',
-                'quantity': 1,
-                'unit_price': float(price),
-                'currency_id': 'BRL',
-            }],
-            'payer': {'email': request.user.email},
-            'back_urls': return_urls,
-            'auto_return': 'approved',
-            'external_reference': reference,
-        }
-        notification_url = _notification_url()
-        if notification_url:
-            body['notification_url'] = notification_url
+        descricao_base = acordo.descricao_servico or 'Pagamento de serviço freelancer'
+        descricao_checkout = f'{descricao_base[:440]} Inclui taxa de serviço da plataforma (10%).'
 
         try:
-            mp_response = requests.post(
-                f'{MERCADO_PAGO_API}/checkout/preferences',
-                json=body,
-                headers={**headers, 'X-Idempotency-Key': reference},
-                timeout=15,
+            session = stripe.checkout.Session.create(
+                mode='payment',
+                line_items=[{
+                    'price_data': {
+                        'currency': 'brl',
+                        'product_data': {
+                            'name': f'Serviço freelancer - {acordo.titulo_anuncio}',
+                            'description': descricao_checkout[:500],
+                        },
+                        'unit_amount': int(price * 100),
+                    },
+                    'quantity': 1,
+                }],
+                customer_email=request.user.email,
+                client_reference_id=reference,
+                metadata={'reference': reference},
+                success_url=_frontend_url('/my-freelas?checkout=success'),
+                cancel_url=_frontend_url('/my-freelas?checkout=failure'),
+                idempotency_key=reference,
             )
-        except requests.RequestException:
+        except stripe.error.StripeError as exc:
             pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'mercado_pago_indisponivel'
+            pagamento.detalhe_status = 'stripe_indisponivel'
             pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
             return Response(
-                {'error': 'Não foi possível conectar ao Mercado Pago. Tente novamente.'},
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        data = _response_json(mp_response)
-        checkout_url = data.get('init_point') or data.get('sandbox_init_point')
-        if mp_response.status_code not in (200, 201) or not checkout_url:
-            pagamento.status = 'falhou'
-            pagamento.detalhe_status = 'erro_criacao_checkout'
-            pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
-            return Response(
-                {'error': _checkout_response_error(mp_response)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        pagamento.mp_preference_id = data.get('id')
-        pagamento.checkout_url = checkout_url
+        pagamento.mp_preference_id = session.id
+        pagamento.checkout_url = session.url
         pagamento.save(update_fields=['mp_preference_id', 'checkout_url', 'atualizado_em'])
-        test_approved = False
-        if _checkout_academico_habilitado():
-            test_approved = _aprovar_checkout_academico(pagamento)
         return Response({
             'checkout_required': True,
-            'init_point': checkout_url,
+            'init_point': session.url,
             'reference': reference,
-            'test_approved': test_approved,
         })
 
 
-class SimularPagamentoAcordoAPI(APIView):
-    """Aprovação local explícita para testes quando o sandbox externo não conclui."""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, pk):
-        test_mode = os.environ.get('MERCADO_PAGO_TEST_MODE', '').strip().lower()
-        if not settings.DEBUG or test_mode not in {'1', 'true', 'yes', 'on'}:
-            return Response(
-                {'error': 'A simulação de pagamento não está habilitada.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        from django.shortcuts import get_object_or_404
-
-        with transaction.atomic():
-            acordo = get_object_or_404(
-                AcordoServico.objects.select_for_update(),
-                pk=pk,
-            )
-            contratante, _ = _partes_do_acordo(acordo)
-            if request.user != contratante:
-                return Response(
-                    {'error': 'Somente o contratante pode simular o pagamento.'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            if acordo.status_acordo != 'Pendente Pagamento':
-                return Response(
-                    {'error': 'O acordo não está aguardando pagamento.'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            if acordo.solicitacoes_cancelamento.filter(status='pendente').exists():
-                return Response(
-                    {'error': 'Existe uma solicitação de cancelamento pendente.'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            try:
-                amount = Decimal(str(acordo.valor_acordado)).quantize(Decimal('0.01'))
-            except (InvalidOperation, TypeError):
-                amount = Decimal('0.00')
-            if amount <= 0:
-                return Response(
-                    {'error': 'O acordo precisa ter um valor válido.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            pagamento = acordo.pagamentos.filter(
-                usuario=request.user,
-                tipo='acordo',
-                status__in=['pendente', 'falhou', 'pago'],
-            ).order_by('-criado_em').first()
-            if not pagamento:
-                pagamento = Pagamento.objects.create(
-                    usuario=request.user,
-                    tipo='acordo',
-                    status='pendente',
-                    valor=amount,
-                    referencia_externa=f'teste:acordo:{acordo.id}:{uuid4().hex}',
-                    acordo=acordo,
-                )
-
-            pagamento.status = 'pago'
-            pagamento.valor = amount
-            pagamento.mp_payment_id = f'LOCAL-TEST-{uuid4().hex}'
-            pagamento.forma_pagamento = 'simulacao_pagamento'
-            pagamento.detalhe_status = 'aprovado_em_ambiente_local'
-            pagamento.aprovado_em = pagamento.aprovado_em or timezone.now()
-            pagamento.save()
-
-            acordo.status_acordo = 'Ativo'
-            acordo.save(update_fields=['status_acordo'])
-
-            _, freelancer = _partes_do_acordo(acordo)
-            criar_notificacao(
-                usuario=freelancer,
-                tipo='pagamento',
-                titulo='Pagamento recebido',
-                mensagem=f'O pagamento do acordo "{acordo.titulo_anuncio}" foi aprovado. O serviço já está em andamento.',
-                link='/my-freelas',
-            )
-
-        return Response({
-            'message': 'Pagamento de teste aprovado e acordo movido para Em Andamento.',
-            'acordo_id': acordo.id,
-            'status_acordo': acordo.status_acordo,
-        })
-
-
-class MercadoPagoWebhookAPI(APIView):
+class StripeWebhookAPI(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
-        payment_id = request.data.get('data', {}).get('id') or request.query_params.get('id')
-        topic = request.data.get('type') or request.query_params.get('topic')
-
-        if not payment_id or (topic and topic != 'payment'):
-            return Response({'status': 'ignored'})
-
-        headers = _mercado_pago_headers()
-        if not headers:
+        webhook_secret = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
+        if not webhook_secret:
             return Response(
-                {'error': 'Credencial do Mercado Pago não configurada.'},
+                {'error': 'Webhook do Stripe não configurado.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         try:
-            mp_response = requests.get(
-                f'{MERCADO_PAGO_API}/v1/payments/{payment_id}',
-                headers=headers,
-                timeout=15,
+            event = stripe.Webhook.construct_event(
+                request.body,
+                request.META.get('HTTP_STRIPE_SIGNATURE', ''),
+                webhook_secret,
             )
-        except requests.RequestException:
+        except (ValueError, stripe.error.SignatureVerificationError):
             return Response(
-                {'error': 'Falha temporária ao consultar o Mercado Pago.'},
-                status=status.HTTP_502_BAD_GATEWAY,
+                {'error': 'Assinatura do webhook inválida.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if mp_response.status_code != 200:
-            return Response(
-                {'error': 'Pagamento não encontrado no Mercado Pago.'},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        if event['type'] == 'checkout.session.completed':
+            processed = _confirmar_pagamento_stripe(event['data']['object'].to_dict())
+            return Response({'status': 'processed' if processed else 'received'})
 
-        processed = _confirmar_pagamento(mp_response.json())
-        return Response({'status': 'processed' if processed else 'received'})
+        return Response({'status': 'ignored'})
+
+
+class PagamentoHistoricoPagination(PageNumberPagination):
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 50
 
 
 class PagamentoHistoricoAPIView(generics.ListAPIView):
     serializer_class = PagamentoSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PagamentoHistoricoPagination
 
     def get_queryset(self):
         # Tentativas pendentes/falhas existem apenas para conciliação e não são
@@ -1857,17 +1808,6 @@ class PagamentoHistoricoAPIView(generics.ListAPIView):
             usuario=self.request.user,
             status='pago',
         ).order_by('-aprovado_em', '-criado_em')
-
-
-class CartaoUsuarioListAPIView(generics.ListAPIView):
-    serializer_class = CartaoUsuarioSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return CartaoUsuario.objects.filter(
-            usuario=self.request.user,
-            ativo=True,
-        ).order_by('-atualizado_em')
 
 
 def _mes_inicio(data):
@@ -2170,7 +2110,8 @@ from .serializers import ChatConversaSerializer, _info_usuario_com_papel
 
 
 def _acordo_do_chat(pk, user):
-    """Retorna o acordo se o usuário participa dele (ou é moderador)."""
+    """Retorna o acordo se o usuário for uma das partes (contratante ou
+    freelancer). O chat é privado entre as partes — nem admins têm acesso."""
     from django.shortcuts import get_object_or_404
 
     acordo = get_object_or_404(
@@ -2181,8 +2122,6 @@ def _acordo_do_chat(pk, user):
         pk=pk,
     )
     contratante, freelancer = _partes_chat(acordo)
-    if user.is_staff or user.is_superuser:
-        return acordo
     if user not in {contratante, freelancer}:
         return None
     return acordo
@@ -2195,12 +2134,9 @@ class ChatListAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        if user.is_staff or user.is_superuser:
-            acordos = AcordoServico.objects.all()
-        else:
-            acordos = AcordoServico.objects.filter(
-                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
-            )
+        acordos = AcordoServico.objects.filter(
+            _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+        )
         acordos = acordos.select_related(
             'candidatura__user__profile',
             'candidatura__ad__author__profile',
@@ -2306,11 +2242,8 @@ class ChatNaoLidasAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        if user.is_staff or user.is_superuser:
-            acordos = AcordoServico.objects.all()
-        else:
-            acordos = AcordoServico.objects.filter(
-                _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
-            )
+        acordos = AcordoServico.objects.filter(
+            _Q(candidatura__user=user) | _Q(candidatura__ad__author=user)
+        )
         total = total_nao_lidas(acordos.values_list('id', flat=True), user.id)
         return Response({'total': total})

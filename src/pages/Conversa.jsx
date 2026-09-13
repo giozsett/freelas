@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { Send, MessageSquare, Lock, HelpCircle, Loader2, ArrowLeft, Archive, MessagesSquare } from 'lucide-react';
+import {
+  Send, MessageSquare, Lock, HelpCircle, Loader2, ArrowLeft, Archive,
+  MessagesSquare, Info, X, UserRound,
+} from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useNotificacoes } from '../context/ContextoNotificacao';
 import ReportModal from '../components/ModalDenuncia';
@@ -126,6 +129,7 @@ export default function Conversa() {
   const [chatTab, setChatTab] = useState('em-andamento');
   const [modalDenuncia, setModalDenuncia] = useState(false);
   const [wsId, setWsId] = useState(null);
+  const [detalhesAbertos, setDetalhesAbertos] = useState(false);
 
   const inicializadoRef = useRef(false);
   const fimRef = useRef(null);
@@ -156,6 +160,7 @@ export default function Conversa() {
       setWsId(id);
       setCarregandoChat(true);
       setErro('');
+      setDetalhesAbertos(false);
       try {
         const res = await fetch(`${API}/api/chat/${id}/`, { headers: authHeaders() });
         if (!res.ok) {
@@ -260,6 +265,12 @@ export default function Conversa() {
               prev.some((m) => m.id === msg.mensagem.id) ? prev : [...prev, msg.mensagem],
             );
             setChat((prev) => (prev ? { ...prev, chat_ativo: true } : prev));
+            // Chat está aberto e a mensagem já foi exibida: marca como lida
+            // imediatamente para o contador de não lidas não ficar preso.
+            fetch(`${API}/api/chat/${wsId}/ler/`, {
+              method: 'POST',
+              headers: authHeaders(),
+            }).catch(() => {});
             carregarChats();
           }
         } catch {
@@ -333,6 +344,14 @@ export default function Conversa() {
     }
   };
 
+  const voltarParaLista = () => {
+    setChat(null);
+    setMessages([]);
+    setWsId(null);
+    setDetalhesAbertos(false);
+    navigate('/chat');
+  };
+
   const chip = chat ? STATUS_CHIP[chat.status_acordo] || { label: chat.status_acordo, tone: 'done' } : null;
   const outraParte = chat?.outra_parte;
 
@@ -341,9 +360,9 @@ export default function Conversa() {
   const chatsFiltrados = chatTab === 'em-andamento' ? chatsEmAndamento : chatsFinalizados;
 
   return (
-    <div className={`chat-layout ${chat ? 'chat-selecionado' : ''}`}>
-      {/* Sidebar — conversas (acordos) do usuário */}
-      <aside className="card" style={{ padding: '0.9rem', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+    <div className={`chat-shell ${chat ? 'chat-selecionado' : ''}`}>
+      {/* Coluna 1 — conversas (acordos) do usuário */}
+      <aside className="card chat-sidebar" style={{ padding: '0.9rem', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
           <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Conversas</h2>
           <span className="badge">{chats.length}</span>
@@ -371,6 +390,16 @@ export default function Conversa() {
               <Archive size={17} />
               <span className="chat-tab__count">{chatsFinalizados.length}</span>
             </button>
+          </div>
+        )}
+
+        {chats.length > 0 && (
+          <div className="chat-tab-note">
+            {chatTab === 'em-andamento' ? (
+              <><MessagesSquare size={14} /> Você pode enviar mensagens nesses chats.</>
+            ) : (
+              <><Lock size={14} /> Conversas encerradas — somente leitura.</>
+            )}
           </div>
         )}
 
@@ -404,9 +433,10 @@ export default function Conversa() {
             </p>
           </div>
         ) : (
-          <div className="chat-contacts chat-contacts-scroll">
+          <div className="chat-list">
             {chatsFiltrados.map((item) => {
               const ativo = item.id === chat?.id;
+              const locked = !item.chat_ativo;
               const chipItem = STATUS_CHIP[item.status_acordo] || { label: item.status_acordo, tone: 'done' };
               const ultima = item.ultima_mensagem;
               const papel = item.outra_parte?.papel;
@@ -420,7 +450,7 @@ export default function Conversa() {
                   key={item.id}
                   to={`/chat/${item.id}`}
                   onClick={() => abrirChat(item.id)}
-                  className={`chat-contact-item ${ativo ? 'ativo' : ''}`}
+                  className={`chat-item ${ativo ? 'ativo' : ''} ${locked ? 'locked' : ''}`}
                   style={{ textDecoration: 'none' }}
                 >
                   <Avatar nome={item.outra_parte?.nome} foto={item.outra_parte?.foto_perfil} tamanho={40} />
@@ -430,21 +460,25 @@ export default function Conversa() {
                         {item.outra_parte?.nome || 'Participante'}
                       </strong>
                       {papel && <span className="chat-papel-tag">{PAPEL_LABEL[papel] || papel}</span>}
-                      {horarioUltima && (
-                        <span style={{ fontSize: '0.7rem', opacity: 0.6, flexShrink: 0 }}>
-                          {horarioUltima}
-                        </span>
-                      )}
                     </div>
                     <div style={{ fontSize: '0.78rem', opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {item.titulo_anuncio}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem', minWidth: 0, overflow: 'hidden' }}>
-                      <span className={`chat-status-chip ${chipItem.tone}`}>{chipItem.label}</span>
+                      {locked ? (
+                        <span className="chat-status-chip locked-chip"><Lock size={11} />{chipItem.label}</span>
+                      ) : (
+                        <span className={`chat-status-chip ${chipItem.tone}`}>{chipItem.label}</span>
+                      )}
                       {ultima && (
                         <span style={{ flex: 1, minWidth: 0, fontSize: '0.72rem', opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {ultima.remetente_id === user?.id ? 'Você: ' : ''}
                           {ultima.texto}
+                        </span>
+                      )}
+                      {horarioUltima && (
+                        <span style={{ fontSize: '0.7rem', opacity: 0.6, flexShrink: 0 }}>
+                          {horarioUltima}
                         </span>
                       )}
                     </div>
@@ -459,23 +493,24 @@ export default function Conversa() {
         )}
       </aside>
 
-      {/* Área principal do chat */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', height: '100%', minHeight: '400px' }}>
+      {/* Coluna 2 — conversa */}
+      <section className="card chat-main" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', minHeight: 0, height: '100%' }}>
         {!chat ? (
           <div className="chat-empty-state">
             <MessageSquare size={48} style={{ color: 'var(--border-color)' }} />
             <h3>{chats.length ? 'Selecione uma conversa' : 'Bem-vindo ao chat!'}</h3>
             <p style={{ maxWidth: '380px', fontSize: '0.9rem' }}>
               Aqui você conversa apenas com o freelancer ou contratante do seu acordo.
-              As mensagens só podem ser trocadas enquanto o acordo estiver em andamento.
+              O chat é criado automaticamente quando uma candidatura é aprovada, e as
+              mensagens só podem ser trocadas enquanto o acordo estiver em andamento.
             </p>
           </div>
         ) : (
           <>
             {/* Header do chat */}
-            <div style={{ padding: '1rem 1.25rem', borderBottom: 'var(--border-width) solid var(--border-color)', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div className="chat-header" style={{ padding: '1rem 1.25rem', borderBottom: 'var(--border-width) solid var(--border-color)', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
-                onClick={() => { setChat(null); setMessages([]); setWsId(null); navigate('/chat'); }}
+                onClick={voltarParaLista}
                 className="chat-back-btn"
                 title="Voltar para as conversas"
                 aria-label="Voltar para as conversas"
@@ -493,35 +528,16 @@ export default function Conversa() {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {chat.titulo_anuncio}
                   </span>
-                  {chat.valor_acordado != null && (
-                    <span style={{ fontWeight: 600 }}>
-                      · {formatarValor(chat.valor_acordado, chat.unidade_valor)}
-                    </span>
-                  )}
-                  {chat.data_confirmacao && (
-                    <span>· Iniciado em {formatarData(chat.data_confirmacao)}</span>
-                  )}
                 </div>
               </div>
-
-              {outraParte && (
-                <>
-                  <button
-                    onClick={() => setModalDenuncia(true)}
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    title="Denunciar usuário"
-                  >
-                    <HelpCircle size={24} color="var(--danger-color)" />
-                  </button>
-                  <Link
-                    to={`/user/${outraParte.id}`}
-                    className="btn btn-secondary"
-                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                  >
-                    Ver Perfil
-                  </Link>
-                </>
-              )}
+              <button
+                onClick={() => setDetalhesAbertos(true)}
+                className="chat-info-btn"
+                title="Ver detalhes do acordo"
+                aria-label="Ver detalhes do acordo"
+              >
+                <Info size={18} />
+              </button>
             </div>
 
             {/* Aviso de chat encerrado */}
@@ -537,7 +553,7 @@ export default function Conversa() {
             )}
 
             {/* Mensagens */}
-            <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem', background: 'var(--bg-color)', minHeight: '280px' }}>
+            <div className={`chat-messages ${!chat.chat_ativo ? 'locked' : ''}`}>
               {carregandoChat && messages.length === 0 ? (
                 <div className="chat-empty-state">
                   <Loader2 size={28} style={{ animation: 'spin 1s linear infinite' }} />
@@ -557,18 +573,18 @@ export default function Conversa() {
                   return (
                     <div key={msg.id} className={ehUltima ? 'chat-bubble-enter' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                       {novoDia && <span className="chat-mensagem-dia">{diaDaMensagem(msg.criado_em)}</span>}
-                      <div style={{ display: 'flex', gap: '0.6rem', alignSelf: eu ? 'flex-end' : 'flex-start', maxWidth: '85%', flexDirection: eu ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: '0.6rem', alignSelf: eu ? 'flex-end' : 'flex-start', maxWidth: '80%', flexDirection: eu ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
                         {!eu && <Avatar nome={msg.remetente_nome} tamanho={30} />}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: eu ? 'flex-end' : 'flex-start' }}>
                           <div
                             style={{
-                              padding: '0.7rem 1rem',
+                              padding: '0.75rem 1.05rem',
                               background: eu ? 'var(--primary)' : 'var(--surface-color)',
                               color: eu ? 'var(--role-contrast)' : 'var(--text-color)',
                               border: eu ? 'none' : '1px solid var(--border-color)',
-                              borderRadius: '14px',
-                              borderBottomRightRadius: eu ? '4px' : '14px',
-                              borderBottomLeftRadius: eu ? '14px' : '4px',
+                              borderRadius: '16px',
+                              borderBottomRightRadius: eu ? '4px' : '16px',
+                              borderBottomLeftRadius: eu ? '16px' : '4px',
                               wordBreak: 'break-word',
                               whiteSpace: 'pre-wrap',
                               boxShadow: '0 1px 3px var(--shadow-color)',
@@ -621,7 +637,60 @@ export default function Conversa() {
             </form>
           </>
         )}
-      </div>
+      </section>
+
+      {/* Coluna 3 — detalhes do acordo (vira painel deslizante no mobile) */}
+      <aside className={`card chat-details ${detalhesAbertos ? 'open' : ''} ${chat && !chat.chat_ativo ? 'locked' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {chat && (
+          <>
+            <button
+              className="chat-details__close"
+              onClick={() => setDetalhesAbertos(false)}
+              title="Fechar"
+              aria-label="Fechar detalhes"
+            >
+              <X size={16} />
+            </button>
+            <div className="chat-details__avatar">
+              <Avatar nome={outraParte?.nome} foto={outraParte?.foto_perfil} tamanho={48} />
+              <h3>{outraParte?.nome || 'Participante'}</h3>
+              {outraParte?.papel && <span className="chat-papel-tag">{PAPEL_LABEL[outraParte.papel] || outraParte.papel}</span>}
+            </div>
+            <div className="chat-details__section">
+              <span className="chat-details__label">Acordo</span>
+              <div className="chat-details__row"><span>Anúncio</span><span>{chat.titulo_anuncio}</span></div>
+              <div className="chat-details__row"><span>Status</span><span className={`chat-status-chip ${chip.tone}`}>{chip.label}</span></div>
+              {chat.data_confirmacao && (
+                <div className="chat-details__row"><span>Iniciado em</span><span>{formatarData(chat.data_confirmacao)}</span></div>
+              )}
+              {!chat.chat_ativo && (
+                <div className="chat-details__row"><span>Encerrado</span><span>{chat.status_acordo}</span></div>
+              )}
+            </div>
+            {chat.valor_acordado != null && (
+              <div className="chat-details__section">
+                <span className="chat-details__label">Valor combinado</span>
+                <div className="chat-details__value">{formatarValor(chat.valor_acordado, chat.unidade_valor)}</div>
+              </div>
+            )}
+            {outraParte && (
+              <div className="chat-details__section chat-details__actions">
+                <Link to={`/user/${outraParte.id}`} className="btn btn-secondary">
+                  <UserRound size={16} /> Ver perfil
+                </Link>
+                <button className="btn btn-danger-ghost" onClick={() => setModalDenuncia(true)}>
+                  <HelpCircle size={16} /> Denunciar usuário
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </aside>
+      <div
+        className={`details-backdrop ${detalhesAbertos ? 'open' : ''}`}
+        onClick={() => setDetalhesAbertos(false)}
+        aria-hidden="true"
+      />
 
       <ReportModal
         isOpen={modalDenuncia}
