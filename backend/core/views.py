@@ -8,10 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 from django.contrib.auth.models import User
-from .serializers import UserSerializer, RegisterSerializer
-from google.oauth2 import id_token
 import os
-from google.auth.transport import requests as google_requests
+from .serializers import UserSerializer, RegisterSerializer
 from .serializers import UserProfileSerializer, FotoPerfilSerializer
 from .models import UserProfile
 from .serializers import CandidaturaSerializer
@@ -24,6 +22,9 @@ from django.core.mail import send_mail
 from .models import VerificacaoEmail
 from .serializers import CertificadoSerializer, InstituicaoEnsinoSerializer, ExperienciaSerializer
 from .models import Certificado, InstituicaoEnsino, Experiencia
+from allauth.socialaccount.adapter import get_adapter as get_social_adapter
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.models import SocialAccount
 
 logger = logging.getLogger(__name__)
 
@@ -632,6 +633,9 @@ class NotificacaoMarcarLidaAPIView(APIView):
         )
         notificacao.lida = True
         notificacao.save(update_fields=['lida'])
+        from .notificacoes import publicar_resumo_notificacoes
+
+        publicar_resumo_notificacoes(request.user)
         return Response({'ok': True})
 
 
@@ -647,6 +651,9 @@ class NotificacaoMarcarLidasAPIView(APIView):
         if tipos:
             queryset = queryset.filter(tipo__in=tipos)
         quantidade = queryset.update(lida=True)
+        from .notificacoes import publicar_resumo_notificacoes
+
+        publicar_resumo_notificacoes(request.user)
         return Response({'count': quantidade})
 
 
@@ -660,87 +667,100 @@ class NotificacaoLimparAPIView(APIView):
 
 ### autenticação com conta google ###
 class GoogleSocialLoginAPI(APIView):
+    """
+    Login/cadastro unificado via Google.
+    Recebe o id_token do Google Identity Services, verifica com allauth
+    e retorna DRF Token.
+    """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        token = request.data.get('id_token')
-        if not token:
-            return Response({'error': 'Token não fornecido'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            # Valida o token diretamente com o Google
-            idinfo = id_token.verify_oauth2_token(
-                token,
-                google_requests.Request(),
-                os.environ.get('GOOGLE_CLIENT_ID')
+        credential = request.data.get('id_token')
+        if not credential:
+            return Response(
+                {'error': 'Token não fornecido'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            email = idinfo.get('email')
-            first_name = idinfo.get('given_name', '')
-            last_name = idinfo.get('family_name', '')
 
-            # Cria ou pega o usuário
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-            # Usuário não cadastrado, retorna erro para o frontend redirecionar
-                return Response(
-                    {'error': 'not_registered', 'email': email},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-
-            auth_token, _ = Token.objects.get_or_create(user=user)
-
-            return Response({
-                'token': auth_token.key,
-                'user': UserSerializer(user).data,
-})
-
-        except ValueError:
-            return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-## cadastro google ###
-class GoogleSocialRegisterAPI(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        token = request.data.get('id_token')
-        if not token:
-            return Response({'error': 'Token não fornecido'}, status=status.HTTP_400_BAD_REQUEST)
+        # --- Verifica o JWT do Google usando o allauth ---
         try:
-            idinfo = id_token.verify_oauth2_token(
-                token,
-                google_requests.Request(),
-                os.environ.get('GOOGLE_CLIENT_ID')
+            provider = get_social_adapter().get_provider(
+                request, GoogleOAuth2Adapter.provider_id
             )
-            email = idinfo.get('email')
-            first_name = idinfo.get('given_name', '')
-            last_name = idinfo.get('family_name', '')
+            sociallogin = provider.verify_token(request, {'id_token': credential})
+        except Exception:
+            return Response(
+                {'error': 'Token inválido ou expirado'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-            # Se já existe, não deixa cadastrar de novo
-            if User.objects.filter(email=email).exists():
+        # Dados extraídos do JWT
+        identity = sociallogin.account.extra_data
+        email = identity.get('email', '').strip().lower()
+        first_name = identity.get('given_name', '')
+        last_name = identity.get('family_name', '')
+
+        if not email:
+            return Response(
+                {'error': 'Não foi possível obter o email do Google'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cadastro/login unificado com verificação de conflito de email:
+        #  - sem usuário com esse email        → cria conta nova (cadastro)
+        #  - email vinculado ao mesmo Google   → login da conta existente
+        #  - email já usado por outra conta    → conflito (manual ou outro)
+        conta_google = SocialAccount.objects.filter(
+            provider='google', uid__iexact=email,
+        ).select_related('user').first()
+
+        if conta_google:
+            user = conta_google.user
+            conta_google.extra_data = identity
+            conta_google.save(update_fields=['extra_data'])
+            if (not user.first_name and first_name) or (not user.last_name and last_name):
+                user.first_name = user.first_name or first_name
+                user.last_name = user.last_name or last_name
+                user.save(update_fields=['first_name', 'last_name'])
+        else:
+            if User.objects.filter(email__iexact=email).exists():
                 return Response(
-                    {'error': 'already_registered'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {
+                        'error': 'Este email já está sendo utilizado.',
+                        'code': 'email_em_uso',
+                    },
+                    status=status.HTTP_409_CONFLICT,
                 )
-
-            # Cria o usuário
             user = User.objects.create_user(
                 username=email,
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
             )
+            SocialAccount.objects.create(
+                provider='google',
+                uid=email,
+                user=user,
+                extra_data=identity,
+            )
 
-            auth_token, _ = Token.objects.get_or_create(user=user)
+        # --- Garante que o UserProfile existe ---
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                'nome_completo': f'{first_name} {last_name}'.strip() or user.username,
+                'email': email,
+            },
+        )
 
-            return Response({
-                'token': auth_token.key,
-                'user': UserSerializer(user).data,
-            })
+        # --- Retorna DRF Token ---
+        auth_token, _ = Token.objects.get_or_create(user=user)
 
-        except ValueError:
-            return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        return Response({
+            'token': auth_token.key,
+            'user': UserSerializer(user).data,
+        })
+
 
 class EnviarCodigoVerificacaoAPI(APIView):
     permission_classes = [permissions.AllowAny]
@@ -1629,6 +1649,13 @@ def _mes_inicio(data):
     return data.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
+def _corte_dashboard():
+    """Data de corte: a dashboard contabiliza somente usuários registrados a
+    partir da migração do login social para django-allauth (era atual)."""
+    from datetime import datetime
+    return timezone.make_aware(datetime(2026, 9, 9))
+
+
 def _variacao(atual, anterior):
     if not anterior:
         return 100 if atual else 0
@@ -1716,15 +1743,22 @@ class DashboardAdminAPIView(APIView):
         def serie_usuarios(qs):
             return _contagem_por_periodo(qs, 'date_joined', inicio_atual, fim_atual, inicio_anterior)
 
-        usuarios_atual, usuarios_anterior = serie_usuarios(User.objects.all())
+        # Com a migração do login para django-allauth, a estatística começa a
+        # contabilizar apenas os usuários registrados a partir de hoje.
+        corte = _corte_dashboard()
+        usuarios_atual, usuarios_anterior = serie_usuarios(
+            User.objects.filter(date_joined__gte=corte),
+        )
 
         autores_freelancer = User.objects.filter(
             ads__role='freelancer',
             ads__deletado=False,
+            date_joined__gte=corte,
         ).distinct()
         autores_contratante = User.objects.filter(
             ads__role__in=['contractor', 'contratante'],
             ads__deletado=False,
+            date_joined__gte=corte,
         ).distinct()
 
         freelancer_atual, freelancer_anterior = serie_usuarios(autores_freelancer)
@@ -1738,13 +1772,34 @@ class DashboardAdminAPIView(APIView):
         )
         ids_freela_acordo_periodo = set(
             acordos_do_periodo.exclude(candidatura__user=None)
+            .exclude(candidatura__user__date_joined__lt=corte)
             .values_list('candidatura__user_id', flat=True),
         )
         ids_contratante_acordo_periodo = set(
             acordos_do_periodo.exclude(candidatura__ad__author=None)
+            .exclude(candidatura__ad__author__date_joined__lt=corte)
             .values_list('candidatura__ad__author_id', flat=True),
         )
         pessoas_fecharam_acordo_periodo = len(ids_freela_acordo_periodo | ids_contratante_acordo_periodo)
+
+        # Indicador mensal fixo: quantos usuários manuais fecharam acordo no
+        # mês calendário atual, independentemente do filtro de período.
+        agora = timezone.now()
+        acordos_do_mes = AcordoServico.objects.filter(
+            data_confirmacao__gte=_mes_inicio(agora),
+            data_confirmacao__lte=agora,
+        )
+        ids_freela_acordo_mes = set(
+            acordos_do_mes.exclude(candidatura__user=None)
+            .exclude(candidatura__user__date_joined__lt=corte)
+            .values_list('candidatura__user_id', flat=True),
+        )
+        ids_contratante_acordo_mes = set(
+            acordos_do_mes.exclude(candidatura__ad__author=None)
+            .exclude(candidatura__ad__author__date_joined__lt=corte)
+            .values_list('candidatura__ad__author_id', flat=True),
+        )
+        pessoas_fecharam_acordo_mes = len(ids_freela_acordo_mes | ids_contratante_acordo_mes)
 
         denuncias_atual, denuncias_anterior = _contagem_por_periodo(
             Report.objects.all(), 'created_at', inicio_atual, fim_atual, inicio_anterior,
@@ -1790,6 +1845,7 @@ class DashboardAdminAPIView(APIView):
                 'freelas': {
                     **_item_contagem(freelas_atual, freelas_anterior),
                     'fecharam_acordo_periodo': pessoas_fecharam_acordo_periodo,
+                    'fecharam_acordo_mes': pessoas_fecharam_acordo_mes,
                 },
                 'denuncias': _item_contagem(denuncias_atual, denuncias_anterior),
                 'cancelamentos_planos': _item_contagem(cancelamentos_atual, cancelamentos_anterior),
