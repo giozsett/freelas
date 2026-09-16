@@ -1,4 +1,5 @@
 import logging
+import requests
 from django.conf import settings
 from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
@@ -204,7 +205,7 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.AllowAny()]
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
@@ -229,8 +230,7 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         # Uma denúncia nova nunca pode chegar do cliente já julgada, e quem
         # denunciou é sempre o usuário autenticado (nunca o que o cliente
         # mandar no corpo) — reporter já é read-only no serializer.
-        reporter = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(status='pending', reporter=reporter)
+        serializer.save(status='pending', reporter=self.request.user)
 
 class ReportUpdateAPIView(generics.UpdateAPIView):
     queryset = Report.objects.all()
@@ -740,6 +740,142 @@ class GoogleSocialLoginAPI(APIView):
             SocialAccount.objects.create(
                 provider='google',
                 uid=email,
+                user=user,
+                extra_data=identity,
+            )
+
+        # --- Garante que o UserProfile existe ---
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                'nome_completo': f'{first_name} {last_name}'.strip() or user.username,
+                'email': email,
+            },
+        )
+
+        # --- Retorna DRF Token ---
+        auth_token, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'token': auth_token.key,
+            'user': UserSerializer(user).data,
+        })
+
+
+### autenticação com conta linkedin ###
+class LinkedInSocialLoginAPI(APIView):
+    """
+    Login/cadastro unificado via LinkedIn (Sign In with LinkedIn / OpenID Connect).
+
+    Diferente do Google (que usa id_token no navegador), o LinkedIn usa o fluxo
+    de "authorization code": o frontend redireciona o usuário para o LinkedIn,
+    que redireciona de volta com um `code`. Este endpoint troca o `code` por um
+    `id_token` (mantendo o client_secret no servidor) e unifica login/cadastro
+    com a MESMA lógica do Google.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        code = request.data.get('code')
+        redirect_uri = request.data.get('redirect_uri')
+        client_id = os.environ.get('LINKEDIN_CLIENT_ID', '')
+        client_secret = os.environ.get('LINKEDIN_CLIENT_SECRET', '')
+
+        if not code or not redirect_uri:
+            return Response(
+                {'error': 'Código de autorização não fornecido'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Troca o authorization code por id_token no LinkedIn ---
+        try:
+            resp = requests.post(
+                'https://www.linkedin.com/oauth/v2/accessToken',
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': redirect_uri,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                },
+                timeout=20,
+            )
+            payload = resp.json()
+        except requests.RequestException:
+            return Response(
+                {'error': 'Não foi possível conectar com o LinkedIn'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        id_token = payload.get('id_token')
+        if not id_token:
+            return Response(
+                {'error': 'Falha na autenticação com o LinkedIn. Tente novamente.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- Verifica o JWT do LinkedIn usando as JWKs públicas (OIDC) ---
+        try:
+            from allauth.socialaccount.internal import jwtkit
+
+            identity = jwtkit.verify_and_decode(
+                credential=id_token,
+                keys_url='https://www.linkedin.com/oauth/openid/jwks',
+                issuer='https://www.linkedin.com/oauth',
+                audience=[client_id],
+                lookup_kid=jwtkit.lookup_kid_jwk,
+            )
+        except Exception:
+            return Response(
+                {'error': 'Token do LinkedIn inválido ou expirado'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = identity.get('email', '').strip().lower()
+        first_name = identity.get('given_name', '')
+        last_name = identity.get('family_name', '')
+        uid = str(identity.get('sub', ''))
+
+        if not email:
+            return Response(
+                {'error': 'Não foi possível obter o email do LinkedIn'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cadastro/login unificado com verificação de conflito de email:
+        #  - sem usuário com esse email        → cria conta nova (cadastro)
+        #  - email vinculado ao mesmo LinkedIn → login da conta existente
+        #  - email já usado por outra conta    → conflito
+        conta_linkedin = SocialAccount.objects.filter(
+            provider='linkedin', uid__iexact=uid,
+        ).select_related('user').first()
+
+        if conta_linkedin:
+            user = conta_linkedin.user
+            conta_linkedin.extra_data = identity
+            conta_linkedin.save(update_fields=['extra_data'])
+            if (not user.first_name and first_name) or (not user.last_name and last_name):
+                user.first_name = user.first_name or first_name
+                user.last_name = user.last_name or last_name
+                user.save(update_fields=['first_name', 'last_name'])
+        else:
+            if User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {
+                        'error': 'Este email já está sendo utilizado.',
+                        'code': 'email_em_uso',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            SocialAccount.objects.create(
+                provider='linkedin',
+                uid=uid,
                 user=user,
                 extra_data=identity,
             )

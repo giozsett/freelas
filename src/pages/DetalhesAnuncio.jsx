@@ -9,6 +9,7 @@ import ReportModal from '../components/ModalDenuncia';
 import LimitePlano from '../components/LimitePlano';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 import { DIAS_SEMANA, PERIODOS, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
 
 // Reputação padrão exibida quando a API não retorna author_reputation
@@ -30,6 +31,7 @@ export default function AdDetails() {
   const { user } = useAuth();
   const { alerta } = useDialogo();
   const navigate = useNavigate();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -277,7 +279,7 @@ export default function AdDetails() {
               </div>
             )}
           </div>
-          <button onClick={() => setIsReportModalOpen(true)} className="icon-btn-ghost" title="Denunciar Anúncio">
+          <button onClick={() => exigirAutenticacao(() => setIsReportModalOpen(true))} className="icon-btn-ghost" title="Denunciar Anúncio">
             <Flag size={18} />
           </button>
         </div>
@@ -398,7 +400,7 @@ export default function AdDetails() {
               </div>
               <button
                 className="ad-cta"
-                onClick={() => !hasApplied && !isExpired && !candidaturaLimiteAtingido && setIsModalOpen(true)}
+                onClick={() => !hasApplied && !isExpired && !candidaturaLimiteAtingido && exigirAutenticacao(() => setIsModalOpen(true))}
                 disabled={hasApplied || isExpired || candidaturaLimiteAtingido}
               >
                 <Star size={18} fill="currentColor" />

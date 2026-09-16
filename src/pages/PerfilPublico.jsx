@@ -6,11 +6,13 @@ import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 
 const API = 'http://localhost:8000';
 
 export default function PublicProfile() {
   const { id } = useParams();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(false);
   const [activeTab, setActiveTab] = useState('skills');
@@ -160,7 +162,7 @@ export default function PublicProfile() {
                 {user.profile?.disponivel ? 'Disponível' : 'Indisponível'}
               </span>
               <button
-                onClick={() => setIsReportModalOpen(true)}
+                onClick={() => exigirAutenticacao(() => setIsReportModalOpen(true))}
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--danger-color)', cursor: 'pointer' }}
                 title="Denunciar Usuário"
               >

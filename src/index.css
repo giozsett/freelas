@@ -122,6 +122,22 @@ a { color: var(--text-color); text-decoration: none; }
 .btn-danger-ghost { background: transparent; color: var(--danger-color); border: 1px solid color-mix(in srgb, var(--danger-color) 35%, transparent); box-shadow: none; }
 .btn-danger-ghost:hover { background: var(--danger-soft); transform: none; box-shadow: none; }
 
+/* Botões de login social (Google/LinkedIn): visual neutro e igual entre si —
+   o de baixo é um botão real, o do Google é um overlay decorativo por cima do
+   botão de verdade renderizado pelo SDK do Google (ver .social-btn-overlay). */
+.btn-social {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem;
+  width: 100%; height: 42px; padding: 0 1rem; border-radius: 8px;
+  font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 0.95rem;
+  background: var(--surface-color); color: var(--text-color); border: 1px solid var(--border-color);
+  cursor: pointer; transition: background-color 0.15s ease;
+}
+.btn-social:hover { background: var(--bg-color); }
+
+.social-btn-overlay { position: relative; width: 100%; height: 42px; }
+.social-btn-overlay__visual { position: absolute; inset: 0; pointer-events: none; }
+.social-btn-overlay__real { position: absolute; inset: 0; opacity: 0; overflow: hidden; display: flex; justify-content: center; }
+
 /* Cards */
 .card {
   background-color: var(--surface-color); border: var(--border-width) solid var(--border-color);
@@ -799,6 +815,13 @@ a { color: var(--text-color); text-decoration: none; }
 .fn-actions { display: flex; align-items: center; gap: 0.55rem; }
 .fn-actions--guest { margin-left: auto; }
 
+.fn-guest-nav { display: flex; align-items: center; gap: 1rem; margin-left: 0.5rem; flex: 1; min-width: 0; }
+.fn-guest-link {
+  font-weight: 600; font-size: 0.88rem; color: var(--text-secondary); text-decoration: none;
+  transition: color 0.2s ease; white-space: nowrap;
+}
+.fn-guest-link:hover { color: var(--primary); }
+
 .fn-cta {
   display: inline-flex; align-items: center; gap: 0.35rem; appearance: none; border: 0; cursor: pointer;
   padding: 0.5rem 0.9rem; border-radius: 999px; background: var(--primary-gradient); color: #fff;
@@ -1291,11 +1314,14 @@ ul { list-style-type: none; }
 .btn:active, .btn-secondary:active { transform: scale(0.97); }
 .input:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color)); }
 
-/* Toggle de senha (login/cadastro) */
+/* Campo de senha com botão de mostrar/ocultar dentro do input (login/cadastro) */
+.password-field { position: relative; }
+.password-field .input { padding-right: 2.75rem; }
 .password-toggle {
   appearance: none; border: 0; background: transparent; color: var(--text-secondary);
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
   padding: 0.3rem; border-radius: 6px; transition: color 0.15s ease, background 0.15s ease;
+  position: absolute; top: 50%; right: 0.6rem; transform: translateY(-50%);
 }
 .password-toggle:hover, .password-toggle:focus-visible { color: var(--primary); background: var(--bg-color); outline: none; }
 

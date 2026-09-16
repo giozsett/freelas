@@ -4,6 +4,7 @@
 
 
 ## REGRAS DE NEGÓCIO
+- A plataforma deve permitir que usuários não autenticados possam navegar na plataforma, visualizar assinaturas, etc.
 - A plataforma não gera contratos de validade jurídica para cada candidatura aprovada.
 - O limite de anúncios que cada usuário pode postar por mês é definido por seu plano de assinatura (Gratuito: 3, Gold: 6, Platinum: ilimitado);
 - O limite de candidaturas que cada usuário pode enviar por mês também é definido por seu plano de assinatura (Gratuito: 5, Gold: 20, Platinum: ilimitado);

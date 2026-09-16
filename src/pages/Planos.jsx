@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 
 export default function Plans() {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [loadingPlan, setLoadingPlan] = useState(null);
   const { alerta } = useDialogo();
 
@@ -123,18 +125,10 @@ export default function Plans() {
                 <CheckCircle size={20} />
                 <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês</span>
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span>Acesso a todos os freelancers e contratantes</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span>Chat integrado</span>
-              </li>
             </ul>
 
             <button
-              onClick={() => handleSubscribe(plan.id)}
+              onClick={() => exigirAutenticacao(() => handleSubscribe(plan.id))}
               className="btn plan-subscribe-btn"
               disabled={loadingPlan !== null}
               style={{
