@@ -623,7 +623,7 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
                     tipo='candidatura',
                     titulo='Candidatura recusada',
                     mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
-                    link='/my-applications',
+                    link='/my-freelas?tab=candidaturas',
                     ad=candidatura.ad,
                 )
 

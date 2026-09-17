@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import {
   Send,
@@ -129,7 +130,7 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function MinhasCandidaturas() {
+export function CandidaturasView({ showHeader = true }) {
   const { user } = useAuth();
   const { marcarLidas } = useNotificacoes();
   const [applications, setApplications] = useState([]);
@@ -176,8 +177,9 @@ export default function MinhasCandidaturas() {
   const visibleApplications = activeTab === 'em-andamento' ? emAndamento : finalizadas;
 
   return (
-    <div className="mf-page-header-wrapper" style={{ maxWidth: '900px', margin: '2rem auto' }}>
+    <>
       {/* ── Cabeçalho padronizado ── */}
+      {showHeader && (
       <div className="mf-page-header">
         <div className="mf-page-header__main">
           <div className="mf-page-header__icon">
@@ -191,6 +193,7 @@ export default function MinhasCandidaturas() {
           </div>
         </div>
       </div>
+      )}
 
       <LimitePlano recurso="candidaturas" />
 
@@ -387,6 +390,18 @@ export default function MinhasCandidaturas() {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+CandidaturasView.propTypes = {
+  showHeader: PropTypes.bool,
+};
+
+export default function MinhasCandidaturas() {
+  return (
+    <div className="mf-page-header-wrapper" style={{ maxWidth: '900px', margin: '2rem auto' }}>
+      <CandidaturasView />
     </div>
   );
 }

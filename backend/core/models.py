@@ -6,10 +6,16 @@ import string
 from django.utils import timezone
 
 class UserProfile(models.Model):
+    PAPEIS_USUARIO = (
+        ('freelancer', 'Freelancer'),
+        ('empresa', 'Empresa'),
+    )
+
     # Campos da tabela 'usuarios' já existente
     nome_completo = models.CharField(max_length=255, null=True, blank=True)
     email = models.EmailField(unique=True, null=True, blank=True)
     nome_fantasia = models.CharField(max_length=255, null=True, blank=True)
+    papel = models.CharField(max_length=20, choices=PAPEIS_USUARIO, null=True, blank=True)
     reputacao = models.SmallIntegerField(default=0, null=True, blank=True)
     banido = models.BooleanField(default=False, null=True, blank=True)
     deletado = models.BooleanField(default=False, null=True, blank=True)

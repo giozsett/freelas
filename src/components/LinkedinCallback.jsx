@@ -48,6 +48,7 @@ export default function LinkedinCallback() {
         const data = await response.json();
         if (response.ok) {
           login(data.user, data.token);
+          if (destino === 'cadastro') sessionStorage.setItem('freelas_primeira_vez', '1');
           navigate(destino === 'cadastro' ? '/subscription-setup' : '/');
         } else {
           cancel(data.error || 'Erro ao entrar com o LinkedIn.');

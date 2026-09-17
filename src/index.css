@@ -1136,6 +1136,29 @@ ul { list-style-type: none; }
 }
 .mf-tab--active .mf-tab__count { background: var(--primary); color: var(--role-contrast); }
 
+/* View switch (Meus freelas / Minhas candidaturas) */
+.mf-view-switch {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem;
+  padding: 0.4rem; margin: 0 auto 1.75rem; width: fit-content; max-width: 100%;
+  background: var(--surface-color); border: 1px solid var(--border-color);
+  border-radius: 14px; box-shadow: 0 8px 24px var(--shadow-color);
+  animation: fadeInDown 0.35s ease both;
+}
+.mf-view-switch__btn {
+  display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap;
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: 0.92rem; color: var(--text-secondary);
+  padding: 0.65rem 1.35rem; border-radius: 10px;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+.mf-view-switch__btn:hover { color: var(--primary); }
+.mf-view-switch__btn:active { transform: scale(0.97); }
+.mf-view-switch__btn.is-active {
+  color: var(--role-contrast); background: var(--primary-gradient);
+  box-shadow: 0 4px 10px var(--shadow-color);
+}
+.mf-view-switch__btn svg { flex-shrink: 0; }
+
 /* Attention panel */
 .mf-attention {
   margin-bottom: 1.75rem; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;
@@ -1335,4 +1358,11 @@ ul { list-style-type: none; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Escolha de papel (Freelancer / Empresa) */
+.ep-card:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: var(--primary) !important;
+  box-shadow: 0 8px 24px var(--shadow-color);
 }

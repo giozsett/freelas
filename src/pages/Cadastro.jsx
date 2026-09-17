@@ -92,6 +92,7 @@ export default function Cadastro() {
       const data = await response.json();
       if (response.ok) {
         login(data.user, data.token);
+        sessionStorage.setItem('freelas_primeira_vez', '1');
         navigate('/subscription-setup');
       } else {
         setErrorMsg(data.error || 'Código inválido. Tente novamente.');
@@ -127,6 +128,7 @@ export default function Cadastro() {
       const data = await response.json();
       if (response.ok) {
         login(data.user, data.token);
+        sessionStorage.setItem('freelas_primeira_vez', '1');
         navigate('/subscription-setup');
       } else {
         setErrorMsg(data.error || 'Erro ao cadastrar com o Google. Tente novamente.');

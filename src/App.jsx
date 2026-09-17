@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import BarraNavegacao from './components/BarraNavegacao';
 import Inicio from './pages/Inicio';
 import Perfil from './pages/Perfil';
@@ -11,7 +11,6 @@ import Conversa from './pages/Conversa';
 import EditarPerfil from './pages/EditarPerfil';
 import Planos from './pages/Planos';
 import MeusAnuncios from './pages/MeusAnuncios';
-import MinhasCandidaturas from './pages/MinhasCandidaturas';
 import PerfilPublico from './pages/PerfilPublico';
 import GerenciarCandidaturas from './pages/GerenciarCandidaturas';
 import RotaPrivada from './components/RotaPrivada';
@@ -25,6 +24,7 @@ import LinkedinCallback from './components/LinkedinCallback';
 import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
 import Configuracoes from './pages/Configuracoes';
+import EscolherPapel from './pages/EscolherPapel';
 import { ProvedorDialogo } from './context/ContextoDialogo';
 
 function App() {
@@ -49,7 +49,7 @@ function App() {
           <Route path="/plans" element={<RotaPrivada><Planos /></RotaPrivada>} />
           <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
           <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
-          <Route path="/my-applications" element={<RotaPrivada><MinhasCandidaturas /></RotaPrivada>} />
+          <Route path="/my-applications" element={<RotaPrivada><Navigate to="/my-freelas?tab=candidaturas" replace /></RotaPrivada>} />
           <Route path="/user/:id" element={<RotaPrivada><PerfilPublico /></RotaPrivada>} />
           <Route path="/moderator-login" element={<LoginModerador />} />
           <Route path="/moderation-panel" element={<PainelModeracao />} />
@@ -59,6 +59,7 @@ function App() {
           <Route path="/my-reviews" element={<RotaPrivada><MinhasAvaliacoes /></RotaPrivada>} />
           <Route path="/settings" element={<RotaPrivada><Configuracoes /></RotaPrivada>} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+          <Route path="/escolher-papel" element={<RotaPrivada><EscolherPapel /></RotaPrivada>} />
         </Routes>
       </div>
       <Rodape />

@@ -29,10 +29,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
     experiencias = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
+    papel = serializers.ChoiceField(
+        choices=[('freelancer', 'Freelancer'), ('empresa', 'Empresa')],
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel')
         read_only_fields = ('foto_perfil', 'subscription_plan')
 
     def get_banner(self, obj):

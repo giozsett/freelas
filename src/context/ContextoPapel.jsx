@@ -1,4 +1,5 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useEffect, useMemo, useContext } from 'react';
+import { useAuth } from './ContextoAutenticacao';
 
 const RoleContext = createContext();
 
@@ -8,24 +9,28 @@ function aplicarFavicon(role) {
 }
 
 export const RoleProvider = ({ children }) => {
-  // 'freelancer' or 'contractor'
-  const [role, setRole] = useState(localStorage.getItem('platform_role') || 'freelancer');
+  const { user } = useAuth();
+
+  // Fonte única do papel: user.profile.papel (backend). 'empresa' -> 'contractor'
+  const papel = user?.profile?.papel || null;
+  const role = useMemo(
+    () => (papel === 'empresa' ? 'contractor' : papel === 'freelancer' ? 'freelancer' : null),
+    [papel],
+  );
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-role', role);
-    aplicarFavicon(role);
+    if (role) {
+      document.documentElement.setAttribute('data-role', role);
+      aplicarFavicon(role);
+    } else {
+      // Ainda não escolheu papel: volta para o visual padrão (freelancer)
+      document.documentElement.removeAttribute('data-role');
+      aplicarFavicon(null);
+    }
   }, [role]);
 
-  const toggleRole = () => {
-    const newRole = role === 'freelancer' ? 'contractor' : 'freelancer';
-    setRole(newRole);
-    localStorage.setItem('platform_role', newRole);
-    document.documentElement.setAttribute('data-role', newRole);
-    aplicarFavicon(newRole);
-  };
-
   return (
-    <RoleContext.Provider value={{ role, toggleRole }}>
+    <RoleContext.Provider value={{ role }}>
       {children}
     </RoleContext.Provider>
   );
