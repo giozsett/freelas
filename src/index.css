@@ -1363,6 +1363,11 @@ ul { list-style-type: none; }
 /* Escolha de papel (Freelancer / Empresa) */
 .ep-card:hover:not(:disabled) {
   transform: translateY(-3px);
-  border-color: var(--primary) !important;
   box-shadow: 0 8px 24px var(--shadow-color);
+}
+.ep-card--freelancer:hover:not(:disabled) {
+  border-color: #FF6B54 !important;
+}
+.ep-card--empresa:hover:not(:disabled) {
+  border-color: #7C3AED !important;
 }

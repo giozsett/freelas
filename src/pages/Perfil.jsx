@@ -61,7 +61,14 @@ export default function Profile() {
           redes_sociais: data.redes_sociais || [],
           email_visivel: data.email_visivel !== undefined ? data.email_visivel : true,
           telefone_visivel: data.telefone_visivel !== undefined ? data.telefone_visivel : true,
-          curriculo: data.curriculo || null
+          curriculo: data.curriculo || null,
+          tipo_empresa: data.tipo_empresa || null,
+          nome_empresa: data.nome_empresa || '',
+          bio_empresa: data.bio_empresa || '',
+          ramo_empresa: data.ramo_empresa || '',
+          porte_empresa: data.porte_empresa || '',
+          cnpj: data.cnpj || '',
+          site_empresa: data.site_empresa || '',
         });
       })
       .catch(err => console.error(err));
@@ -105,6 +112,12 @@ export default function Profile() {
     plan: profile.subscription_plan
   };
 
+  const ehEmpresaCnpj = authUser?.profile?.papel === 'empresa' && profile.tipo_empresa === 'cnpj';
+  const nomeExibido = ehEmpresaCnpj && profile.nome_empresa ? profile.nome_empresa : userContext.name;
+  const bioExibida = ehEmpresaCnpj && profile.bio_empresa
+    ? profile.bio_empresa
+    : (profile.bio || "Adicione uma biografia no botão 'Editar'.");
+
   return (
     <div className="profile-page">
       <div className="card profile-card fade-in">
@@ -121,13 +134,13 @@ export default function Profile() {
               <img src={profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
-                {userContext.name.charAt(0)}
+                {nomeExibido.charAt(0)}
               </span>
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{userContext.name}</h1>
+              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{nomeExibido}</h1>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -215,8 +228,8 @@ export default function Profile() {
         )}
 
         <section className="profile-section">
-          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
-          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{profile.bio || "Adicione uma biografia no botão 'Editar'."}</p>
+          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>{ehEmpresaCnpj ? 'Sobre a Empresa' : 'Sobre Mim'}</h2>
+          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{bioExibida}</p>
         </section>
 
         <section className="profile-section">

@@ -17,6 +17,42 @@ export default function Configuracoes() {
   const [excluindo, setExcluindo] = useState(false);
   const [salvandoPapel, setSalvandoPapel] = useState(false);
   const [erroPapel, setErroPapel] = useState('');
+  const [dadosEmpresa, setDadosEmpresa] = useState(() => ({
+    nome_empresa: user?.profile?.nome_empresa || '',
+    ramo_empresa: user?.profile?.ramo_empresa || '',
+    porte_empresa: user?.profile?.porte_empresa || '',
+    cnpj: user?.profile?.cnpj || '',
+    site_empresa: user?.profile?.site_empresa || '',
+    bio_empresa: user?.profile?.bio_empresa || '',
+  }));
+  const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
+  const [erroEmpresa, setErroEmpresa] = useState('');
+  const [sucessoEmpresa, setSucessoEmpresa] = useState(false);
+
+  const atualizarEmpresa = (campo) => (e) => {
+    setDadosEmpresa(prev => ({ ...prev, [campo]: e.target.value }));
+    setSucessoEmpresa(false);
+  };
+
+  const salvarDadosEmpresa = async () => {
+    setSalvandoEmpresa(true);
+    setErroEmpresa('');
+    setSucessoEmpresa(false);
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/profile/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
+        body: JSON.stringify(dadosEmpresa)
+      });
+      if (!response.ok) throw new Error('Não foi possível salvar os dados da empresa.');
+      await alerta('Dados da empresa atualizados com sucesso.', { titulo: 'Empresa atualizada', variante: 'sucesso' });
+      setSucessoEmpresa(true);
+    } catch (err) {
+      setErroEmpresa(err.message || 'Erro ao salvar os dados da empresa.');
+    } finally {
+      setSalvandoEmpresa(false);
+    }
+  };
 
   const podeExcluir = senha.trim() !== '' && confirmacao === 'EXCLUIR';
 
@@ -24,6 +60,11 @@ export default function Configuracoes() {
 
   const handleMudarPapel = async (novoPapel) => {
     if (!novoPapel || novoPapel === papelAtual || salvandoPapel) return;
+    // Virar empresa exige criação do perfil de contratante (pessoa física ou CNPJ)
+    if (novoPapel === 'empresa' && !user?.profile?.tipo_empresa) {
+      navigate('/criar-perfil-empresa');
+      return;
+    }
     setSalvandoPapel(true);
     setErroPapel('');
     try {
@@ -84,7 +125,7 @@ export default function Configuracoes() {
       } else {
         setErrorMsg(data.error || 'Erro ao excluir a conta. Tente novamente.');
       }
-    } catch (err) {
+    } catch {
       setErrorMsg('Erro interno de conexão. Tente novamente.');
     } finally {
       setExcluindo(false);
@@ -140,13 +181,61 @@ export default function Configuracoes() {
         </div>
         {role === 'contractor' && (
           <p style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '1rem' }}>
-            Como Empresa você publica anúncios e recebe propostas. A aba "Minhas candidaturas" fica disponível apenas para freelancers.
+            Como Empresa você publica anúncios e recebe propostas. A aba &ldquo;Minhas candidaturas&rdquo; fica disponível apenas para freelancers.
           </p>
         )}
         {erroPapel && (
           <p style={{ color: 'var(--danger-color)', fontSize: '0.9rem', marginTop: '1rem' }}>{erroPapel}</p>
         )}
       </div>
+
+      {role === 'contractor' && user?.profile?.tipo_empresa === 'cnpj' && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Dados da empresa</h2>
+          <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '1.5rem', lineHeight: '1.5' }}>
+            Estes dados compõem o perfil de contratante exibido quando sua conta atua como Empresa.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Nome da empresa</label>
+              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.nome_empresa} onChange={atualizarEmpresa('nome_empresa')} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Ramo / segmento</label>
+              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.ramo_empresa} onChange={atualizarEmpresa('ramo_empresa')} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Porte</label>
+              <select className="input" style={{ width: '100%' }} value={dadosEmpresa.porte_empresa} onChange={atualizarEmpresa('porte_empresa')}>
+                <option value="">Selecione...</option>
+                <option value="autonomo">Autônomo</option>
+                <option value="micro">Micro (até 9 funcionários)</option>
+                <option value="pequena">Pequena (10 a 49)</option>
+                <option value="media">Média (50 a 249)</option>
+                <option value="grande">Grande (250+)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>CNPJ (opcional)</label>
+              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.cnpj} onChange={atualizarEmpresa('cnpj')} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Site (opcional)</label>
+              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.site_empresa} onChange={atualizarEmpresa('site_empresa')} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>O que a empresa faz</label>
+              <textarea className="input" rows={4} style={{ width: '100%', resize: 'vertical' }} value={dadosEmpresa.bio_empresa} onChange={atualizarEmpresa('bio_empresa')} />
+            </div>
+          </div>
+          {sucessoEmpresa && <p style={{ color: 'var(--success-color)', fontSize: '0.9rem', marginTop: '1rem' }}>Dados salvos.</p>}
+          {erroEmpresa && <p style={{ color: 'var(--danger-color)', fontSize: '0.9rem', marginTop: '1rem' }}>{erroEmpresa}</p>}
+          <button type="button" className="btn" style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }} disabled={salvandoEmpresa} onClick={salvarDadosEmpresa}>
+            <Building2 size={16} />
+            {salvandoEmpresa ? 'Salvando...' : 'Salvar dados da empresa'}
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Privacidade e Dados</h2>

@@ -10,6 +10,17 @@ class UserProfile(models.Model):
         ('freelancer', 'Freelancer'),
         ('empresa', 'Empresa'),
     )
+    TIPOS_EMPRESA = (
+        ('pessoa', 'Pessoa física contratante'),
+        ('cnpj', 'Empresa com CNPJ'),
+    )
+    PORTES_EMPRESA = (
+        ('autonomo', 'Autônomo'),
+        ('micro', 'Micro (até 9 funcionários)'),
+        ('pequena', 'Pequena (10 a 49)'),
+        ('media', 'Média (50 a 249)'),
+        ('grande', 'Grande (250+)'),
+    )
 
     # Campos da tabela 'usuarios' já existente
     nome_completo = models.CharField(max_length=255, null=True, blank=True)
@@ -17,6 +28,16 @@ class UserProfile(models.Model):
     nome_fantasia = models.CharField(max_length=255, null=True, blank=True)
     papel = models.CharField(max_length=20, choices=PAPEIS_USUARIO, null=True, blank=True)
     reputacao = models.SmallIntegerField(default=0, null=True, blank=True)
+
+    # Perfil de empresa/contratante (preenchido no onboarding ao virar empresa)
+    tipo_empresa = models.CharField(max_length=20, choices=TIPOS_EMPRESA, null=True, blank=True)
+    nome_empresa = models.CharField(max_length=255, null=True, blank=True)
+    bio_empresa = models.TextField(null=True, blank=True)
+    ramo_empresa = models.CharField(max_length=255, null=True, blank=True)
+    porte_empresa = models.CharField(max_length=20, choices=PORTES_EMPRESA, null=True, blank=True)
+    cnpj = models.CharField(max_length=18, null=True, blank=True)
+    site_empresa = models.URLField(max_length=255, null=True, blank=True)
+    aceitou_termos_empresa = models.BooleanField(default=False)
     banido = models.BooleanField(default=False, null=True, blank=True)
     deletado = models.BooleanField(default=False, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True, null=True, blank=True)

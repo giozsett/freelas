@@ -19,17 +19,36 @@ export default function EscolherPapel() {
       titulo: 'Sou freelancer',
       descricao: 'Ofereço meus serviços: crio trabalhos, me candidato a anúncios e recebo propostas.',
       icone: Briefcase,
+      cor: {
+        primary: '#FF826E',
+        hover: '#FF6B54',
+        soft: '#FFF1EE',
+        contraste: '#43160F',
+        gradiente: 'linear-gradient(135deg, #FF826E 0%, #FFAC9E 35%, #D8B4E2 65%, #8CD6FF 100%)',
+      },
     },
     {
       valor: 'empresa',
       titulo: 'Sou empresa',
       descricao: 'Busco profissionais: publico anúncios, recebo propostas e contrato freelancers.',
       icone: Building2,
+      cor: {
+        primary: '#7C3AED',
+        hover: '#6D28D9',
+        soft: '#F5F3FF',
+        contraste: '#FFFFFF',
+        gradiente: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 35%, #4C1D95 65%, #6EE7B7 100%)',
+      },
     },
   ];
 
   const escolher = async (valor) => {
     if (saving) return;
+    // Empresa exige o onboarding de contratante (pessoa física ou empresa com CNPJ)
+    if (valor === 'empresa') {
+      navigate('/criar-perfil-empresa', { replace: true });
+      return;
+    }
     setSaving(valor);
     setErro('');
     try {
@@ -86,17 +105,28 @@ export default function EscolherPapel() {
           return (
             <button
               key={opcao.valor}
-              className="card ep-card"
+              className={`card ep-card ep-card--${opcao.valor}`}
               onClick={() => escolher(opcao.valor)}
               disabled={!!saving}
               style={{ ...styles.cartao, ...(saving && styles.cartaoDesabilitado) }}
             >
-              <div style={styles.circulo}>
+              <div style={{ ...styles.circulo, background: opcao.cor.soft, color: opcao.cor.primary }}>
                 <Icone size={30} />
               </div>
+              <span style={{ ...styles.badge, background: opcao.cor.soft, color: opcao.cor.primary }}>
+                Área {opcao.valor === 'empresa' ? 'empresa' : 'freelancer'}
+              </span>
               <h3 style={styles.h3}>{opcao.titulo}</h3>
               <p style={styles.descricao}>{opcao.descricao}</p>
-              <span className="btn" style={styles.acoes}>
+              <span
+                className="btn"
+                style={{
+                  ...styles.acoes,
+                  background: opcao.cor.gradiente,
+                  color: opcao.cor.contraste,
+                  boxShadow: `0 4px 6px -1px rgba(0,0,0,0.1)`,
+                }}
+              >
                 {carregando ? 'Salvando...' : ativo ? <><Check size={18} /> Tipo atual</> : 'Escolher'}
               </span>
             </button>
@@ -129,7 +159,7 @@ const styles = {
   },
   h3: {
     fontSize: '1.1rem',
-    marginTop: '1rem',
+    marginTop: '0.75rem',
     marginBottom: '0.4rem',
   },
   subtitulo: {
@@ -156,11 +186,17 @@ const styles = {
     width: '56px',
     height: '56px',
     borderRadius: '50%',
-    background: 'var(--secondary)',
-    color: 'var(--primary)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badge: {
+    display: 'inline-block',
+    marginTop: '1rem',
+    padding: '0.25rem 0.7rem',
+    borderRadius: '999px',
+    fontSize: '0.75rem',
+    fontWeight: '600',
   },
   descricao: {
     color: 'var(--text-secondary)',

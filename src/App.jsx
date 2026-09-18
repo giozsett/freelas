@@ -25,6 +25,7 @@ import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
 import Configuracoes from './pages/Configuracoes';
 import EscolherPapel from './pages/EscolherPapel';
+import CriarPerfilEmpresa from './pages/CriarPerfilEmpresa';
 import { ProvedorDialogo } from './context/ContextoDialogo';
 
 function App() {
@@ -60,6 +61,7 @@ function App() {
           <Route path="/settings" element={<RotaPrivada><Configuracoes /></RotaPrivada>} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
           <Route path="/escolher-papel" element={<RotaPrivada><EscolherPapel /></RotaPrivada>} />
+          <Route path="/criar-perfil-empresa" element={<RotaPrivada><CriarPerfilEmpresa /></RotaPrivada>} />
         </Routes>
       </div>
       <Rodape />

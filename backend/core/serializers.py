@@ -35,11 +35,42 @@ class UserProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
         allow_blank=True,
     )
+    tipo_empresa = serializers.ChoiceField(
+        choices=[('pessoa', 'Pessoa física contratante'), ('cnpj', 'Empresa com CNPJ')],
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
+    porte_empresa = serializers.ChoiceField(
+        choices=[('autonomo', 'Autônomo'), ('micro', 'Micro'), ('pequena', 'Pequena'), ('media', 'Média'), ('grande', 'Grande')],
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa')
         read_only_fields = ('foto_perfil', 'subscription_plan')
+
+    def validate(self, attrs):
+        dados = attrs
+        # Quando o pedido está alterando para empresa, exige o perfil de contratante
+        if 'papel' in dados and dados['papel'] == 'empresa':
+            tipo = dados.get('tipo_empresa', self.instance.tipo_empresa if self.instance else None)
+            termos = dados.get('aceitou_termos_empresa', self.instance.aceitou_termos_empresa if self.instance else False)
+            if not tipo:
+                raise serializers.ValidationError({'tipo_empresa': 'Escolha como você vai atuar: pessoa física contratante ou empresa com CNPJ.'})
+            if not termos:
+                raise serializers.ValidationError({'aceitou_termos_empresa': 'Você precisa aceitar os Termos de Uso do perfil de empresa/contratante.'})
+            if tipo == 'cnpj':
+                if not (dados.get('nome_empresa') or (self.instance and self.instance.nome_empresa)):
+                    raise serializers.ValidationError({'nome_empresa': 'Informe o nome da empresa.'})
+                if not (dados.get('ramo_empresa') or (self.instance and self.instance.ramo_empresa)):
+                    raise serializers.ValidationError({'ramo_empresa': 'Informe o ramo/segmento da empresa.'})
+                if not (dados.get('bio_empresa') or (self.instance and self.instance.bio_empresa)):
+                    raise serializers.ValidationError({'bio_empresa': 'Conte o que a empresa faz.'})
+        return super().validate(attrs)
 
     def get_banner(self, obj):
         return obj.banner
