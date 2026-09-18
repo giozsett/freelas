@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Sun,
   Moon,
@@ -18,6 +18,7 @@ import {
   Settings,
   UserRound,
   Plus,
+  BrushCleaning,
 } from 'lucide-react';
 import { useTheme } from '../context/ContextoTema';
 import { useAuth } from '../context/ContextoAutenticacao';
@@ -65,8 +66,9 @@ export default function BarraNavegacao() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { role, toggleRole } = useRole();
-  const { naoLidas, porTipo, notificacoes, chatNaoLidas, carregarLista, marcarLidas } = useNotificacoes();
+  const { naoLidas, porTipo, notificacoes, chatNaoLidas, carregarLista, marcarLidas, limparNotificacoes } = useNotificacoes();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -155,9 +157,16 @@ export default function BarraNavegacao() {
           <span className="fn-brand__mark">F</span>
           <span className="fn-brand__word">Freelas</span>
         </Link>
+        <div className="fn-guest-nav">
+          <Link to="/plans" className="fn-guest-link">Planos</Link>
+        </div>
         <div className="fn-actions fn-actions--guest">
           <ThemeToggle className="fn-theme-btn" />
-          <Link to="/login" className="fn-cta">Entrar</Link>
+          {location.pathname === '/login' ? (
+            <Link to="/register" className="fn-cta">Cadastre-se</Link>
+          ) : (
+            <Link to="/login" className="fn-cta">Entrar</Link>
+          )}
         </div>
       </nav>
     );
@@ -242,11 +251,24 @@ export default function BarraNavegacao() {
     <>
       <div className="fn-panel__notif-head">
         <strong>Notificações</strong>
-        {naoLidas > 0 && (
-          <button type="button" className="fn-panel__mark-read" onClick={() => marcarLidas()}>
-            Marcar todas como lidas
-          </button>
-        )}
+        <div className="fn-panel__notif-actions">
+          {naoLidas > 0 && (
+            <button type="button" className="fn-panel__mark-read" onClick={() => marcarLidas()}>
+              Marcar todas como lidas
+            </button>
+          )}
+          {notificacoes.length > 0 && (
+            <button
+              type="button"
+              className="fn-panel__clear"
+              onClick={() => limparNotificacoes()}
+              title="Limpar notificações"
+              aria-label="Limpar notificações"
+            >
+              <BrushCleaning size={15} />
+            </button>
+          )}
+        </div>
       </div>
       {notificacoes.length === 0 ? (
         <div className="fn-panel__empty">Nenhuma notificação</div>

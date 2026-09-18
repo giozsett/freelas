@@ -28,3 +28,4 @@ channels==4.3.2
 daphne==4.2.3
 cloudinary==1.46.2
 six==1.17.0
+stripe==15.6.1

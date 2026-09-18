@@ -165,7 +165,7 @@ Write-Host 'Iniciando o tunel HTTPS do ngrok...'
 $env:NGROK_AUTHTOKEN = $ngrokAuthToken
 
 $ngrokProcess = Start-Process -FilePath $ngrokExe `
-    -ArgumentList @('http', "$BackendPort", "--authtoken=$ngrokAuthToken", '--log=stdout') `
+    -ArgumentList @('http', "$BackendPort", "--authtoken=$ngrokAuthToken", '--log=stdout', '--pooling-enabled') `
     -PassThru `
     -NoNewWindow `
     -RedirectStandardOutput $NgrokLog `

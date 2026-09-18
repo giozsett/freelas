@@ -4,8 +4,10 @@
 
 
 ## REGRAS DE NEGÓCIO
+- A plataforma deve permitir que usuários não autenticados possam navegar na plataforma, visualizar assinaturas, etc.
 - A plataforma não gera contratos de validade jurídica para cada candidatura aprovada.
-- O limite de anúncios que cada usuário pode postar por mês é definido por seu plano de assinatura;
+- O limite de anúncios que cada usuário pode postar por mês é definido por seu plano de assinatura (Gratuito: 3, Gold: 6, Platinum: ilimitado);
+- O limite de candidaturas que cada usuário pode enviar por mês também é definido por seu plano de assinatura (Gratuito: 5, Gold: 20, Platinum: ilimitado);
 - A plataforma cobra uma taxa de 10% sobre o valor total de cada acordo fechado.
 - Cada anúncio possui um prazo de 30 dias, após isso ele é considerado como vencido, para preservar o sistema de planos de assinatura.
 - Usuários que fizerem muitas denúncias em um curto período de tempo deve tomar um soft ban, suas denúncias não serão mais consideradas por um tempo.
@@ -42,16 +44,37 @@
 - Minhas avaliações: quando um serviço é concluído ambas as partes, contratante e freelancer, devem se avaliar mutuamente. Nesta página devem ficar as avaliações pendentes para que o usuário avalie em estrelas e escreva um comentário opcional. 
     Através desta página o usuário também pode ver as avaliações que ele já enviou.
 
-- Meus pagamentos: Aqui fica o histórico de pagamentos de assinaturas e de serviços/freelas e os cartões que o usuário deixou cadastrados para pagamentos.
+### PAGAMENTOS
+    + O checkout dos pagamentos de assinaturas e de freelas são realizados através do Stripe.
 
-- Planos e Assinaturas: possibilidade de visualização e escolha de um dos planos de assinatura disponíveis.
+#### Telas
+- Meus pagamentos: histórico de pagamentos já realizados.
 
-- Painel da administração
+
+### PLANOS E ASSINATURAS
+- Há 3 planos de assinatura disponíveis:
+    + Gratuito: 
+        3 anúncios por mês
+        5 candidaturas por mês
+
+    + Gold: 
+        6 anúncios por mês
+        20 candidaturas por mês
+
+    + Platinum: 
+        anúncios ilimitados
+        candidaturas ilimitadas
+
+
+### PAINEL DA ADMINISTRAÇÃO
     - Há um login para contas de administradores.
     - Administradores acessam a dashboard da plataforma.
+        - Na dashboard podem ser visualizadas as informações sobre assinaturas dos usuários, quantidades de freelas, denúncias filtrando por tempo.
     - Administradores podem julgar denúncias como 'procedentes' ou 'improcedentes' e visualizar as denúncias pendentes e já julgadas.
     - Administradores podem julgar solicitações de cancelamento.
     - Administradores podem visualizar solicitações de alterações de acordo (mas estas devem ser aprovadas pelo usuário que está no acordo que é o "destinatário" da solicitação de alteração)
 
-- Chat
-    - Conversa entre as partes de um acordo/ freela (SERÁ IMPLEMENTADO POSTERIORMENTE)
+
+### CHAT
+    - Conversa entre as partes de um acordo/ freela
+    - O chat é referente a um 'freela', e dois usuários só podem trocar mensagens após a aprovação da candidatura no anúncio.

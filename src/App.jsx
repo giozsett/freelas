@@ -21,6 +21,7 @@ import PainelModeracao from './pages/PainelModeracao';
 import ConfigurarAssinatura from './pages/ConfigurarAssinatura';
 import MeusPagamentos from './pages/MeusPagamentos';
 import EsqueciSenha from './pages/EsqueciSenha';
+import LinkedinCallback from './components/LinkedinCallback';
 import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
 import { ProvedorDialogo } from './context/ContextoDialogo';
@@ -33,21 +34,22 @@ function App() {
         <BarraNavegacao />
         <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem', flex: 1, width: '100%' }}>
         <Routes>
-          <Route path="/" element={<RotaPrivada><Inicio /></RotaPrivada>} />
+          <Route path="/" element={<Inicio />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/linkedin-callback" element={<LinkedinCallback />} />
           <Route path="/register" element={<Cadastro />} />
           <Route path="/profile" element={<RotaPrivada><Perfil /></RotaPrivada>} />
           <Route path="/profile/edit" element={<RotaPrivada><EditarPerfil /></RotaPrivada>} />
           <Route path="/create-ad" element={<RotaPrivada><CriarAnuncio /></RotaPrivada>} />
           <Route path="/edit-ad/:id" element={<RotaPrivada><EditarAnuncio /></RotaPrivada>} />
-          <Route path="/ad/:id" element={<RotaPrivada><DetalhesAnuncio /></RotaPrivada>} />
+          <Route path="/ad/:id" element={<DetalhesAnuncio />} />
           <Route path="/chat" element={<RotaPrivada><Conversa /></RotaPrivada>} />
           <Route path="/chat/:acordoId" element={<RotaPrivada><Conversa /></RotaPrivada>} />
-          <Route path="/plans" element={<RotaPrivada><Planos /></RotaPrivada>} />
+          <Route path="/plans" element={<Planos />} />
           <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
           <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
           <Route path="/my-applications" element={<RotaPrivada><MinhasCandidaturas /></RotaPrivada>} />
-          <Route path="/user/:id" element={<RotaPrivada><PerfilPublico /></RotaPrivada>} />
+          <Route path="/user/:id" element={<PerfilPublico />} />
           <Route path="/moderator-login" element={<LoginModerador />} />
           <Route path="/moderation-panel" element={<PainelModeracao />} />
           <Route path="/subscription-setup" element={<RotaPrivada><ConfigurarAssinatura /></RotaPrivada>} />

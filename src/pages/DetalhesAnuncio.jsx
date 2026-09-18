@@ -6,59 +6,43 @@ import {
   Briefcase, HandCoins, FileText, LineChart,
 } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
+import LimitePlano from '../components/LimitePlano';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 import { DIAS_SEMANA, PERIODOS, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
 
-// Comentários padrão de reputação (estilo iFood/Mercado Livre) por faixa de
-// nota — o cálculo da nota em si ainda é mockado (ver reputationScore
-// abaixo) até a reputação de usuário ser implementada de verdade.
-function reputacaoInfo(score) {
-  if (score > 80) {
-    return {
-      color: 'var(--success-color)',
-      label: 'Excelente',
-      tags: [
-        { tone: 'positivo', text: 'Entrega no prazo combinado' },
-        { tone: 'positivo', text: 'Boa comunicação durante o serviço' },
-        { tone: 'positivo', text: 'Recomendado por outros usuários' },
-      ],
-    };
-  }
-  if (score > 50) {
-    return {
-      color: 'var(--warning-color)',
-      label: 'Regular',
-      tags: [
-        { tone: 'positivo', text: 'Boa comunicação durante o serviço' },
-        { tone: 'alerta', text: 'Já reagendou compromissos algumas vezes' },
-      ],
-    };
-  }
-  return {
-    color: 'var(--danger-color)',
-    label: 'Baixa',
-    tags: [
-      { tone: 'alerta', text: 'Cancela acordos com frequência' },
-      { tone: 'alerta', text: 'Demora para responder mensagens' },
-    ],
-  };
-}
+// Reputação padrão exibida quando a API não retorna author_reputation
+// (ex.: autor sem perfil associado). Espelha o fallback "sem avaliações"
+// calculado em calcular_reputacao_usuario (backend/core/serializers.py).
+const REPUTACAO_PADRAO = {
+  score: 100,
+  label: 'Excelente',
+  color: 'var(--success-color)',
+  tags: [
+    { tone: 'positivo', text: 'Novo usuário na plataforma' },
+    { tone: 'positivo', text: 'Sem histórico de infrações ou cancelamentos' },
+  ],
+  total_avaliacoes: 0,
+};
 
 export default function AdDetails() {
   const { id } = useParams();
   const { user } = useAuth();
   const { alerta } = useDialogo();
   const navigate = useNavigate();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [proposalPrice, setProposalPrice] = useState('');
+  const [showPriceInput, setShowPriceInput] = useState(false);
   const [proposalText, setProposalText] = useState('');
   const [hasApplied, setHasApplied] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [applicationsCount, setApplicationsCount] = useState(null);
+  const [candidaturaLimiteAtingido, setCandidaturaLimiteAtingido] = useState(false);
 
   const [ad, setAd] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,11 +61,23 @@ export default function AdDetails() {
         }
       })
       .catch(err => console.error(err));
+
+      fetch('http://localhost:8000/api/candidaturas/limite/', {
+        headers: { 'Authorization': `Token ${token}` }
+      })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.atingiu_limite) setCandidaturaLimiteAtingido(true);
+      })
+      .catch(err => console.error(err));
     }
   }, [user, id]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/ads/${id}/`)
+    const token = localStorage.getItem('token');
+    fetch(`http://localhost:8000/api/ads/${id}/`, {
+      headers: token ? { 'Authorization': `Token ${token}` } : {},
+    })
       .then(res => {
         if (!res.ok) throw new Error('Not found');
         return res.json();
@@ -108,7 +104,7 @@ export default function AdDetails() {
           createdAt: data.created_at,
           deadline: data.deadline || null,
           availability: normalizarDisponibilidade(data.availability),
-          reputationScore: 92 // Maintained mock as requested
+          reputation: data.author_reputation || null,
         });
         setIsLoading(false);
       })
@@ -148,7 +144,7 @@ export default function AdDetails() {
       body: JSON.stringify({
         ad: ad.id,
         mensagem: proposalText,
-        valor_proposta: proposalPrice // although 'valor_proposta' is not in model, user put 'proposalPrice'
+        valor_proposta: proposalPrice.trim() !== '' ? proposalPrice : ad.price // sem alteração, mantém o valor original do anúncio
       })
     })
     .then(res => {
@@ -158,6 +154,7 @@ export default function AdDetails() {
         setHasApplied(true);
         setIsModalOpen(false);
         setProposalPrice('');
+        setShowPriceInput(false);
         setProposalText('');
       } else {
         console.error("Erro ao enviar candidatura.");
@@ -216,7 +213,7 @@ export default function AdDetails() {
   const isFreelancerAd = ad.type === 'freelancer';
   const isAuthor = user && user.id === ad.author_id;
   const initial = (ad.author || '?').charAt(0).toUpperCase();
-  const rep = reputacaoInfo(ad.reputationScore);
+  const rep = ad.reputation || REPUTACAO_PADRAO;
   const diasNoAr = ad.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(ad.createdAt)) / 86400000))
     : null;
@@ -282,7 +279,7 @@ export default function AdDetails() {
               </div>
             )}
           </div>
-          <button onClick={() => setIsReportModalOpen(true)} className="icon-btn-ghost" title="Denunciar Anúncio">
+          <button onClick={() => exigirAutenticacao(() => setIsReportModalOpen(true))} className="icon-btn-ghost" title="Denunciar Anúncio">
             <Flag size={18} />
           </button>
         </div>
@@ -403,12 +400,23 @@ export default function AdDetails() {
               </div>
               <button
                 className="ad-cta"
-                onClick={() => !hasApplied && !isExpired && setIsModalOpen(true)}
-                disabled={hasApplied || isExpired}
+                onClick={() => !hasApplied && !isExpired && !candidaturaLimiteAtingido && exigirAutenticacao(() => setIsModalOpen(true))}
+                disabled={hasApplied || isExpired || candidaturaLimiteAtingido}
               >
                 <Star size={18} fill="currentColor" />
-                {isExpired ? 'Anúncio expirado' : hasApplied ? 'Candidatura Pendente' : 'Candidatar-se'}
+                {isExpired
+                  ? 'Anúncio expirado'
+                  : hasApplied
+                  ? 'Candidatura Pendente'
+                  : candidaturaLimiteAtingido
+                  ? 'Limite de candidaturas atingido'
+                  : 'Candidatar-se'}
               </button>
+              {candidaturaLimiteAtingido && !hasApplied && !isExpired && (
+                <p style={{ fontSize: '0.8rem', color: 'var(--danger-color)', marginTop: '0.6rem', marginBottom: 0 }}>
+                  Você atingiu o limite de candidaturas do seu plano este mês. <Link to="/plans" style={{ color: 'inherit', fontWeight: 600 }}>Ver planos</Link>
+                </p>
+              )}
             </div>
           )}
 
@@ -421,11 +429,15 @@ export default function AdDetails() {
             </div>
             <div className="rep-score-row">
               <div className="rep-score-track">
-                <div className="rep-score-marker" style={{ left: `${ad.reputationScore}%`, border: `3px solid ${rep.color}` }} />
+                <div className="rep-score-marker" style={{ left: `${rep.score}%`, border: `3px solid ${rep.color}` }} />
               </div>
               <span className="rep-score-label" style={{ color: rep.color }}>{rep.label}</span>
             </div>
-            <p className="rep-note">Cálculo a implementar — comentários abaixo resumem o histórico do usuário.</p>
+            <p className="rep-note">
+              {rep.total_avaliacoes > 0
+                ? `Baseado em ${rep.total_avaliacoes} ${rep.total_avaliacoes === 1 ? 'avaliação recebida' : 'avaliações recebidas'}.`
+                : 'Ainda sem avaliações recebidas nesta função.'}
+            </p>
             <div className="reputation-tags">
               {rep.tags.map(tag => (
                 <span key={tag.text} className={`reputation-tag ${tag.tone}`}>
@@ -443,7 +455,7 @@ export default function AdDetails() {
         <div className="mf-modal-backdrop">
            <div className="mf-modal" style={{ width: '100%', maxWidth: '500px' }}>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => { setIsModalOpen(false); setProposalPrice(''); setShowPriceInput(false); }}
                 style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
               >
                 <X size={24} />
@@ -451,23 +463,13 @@ export default function AdDetails() {
 
               <h2 style={{ fontSize: '1.8rem', marginBottom: '1.5rem', paddingRight: '2rem' }}>Enviar Proposta</h2>
 
-              <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '2rem' }}>
+              <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '1.5rem' }}>
                 Apresente-se ao autor do anúncio e descreva por que você é a escolha certa. Se desejar, faça uma contra-proposta de valor.
               </p>
 
-              <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                 <div>
-                    <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor da Proposta (R$)</label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder={`Valor original: R$ ${ad.price}`}
-                      value={proposalPrice}
-                      onChange={(e) => setProposalPrice(e.target.value)}
-                      required
-                    />
-                 </div>
+              <LimitePlano recurso="candidaturas" />
 
+              <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                  <div>
                     <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Sua Mensagem de Apresentação</label>
                     <textarea
@@ -480,8 +482,36 @@ export default function AdDetails() {
                     ></textarea>
                  </div>
 
+                 <div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      Valor do anúncio: <strong style={{ color: 'var(--text-color)' }}>R$ {ad.price}</strong>
+                      {!showPriceInput && (
+                        <>
+                          {' · '}
+                          <button
+                            type="button"
+                            onClick={() => setShowPriceInput(true)}
+                            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+                          >
+                            propor outro valor
+                          </button>
+                        </>
+                      )}
+                    </p>
+                    {showPriceInput && (
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder={`Ex: ${ad.price}`}
+                        value={proposalPrice}
+                        onChange={(e) => setProposalPrice(e.target.value)}
+                        style={{ maxWidth: '180px', fontSize: '0.9rem', padding: '0.5rem 0.75rem', marginTop: '0.5rem' }}
+                      />
+                    )}
+                 </div>
+
                  <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setIsModalOpen(false); setProposalPrice(''); setShowPriceInput(false); }}>Cancelar</button>
                     <button type="submit" className="btn dark-text" style={{ flex: 1 }}>Enviar Apresentação</button>
                  </div>
               </form>

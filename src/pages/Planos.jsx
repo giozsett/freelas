@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 
 export default function Plans() {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [loadingPlan, setLoadingPlan] = useState(null);
   const { alerta } = useDialogo();
 
@@ -16,6 +18,7 @@ export default function Plans() {
       name: 'Gratuito',
       price: 'R$ 0/mês',
       ads: 3,
+      candidaturas: 5,
       color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
@@ -24,7 +27,8 @@ export default function Plans() {
       id: 'gold',
       name: 'Gold',
       price: 'R$ 29,90/mês',
-      ads: 10,
+      ads: 6,
+      candidaturas: 20,
       color: 'var(--holo-gradient-gold)',
       badge: 'Mais Popular',
       icon: <Star size={32} />
@@ -34,6 +38,7 @@ export default function Plans() {
       name: 'Platinum',
       price: 'R$ 79,90/mês',
       ads: 'Ilimitados',
+      candidaturas: 'Ilimitadas',
       color: 'var(--holo-gradient-platinum)',
       badge: 'Profissional',
       icon: <Gem size={32} />
@@ -43,7 +48,7 @@ export default function Plans() {
   const handleSubscribe = async (planId) => {
     const checkoutWindow = planId === 'free' ? null : window.open('', '_blank');
     if (planId !== 'free' && !checkoutWindow) {
-      await alerta('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
+      await alerta('Permita pop-ups para abrir o checkout do Stripe em uma nova aba.', { titulo: 'Não foi possível abrir o checkout', variante: 'perigo' });
       return;
     }
 
@@ -64,15 +69,11 @@ export default function Plans() {
       if (data.checkout_required && data.init_point) {
         checkoutWindow.opener = null;
         checkoutWindow.location.href = data.init_point;
-        if (data.test_approved) {
-          navigate('/my-payments?checkout=academic-approved');
-        } else {
-          setLoadingPlan(null);
-        }
+        setLoadingPlan(null);
       } else if (!data.checkout_required) {
         navigate('/my-payments');
       } else {
-        throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+        throw new Error('O Stripe não retornou o endereço do checkout.');
       }
     } catch (err) {
       if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
@@ -122,16 +123,12 @@ export default function Plans() {
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                 <CheckCircle size={20} />
-                <span>Acesso a todos os freelancers e contratantes</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span>Chat integrado</span>
+                <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês</span>
               </li>
             </ul>
 
             <button
-              onClick={() => handleSubscribe(plan.id)}
+              onClick={() => exigirAutenticacao(() => handleSubscribe(plan.id))}
               className="btn plan-subscribe-btn"
               disabled={loadingPlan !== null}
               style={{

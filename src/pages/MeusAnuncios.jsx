@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useNotificacoes } from '../context/ContextoNotificacao';
+import LimitePlano from '../components/LimitePlano';
 
 export default function MyAds() {
   const { user } = useAuth();
@@ -63,6 +64,8 @@ export default function MyAds() {
           </div>
         </div>
       </div>
+
+      <LimitePlano recurso="anuncios" />
 
       {/* Summary bar */}
       {myAds.length > 0 && (

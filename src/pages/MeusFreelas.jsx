@@ -11,6 +11,7 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 import { useNotificacoes } from '../context/ContextoNotificacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 function AgreementSteps({ status, isPaid }) {
   const steps = [
@@ -107,6 +108,7 @@ export default function MeusFreelas() {
   const { confirmar } = useDialogo();
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
+  const tabsScrollRef = useScrollEdges();
 
   useEffect(() => { marcarLidas(['acordo']); }, [marcarLidas]);
 
@@ -138,7 +140,7 @@ export default function MeusFreelas() {
   const handlePayService = async (acordoId) => {
     const checkoutWindow = window.open('', '_blank');
     if (!checkoutWindow) {
-      showStatus('Permita pop-ups para abrir o checkout do Mercado Pago em uma nova aba.', 'error');
+      showStatus('Permita pop-ups para abrir o checkout do Stripe em uma nova aba.', 'error');
       return;
     }
     setPayingAgreementId(acordoId);
@@ -154,15 +156,10 @@ export default function MeusFreelas() {
       if (data.checkout_required && data.init_point) {
         checkoutWindow.opener = null;
         checkoutWindow.location.href = data.init_point;
-        if (data.test_approved) {
-          showStatus('Checkout aberto. Pagamento registrado e freela movido para Em andamento.', 'success');
-          fetchAgreements();
-        } else {
-          showStatus('Checkout aberto. O freela será iniciado após a aprovação do pagamento.', 'success');
-        }
+        showStatus('Checkout aberto. O freela será iniciado após a aprovação do pagamento.', 'success');
         setPayingAgreementId(null);
       } else {
-        throw new Error('O Mercado Pago não retornou o endereço do checkout.');
+        throw new Error('O Stripe não retornou o endereço do checkout.');
       }
     } catch (err) {
       if (!checkoutWindow.closed) checkoutWindow.close();
@@ -289,8 +286,8 @@ export default function MeusFreelas() {
     const checkout = params.get('checkout');
     if (checkout) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      if (checkout === 'success') showStatus('Pagamento enviado. Aguardando a confirmação do Mercado Pago.', 'success');
-      else if (checkout === 'pending') showStatus('O pagamento está em análise no Mercado Pago.', 'success');
+      if (checkout === 'success') showStatus('Pagamento enviado. Aguardando a confirmação do Stripe.', 'success');
+      else if (checkout === 'pending') showStatus('O pagamento está em análise no Stripe.', 'success');
       else showStatus('O pagamento não foi concluído. Você pode tentar novamente.', 'error');
       fetchAgreements();
     }
@@ -429,7 +426,7 @@ export default function MeusFreelas() {
       </div>
 
       {/* Segmented tabs */}
-      <div className="mf-tabs">
+      <div className="mf-tabs" ref={tabsScrollRef}>
         {[
           ['ativos', 'Em andamento', pendingPaymentAgreements.length + activeAgreements.length],
           ['concluidos', 'Concluídos', completedAgreements.length],
@@ -464,7 +461,7 @@ export default function MeusFreelas() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="mf-card__badges">
-                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast)' }}>Pendente de Aprovação</span>
+                        <span className="badge" style={{ background: 'var(--primary)', color: 'var(--role-contrast) !important' }}>Pendente de Aprovação</span>
                       </div>
                       <h4 style={{ margin: '0.25rem 0 0.35rem', fontSize: '1.1rem' }}>{app.titulo_anuncio}</h4>
                       <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
@@ -527,12 +524,12 @@ export default function MeusFreelas() {
                       <div className="mf-card__summary">
                         <div style={{ minWidth: 0 }}>
                           <div className="mf-card__badges">
-                            <span className="badge" style={{ background: 'var(--pending-accent)', color: 'var(--pending-accent-contrast)', fontSize: '0.75rem' }}>Pendente de Pagamento</span>
+                            <span className="badge" style={{ background: 'var(--pending-accent)', color: 'var(--pending-accent-contrast) !important', fontSize: '0.75rem' }}>Pendente de Pagamento</span>
                             <span className="badge role-badge" style={{ fontSize: '0.75rem' }}>
                               Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                             </span>
                             {app.cancelamento_pendente && (
-                              <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast) !important', fontSize: '0.75rem' }}>
                                 <Ban size={11} /> Cancelamento Pendente
                               </span>
                             )}
@@ -544,7 +541,7 @@ export default function MeusFreelas() {
                           </div>
                           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
                             {userIsContractor
-                              ? 'Para ativar este acordo, conclua o pagamento no checkout seguro do Mercado Pago.'
+                              ? 'Para ativar este acordo, conclua o pagamento no checkout seguro do Stripe.'
                               : 'Aguardando o contratante concluir o pagamento para iniciar o projeto.'}
                           </p>
                         </div>
@@ -553,6 +550,12 @@ export default function MeusFreelas() {
                           <div className="mf-card__price-value">
                             {Number(app.valor_acordado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </div>
+                          {userIsContractor && (
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                              + taxa da plataforma (10%): {Number(app.taxa_plataforma || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {' · '}Total {Number(app.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -614,12 +617,12 @@ export default function MeusFreelas() {
                               Seu Papel: {userIsContractor ? 'Contratante' : 'Freelancer'}
                             </span>
                             {app.tem_solicitacao && (
-                              <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning-color)', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning-color) !important', fontSize: '0.75rem' }}>
                                 <Bell size={11} /> Alteração Pendente
                               </span>
                             )}
                             {app.cancelamento_pendente && (
-                              <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger-color) !important', fontSize: '0.75rem' }}>
                                 <Ban size={11} /> Cancelamento Pendente
                               </span>
                             )}
@@ -907,7 +910,7 @@ export default function MeusFreelas() {
                   style={{ resize: 'vertical' }}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="mf-budget-grid">
                 <div>
                   <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.92rem' }}>Novo Orçamento (R$)</label>
                   <input type="number" step="0.01" className="input" placeholder="Ex: 1500.00"

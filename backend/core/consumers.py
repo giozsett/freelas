@@ -155,3 +155,105 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await sync_to_async(_marcar_lidas_sync)(
                 self.acordo_id, self.scope['user'].id
             )
+
+
+class NotificacaoConsumer(AsyncJsonWebsocketConsumer):
+    """Consumer WebSocket das notificações — entrega em tempo real via Redis
+    Pub/Sub, no mesmo padrão do chat.
+
+    Fluxo:
+    1. O cliente conecta em `/ws/notificacoes/?token=<token>`.
+    2. O consumer autentica pelo token REST e assina o canal pessoal
+       `notif:{user_id}:pubsub`.
+    3. Ao conectar, envia um snapshot (`sincronizacao`) com o estado atual
+       (não lidas de notificações e de chat), cobrindo o período em que o
+       usuário esteve desconectado.
+    4. Quando `core.notificacoes` (ou `core.chat`) publica no canal, o evento
+       é repassado ao navegador em tempo real.
+    """
+
+    async def connect(self):
+        from asgiref.sync import sync_to_async
+
+        from .notificacoes import resumo_nao_lidas
+
+        user = await sync_to_async(_autenticar_por_token)(self._obter_token())
+        if user is None or user.is_anonymous:
+            await self.close(code=4401)
+            return
+
+        self.scope['user'] = user
+        self._pubsub_task = None
+        self._redis_client = None
+
+        await self.accept()
+
+        # Snapshot inicial: notificações não lidas + chat não lido.
+        resumo = await sync_to_async(resumo_nao_lidas)(user)
+        from .chat import total_nao_lidas_usuario
+
+        chat_total = await sync_to_async(total_nao_lidas_usuario)(user)
+        await self.send_json({
+            'tipo': 'sincronizacao',
+            'naoLidas': resumo['naoLidas'],
+            'tipos': resumo['tipos'],
+            'chatNaoLidas': chat_total,
+        })
+
+        from .notificacoes import canal_notificacoes
+
+        self._pubsub_task = asyncio.create_task(
+            self._escutar_pubsub(canal_notificacoes(user.id)),
+            name=f'notificacoes_{user.id}',
+        )
+
+    async def _escutar_pubsub(self, canal):
+        import redis.asyncio as aioredis
+
+        try:
+            self._redis_client = aioredis.from_url(_redis_url())
+            pubsub = self._redis_client.pubsub()
+            await pubsub.subscribe(canal)
+
+            while True:
+                try:
+                    mensagem = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=1.0
+                    )
+                except asyncio.TimeoutError:
+                    continue
+                except Exception:
+                    break
+                if mensagem is None:
+                    continue
+                try:
+                    payload = json.loads(mensagem['data'])
+                except (TypeError, ValueError):
+                    continue
+                await self.send_json(payload)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+        finally:
+            try:
+                if self._redis_client is not None:
+                    await self._redis_client.aclose()
+            except Exception:
+                pass
+
+    async def disconnect(self, code):
+        if getattr(self, '_pubsub_task', None):
+            self._pubsub_task.cancel()
+            try:
+                await self._pubsub_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._pubsub_task = None
+
+    def _obter_token(self):
+        qs = (self.scope.get('query_string') or b'').decode('utf-8', 'ignore')
+        for parte in qs.split('&'):
+            if parte.startswith('token='):
+                return parte.split('=', 1)[1]
+        return ''

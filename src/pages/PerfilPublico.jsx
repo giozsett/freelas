@@ -3,15 +3,20 @@ import { useParams } from 'react-router-dom';
 import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import IconeRedeSocial from '../components/IconeRedeSocial';
+import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
+import useScrollEdges from '../hooks/useScrollEdges';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 
 const API = 'http://localhost:8000';
 
 export default function PublicProfile() {
   const { id } = useParams();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(false);
   const [activeTab, setActiveTab] = useState('skills');
+  const tabsScrollRef = useScrollEdges();
   const [isLoading, setIsLoading] = useState(true);
 
   const [user, setUser] = useState({
@@ -37,6 +42,7 @@ export default function PublicProfile() {
     roles: [],
     reviews: [],
   });
+  const [reputacao, setReputacao] = useState({ freelancer: null, contratante: null });
 
   useEffect(() => {
     setIsLoading(true);
@@ -82,6 +88,7 @@ export default function PublicProfile() {
           ],
           reviews: Array.isArray(data.avaliacoes_recebidas) ? data.avaliacoes_recebidas : [],
         }));
+        if (data.reputacao) setReputacao(data.reputacao);
         setIsLoading(false);
       })
       .catch(err => {
@@ -155,7 +162,7 @@ export default function PublicProfile() {
                 {user.profile?.disponivel ? 'Disponível' : 'Indisponível'}
               </span>
               <button
-                onClick={() => setIsReportModalOpen(true)}
+                onClick={() => exigirAutenticacao(() => setIsReportModalOpen(true))}
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--danger-color)', cursor: 'pointer' }}
                 title="Denunciar Usuário"
               >
@@ -228,8 +235,16 @@ export default function PublicProfile() {
           <p style={{ fontSize: '1.1rem', lineHeight: 1.8, overflowWrap: 'anywhere' }}>{user.profile?.bio || 'Sem biografia.'}</p>
         </section>
 
+        <section className="profile-section">
+          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Reputação</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <TermometroReputacao titulo="Reputação como Freelancer" reputacao={reputacao.freelancer} />
+            <TermometroReputacao titulo="Reputação como Contratante" reputacao={reputacao.contratante} />
+          </div>
+        </section>
+
         {/* Tabs */}
-        <div className="profile-tabs" role="tablist" aria-label="Informações do perfil">
+        <div className="profile-tabs scroll-fade scroll-fade--bg" role="tablist" aria-label="Informações do perfil" ref={tabsScrollRef}>
           {[
             { key: 'skills', label: 'Habilidades e Especialidades' },
             { key: 'experiencia', label: `Experiência${user.profile?.experiencias?.length > 0 ? ` (${user.profile.experiencias.length})` : ''}` },

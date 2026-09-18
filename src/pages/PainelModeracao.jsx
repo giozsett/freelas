@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/ContextoAutenticacao';
 import DashboardModeracao from './DashboardModeracao';
 import { useDialogo } from '../context/ContextoDialogo';
+import useScrollEdges from '../hooks/useScrollEdges';
 
 const API = 'http://localhost:8000';
 const PAGE_SIZE = 10;
@@ -101,10 +102,11 @@ function ReportTable({
   onDecision,
 }) {
   const rows = data.results || [];
+  const scrollRef = useScrollEdges();
 
   return (
     <>
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+      <div ref={scrollRef} className="scroll-fade" style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
           <thead style={{ background: 'var(--surface-color)', textAlign: 'left' }}>
             <tr>
@@ -203,10 +205,11 @@ function RequestTable({
 }) {
   const isCancellation = kind === 'cancelamentos';
   const rows = data.results || [];
+  const scrollRef = useScrollEdges();
 
   return (
     <>
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+      <div ref={scrollRef} className="scroll-fade" style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '780px' }}>
           <thead style={{ background: 'var(--surface-color)', textAlign: 'left' }}>
             <tr>
@@ -350,6 +353,7 @@ export default function ModerationPanel() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const tabsScrollRef = useScrollEdges();
   const [reports, setReports] = useState({ count: 0, results: [] });
   const [cancelamentos, setCancelamentos] = useState({ count: 0, results: [] });
   const [alteracoes, setAlteracoes] = useState({ count: 0, results: [] });
@@ -540,7 +544,7 @@ export default function ModerationPanel() {
         <button type="button" onClick={handleLogout} className="btn btn-secondary">Sair</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' }}>
+      <div ref={tabsScrollRef} className="scroll-fade scroll-fade--bg" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' }}>
         {tabs.map(([id, label]) => (
           <button
             type="button"
