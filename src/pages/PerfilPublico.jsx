@@ -72,7 +72,15 @@ export default function PublicProfile() {
             telefone_visivel: data.profile?.telefone_visivel !== undefined ? data.profile.telefone_visivel : true,
             certificados: data.profile?.certificados || [],
             experiencias: data.profile?.experiencias || [],
-            curriculo: data.profile?.curriculo || null
+            curriculo: data.profile?.curriculo || null,
+            papel: data.profile?.papel || null,
+            tipo_empresa: data.profile?.tipo_empresa || null,
+            nome_empresa: data.profile?.nome_empresa || '',
+            bio_empresa: data.profile?.bio_empresa || '',
+            ramo_empresa: data.profile?.ramo_empresa || '',
+            porte_empresa: data.profile?.porte_empresa || '',
+            cnpj: data.profile?.cnpj || '',
+            site_empresa: data.profile?.site_empresa || '',
           },
           roles: [
             {
@@ -115,6 +123,12 @@ export default function PublicProfile() {
     );
   }
 
+  const ehEmpresaCnpj = user.profile?.papel === 'empresa' && user.profile?.tipo_empresa === 'cnpj';
+  const nomeExibido = ehEmpresaCnpj && user.profile?.nome_empresa ? user.profile.nome_empresa : user.name;
+  const bioExibida = ehEmpresaCnpj && user.profile?.bio_empresa
+    ? user.profile.bio_empresa
+    : (user.profile?.bio || 'Sem biografia.');
+
   return (
     <div className="profile-page">
       <div className="card profile-card fade-in">
@@ -139,13 +153,13 @@ export default function PublicProfile() {
               <img src={user.profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
-                {user.name.charAt(0)}
+                {nomeExibido.charAt(0)}
               </span>
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{user.name}</h1>
+              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{nomeExibido}</h1>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -180,6 +194,25 @@ export default function PublicProfile() {
                 </div>
               ))}
             </div>
+
+            {ehEmpresaCnpj && (
+              <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '1rem', opacity: 0.85 }}>
+                {user.profile?.ramo_empresa && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Briefcase size={18} /> {user.profile.ramo_empresa}
+                  </span>
+                )}
+                {user.profile?.porte_empresa && (
+                  <span>{user.profile.porte_empresa}</span>
+                )}
+                {user.profile?.cnpj && (
+                  <span>CNPJ {user.profile.cnpj}</span>
+                )}
+                {user.profile?.site_empresa && (
+                  <a href={user.profile.site_empresa} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline', wordBreak: 'break-all' }}>{user.profile.site_empresa}</a>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '1rem', opacity: 0.85 }}>
               {user.profile?.cidade && (
@@ -231,8 +264,8 @@ export default function PublicProfile() {
         )}
 
         <section className="profile-section">
-          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
-          <p style={{ fontSize: '1.1rem', lineHeight: 1.8, overflowWrap: 'anywhere' }}>{user.profile?.bio || 'Sem biografia.'}</p>
+          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>{ehEmpresaCnpj ? 'Sobre a Empresa' : 'Sobre Mim'}</h2>
+          <p style={{ fontSize: '1.1rem', lineHeight: 1.8, overflowWrap: 'anywhere' }}>{bioExibida}</p>
         </section>
 
         <section className="profile-section">

@@ -26,6 +26,7 @@ from .models import Certificado, InstituicaoEnsino, Experiencia
 from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.models import SocialAccount
+from .validacao_senha import validar_forca_senha
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,6 @@ class RegisterAPI(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        token, created = Token.objects.get_or_create(user=user)
         # Cria o UserProfile imediatamente no cadastro comum
         UserProfile.objects.get_or_create(
             user=user,
@@ -47,9 +47,25 @@ class RegisterAPI(generics.GenericAPIView):
                 'email': user.email,
             }
         )
+        # Gera e envia o código de confirmação do email
+        verificacao, _ = VerificacaoEmail.objects.get_or_create(usuario=user)
+        verificacao.verificado = False
+        verificacao.gerar_codigo()
+        try:
+            send_mail(
+                subject='Confirme seu email - Freelas',
+                message=f'Olá, {user.first_name}!\n\nSeu código de confirmação é: {verificacao.codigo}\n\nEle expira em 10 minutos.\n\nEquipe Freelas',
+                from_email=None,
+                recipient_list=[user.email],
+            )
+        except Exception:
+            # Se falhar, o usuário pode solicitar um novo código na tela de verificação
+            pass
+        # Nenhum token emitido: o acesso só é liberado após confirmar o email
         return Response({
-            "user": UserSerializer(user, context=self.get_serializer_context()).data,
-            "token": token.key
+            'message': 'Cadastro realizado. Confirme seu email para entrar.',
+            'email': user.email,
+            'user': UserSerializer(user, context=self.get_serializer_context()).data,
         })
 
 class LoginAPI(APIView):
@@ -60,6 +76,11 @@ class LoginAPI(APIView):
         password = request.data.get("password")
         user = authenticate(username=username, password=password)
         if user:
+            if VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists():
+                return Response(
+                    {'error': 'Confirme seu email para poder entrar.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             token, created = Token.objects.get_or_create(user=user)
             return Response({
                 "user": UserSerializer(user).data,
@@ -68,6 +89,37 @@ class LoginAPI(APIView):
         if not User.objects.filter(username=username).exists():
             return Response({"error": "email_not_found"}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"error": "wrong_credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+class ExcluirContaAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        senha = request.data.get('senha', '')
+        if not request.user.check_password(senha):
+            return Response({"error": "Senha incorreta."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            profile = request.user.profile
+            profile.deletado = True
+            profile.nome_completo = "Usuário removido"
+            profile.email = f"deletado_{request.user.id}@freelas.local"
+            profile.bio = ""
+            profile.foto_perfil = None
+            profile.banner = None
+            profile.save()
+
+            user = request.user
+            user.is_active = False
+            user.save()
+
+            Token.objects.filter(user=request.user).delete()
+
+            return Response({"mensagem": "Conta excluída com sucesso."}, status=status.HTTP_200_OK)
+        except Exception:
+            logger.exception("Erro inesperado ao excluir a conta do usuário %s", request.user.id)
+            return Response(
+                {"error": "Erro interno ao excluir a conta. Tente novamente mais tarde."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class UserAPI(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -144,6 +196,8 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
         import cloudinary.uploader
         try:
             public_id = url.split('/image/upload/')[-1].split('?')[0]
+            if '.' in public_id.rsplit('/', 1)[-1]:
+                public_id = public_id.rsplit('.', 1)[0]
             cloudinary.uploader.destroy(public_id, resource_type='image', invalidate=True)
         except Exception:
             pass
@@ -207,7 +261,7 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.IsAuthenticated()]
+            return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
@@ -232,7 +286,8 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         # Uma denúncia nova nunca pode chegar do cliente já julgada, e quem
         # denunciou é sempre o usuário autenticado (nunca o que o cliente
         # mandar no corpo) — reporter já é read-only no serializer.
-        serializer.save(status='pending', reporter=self.request.user)
+        reporter = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(status='pending', reporter=reporter)
 
 class ReportUpdateAPIView(generics.UpdateAPIView):
     queryset = Report.objects.all()
@@ -569,7 +624,7 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
                     tipo='candidatura',
                     titulo='Candidatura recusada',
                     mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
-                    link='/my-applications',
+                    link='/my-freelas?tab=candidaturas',
                     ad=candidatura.ad,
                 )
 
@@ -1022,6 +1077,10 @@ class RedefinirSenhaAPI(APIView):
 
         if verificacao.codigo != codigo:
             return Response({'error': 'Código incorreto.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        erro_senha = validar_forca_senha(nova_senha)
+        if erro_senha:
+            return Response({'error': erro_senha}, status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(nova_senha)
         user.save()

@@ -985,6 +985,11 @@ export default function EditProfile() {
               placeholder={BIO_PLACEHOLDER[role] || BIO_PLACEHOLDER.freelancer}
               style={{ resize: 'none' }}
             ></textarea>
+            {role === 'contractor' && authUser?.profile?.tipo_empresa === 'cnpj' && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                Como sua conta é uma empresa com CNPJ, o texto exibido no perfil é o de <strong>Sobre a Empresa</strong>, editável em Configurações &gt; Dados da empresa.
+              </p>
+            )}
           </div>
 
           {/* Categories */}

@@ -178,13 +178,13 @@ class PagamentoAPITests(TestCase):
         )
         construct_event.return_value = {
             'type': 'checkout.session.completed',
-            'data': {'object': {
+            'data': {'object': FakeStripeObject({
                 'client_reference_id': pagamento.referencia_externa,
                 'amount_total': 125000,
                 'currency': 'brl',
                 'payment_status': 'paid',
                 'payment_intent': 'pi_teste123',
-            }},
+            })},
         }
 
         response = self.client.post(
@@ -1251,7 +1251,7 @@ class CadastroConflitoEmailTests(TestCase):
         resp = self.client.post('/api/auth/register/', {
             'username': 'novo_usuario',
             'email': self.fake_identity['email'],
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Novo',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -1262,7 +1262,7 @@ class CadastroConflitoEmailTests(TestCase):
         resp = self.client.post('/api/auth/register/', {
             'username': 'outro_usuario',
             'email': self.fake_identity['email'],
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Outro',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -1285,6 +1285,67 @@ class CadastroConflitoEmailTests(TestCase):
         resp2 = self._post_google()
         self.assertEqual(resp2.status_code, 200)
         self.assertEqual(resp2.data['token'], token1)
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class VerificacaoEmailTests(TestCase):
+    """Cadastro manual exige confirmação do email antes de entrar no site."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def _registrar(self):
+        return self.client.post('/api/auth/register/', {
+            'username': 'novo@example.com',
+            'email': 'novo@example.com',
+            'password': 'Abcdef1@',
+            'first_name': 'Novo',
+        }, format='json')
+
+    def test_registro_nao_emite_token_e_cria_codigo(self):
+        resp = self._registrar()
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('token', resp.data)
+        user = User.objects.get(email='novo@example.com')
+        verificacao = VerificacaoEmail.objects.get(usuario=user)
+        self.assertFalse(verificacao.verificado)
+        self.assertTrue(verificacao.codigo)
+
+    def test_login_bloqueado_antes_de_confirmar_email(self):
+        self._registrar()
+        resp = self.client.post('/api/auth/login/', {
+            'username': 'novo@example.com',
+            'password': 'Abcdef1@',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('Confirme seu email', str(resp.data))
+
+    def test_codigo_incorreto_rejeitado(self):
+        self._registrar()
+        resp = self.client.post('/api/auth/verificar-codigo/', {
+            'email': 'novo@example.com',
+            'codigo': '000000',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_confirma_email_e_libera_acesso(self):
+        self._registrar()
+        user = User.objects.get(email='novo@example.com')
+        codigo = VerificacaoEmail.objects.get(usuario=user).codigo
+
+        resp = self.client.post('/api/auth/verificar-codigo/', {
+            'email': 'novo@example.com',
+            'codigo': codigo,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('token', resp.data)
+        self.assertTrue(VerificacaoEmail.objects.get(usuario=user).verificado)
+
+        login = self.client.post('/api/auth/login/', {
+            'username': 'novo@example.com',
+            'password': 'Abcdef1@',
+        }, format='json')
+        self.assertEqual(login.status_code, 200)
 
 
 class AutenticacaoSenhaAPITests(TestCase):
@@ -1374,9 +1435,10 @@ class AutenticacaoSenhaAPITests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn('token', response.data)
+        self.assertNotIn('token', response.data)
         user = User.objects.get(username='valida@example.com')
         self.assertTrue(user.check_password(self.SENHA_VALIDA))
+        self.assertTrue(VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists())
 
     # ---------- Redefinição de senha (RedefinirSenhaAPI) ----------
 

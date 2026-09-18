@@ -23,9 +23,9 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const location = useLocation();
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
-  const location = useLocation();
   const { login } = useAuth();
   const destinoPosLogin = location.state?.from
     ? `${location.state.from.pathname}${location.state.from.search || ''}`
@@ -122,6 +122,7 @@ export default function Login() {
               <input
                 type="email"
                 className="input"
+                style={{ padding: '0.6rem 0.9rem' }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="exemplo@email.com"
@@ -155,7 +156,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
+          <div style={{ margin: '1rem 0', textAlign: 'center', position: 'relative' }}>
             <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
             <span style={{ position: 'relative', zIndex: 2, background: 'var(--surface-color)', padding: '0 1rem', fontWeight: 'bold', fontSize: '0.8rem' }}>OU</span>
           </div>
@@ -189,7 +190,7 @@ export default function Login() {
             </button>
           </div>
 
-          <p style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <p style={{ marginTop: '1rem', textAlign: 'center' }}>
             Não tem uma conta? <Link to="/register" style={{ fontWeight: 'bold', textDecoration: 'underline' }}>Cadastre-se</Link>
           </p>
         </div>
