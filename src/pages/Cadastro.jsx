@@ -45,12 +45,32 @@ export default function Cadastro() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!name.trim()) {
+      setErrorMsg('Por favor, preencha seu nome completo.');
+      return;
+    }
+    if (!email.trim()) {
+      setErrorMsg('Por favor, preencha seu e-mail.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrorMsg('Digite um e-mail válido.');
+      return;
+    }
+    if (!password) {
+      setErrorMsg('Por favor, preencha sua senha.');
+      return;
+    }
+    if (!confirmPassword) {
+      setErrorMsg('Por favor, confirme sua senha.');
+      return;
+    }
     if (password !== confirmPassword) {
       setErrorMsg('As senhas não coincidem!');
       return;
     }
     if (passwordStrength === 'Fraca') {
-      setErrorMsg('Sua senha é Fraca. Utilize letras e números no mínimo.');
+      setErrorMsg('Sua senha é fraca.\nA senha precisa ter no mínimo 6 caracteres, e, pelo menos, 1 número e 1 letra.');
       return;
     }
     if (!agreedToTerms) {
@@ -185,7 +205,7 @@ export default function Cadastro() {
                 style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
               />
             </div>
-            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.65rem 0.8rem', textAlign: 'left', fontSize: '0.9rem', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{errorMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
               Verificar
             </button>
@@ -204,7 +224,7 @@ export default function Cadastro() {
   // ── Etapa de cadastro ──
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-      <div style={{ maxWidth: '500px', margin: '4rem auto' }}>
+      <div style={{ maxWidth: '500px', margin: '1.5rem auto' }}>
         <div className="card fade-in">
           <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Crie sua conta</h1>
 
@@ -237,7 +257,7 @@ export default function Cadastro() {
             </button>
           </div>
 
-          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.65rem 0.8rem', marginBottom: '1.5rem', textAlign: 'left', fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'pre-line', fontFamily: "'Outfit', sans-serif" }}>{errorMsg}</div>}
 
           <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
             <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
@@ -246,18 +266,18 @@ export default function Cadastro() {
 
           <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nome Completo</label>
-              <input type="text" className="input" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Seu nome" />
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nome Completo <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+              <input type="text" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
             </div>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail</label>
-              <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="exemplo@email.com" />
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+              <input type="text" className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@email.com" />
             </div>
             <div className="form-row">
               <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha</label>
+                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha <span style={{ color: 'var(--danger-color)' }}>*</span></label>
                 <div className="password-field">
-                  <input type={showPassword ? 'text' : 'password'} className="input" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Sua senha" />
+                  <input type={showPassword ? 'text' : 'password'} className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" />
                   <button
                     type="button"
                     className="password-toggle"
@@ -269,8 +289,8 @@ export default function Cadastro() {
                 </div>
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a Senha</label>
-                <input type={showPassword ? 'text' : 'password'} className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Confirme" />
+                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a Senha <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+                <input type={showPassword ? 'text' : 'password'} className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirme" />
               </div>
             </div>
 
@@ -288,6 +308,7 @@ export default function Cadastro() {
                   <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength === 'Forte' ? 'var(--success-color)' : 'var(--border-color)' }}></div>
                 </div>
                 <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem', lineHeight: '1.4' }}>
+                  Mínimo de 6 caracteres.<br />
                   Forte: Mínimo 1 letra maiúscula, 1 número e 1 caractere especial.<br />
                   Média: Letras e números.<br />
                   Fraca: Apenas letras ou números (não permitida).

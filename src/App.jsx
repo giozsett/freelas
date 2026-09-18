@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import BarraNavegacao from './components/BarraNavegacao';
 import Inicio from './pages/Inicio';
 import Perfil from './pages/Perfil';
@@ -26,13 +26,14 @@ import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
 import { ProvedorDialogo } from './context/ContextoDialogo';
 
-function App() {
+function ConteudoApp() {
+  const location = useLocation();
+  const isPaginaAutenticacao = location.pathname === '/login' || location.pathname === '/register';
+
   return (
-    <ProvedorDialogo>
-    <Router>
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <BarraNavegacao />
-        <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem', flex: 1, width: '100%' }}>
+        <div className="container" style={{ marginTop: '2rem', marginBottom: isPaginaAutenticacao ? '1.5rem' : '4rem', flex: isPaginaAutenticacao ? '0 1 auto' : 1, width: '100%' }}>
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/login" element={<Login />} />
@@ -61,7 +62,15 @@ function App() {
       </div>
       <Rodape />
       </div>
-    </Router>
+  );
+}
+
+function App() {
+  return (
+    <ProvedorDialogo>
+      <Router>
+        <ConteudoApp />
+      </Router>
     </ProvedorDialogo>
   );
 }

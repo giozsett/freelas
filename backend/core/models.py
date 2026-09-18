@@ -22,6 +22,7 @@ class UserProfile(models.Model):
     categories = models.JSONField(blank=True, default=list)
     skills = models.JSONField(blank=True, default=list)
     subscription_plan = models.CharField(max_length=50, default='Gratuito')
+    subscription_cancel_at = models.DateTimeField(null=True, blank=True)
 
     # Novos campos (armazenam URLs públicas do Cloudinary)
     foto_perfil = models.URLField(max_length=500, null=True, blank=True)

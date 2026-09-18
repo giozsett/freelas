@@ -40,6 +40,10 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!email.trim() || !password) {
+      setErrorMsg('Preencha o email e a senha para realizar o login.');
+      return;
+    }
     setErrorMsg('');
     try {
       const response = await fetch('http://localhost:8000/api/auth/login/', {
@@ -51,6 +55,8 @@ export default function Login() {
       if (response.ok) {
         login(data.user, data.token);
         navigate(destinoPosLogin, { replace: true });
+      } else if (data.error === 'email_not_found') {
+        setErrorMsg('Email inválido. Confira o email digitado ou cadastre-se se ainda não tiver uma conta.');
       } else {
         setErrorMsg('E-mail ou senha incorretos.');
       }
@@ -106,30 +112,29 @@ export default function Login() {
 
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-      <div style={{ maxWidth: '400px', margin: '4rem auto' }}>
+      <div style={{ maxWidth: '400px', margin: '1.5rem auto' }}>
         <div className="card fade-in">
-          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
+          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem vindo ao <span className="brand-gradient-text">Freelas</span></h1>
+          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.65rem 0.8rem', marginBottom: '1rem', textAlign: 'left', fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'pre-line', fontFamily: "'Outfit', sans-serif" }}>{errorMsg}</div>}
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail</label>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail <span style={{ color: 'var(--danger-color)' }}>*</span></label>
               <input
                 type="email"
                 className="input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
                 placeholder="exemplo@email.com"
               />
             </div>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha</label>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha <span style={{ color: 'var(--danger-color)' }}>*</span></label>
               <div className="password-field">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="input"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
                   placeholder="Sua senha"
                 />
                 <button
@@ -145,7 +150,6 @@ export default function Login() {
                 Esqueci minha senha
               </Link>
             </div>
-            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '1rem', width: '100%' }}>
               Entrar
             </button>

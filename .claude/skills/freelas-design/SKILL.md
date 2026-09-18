@@ -123,6 +123,12 @@ Sempre usar o par cor+`-soft` (ex.: `--danger-color` no texto/ícone,
 - **Switch/alternância de papel**: trilho com `--primary-gradient`, thumb
   circular `--surface-color`, texto do rótulo oculto/visível por
   opacidade+translação (~114px de curso), transição `cubic-bezier(0.68,-0.55,0.27,1.55)`.
+- **Mensagem de erro de formulário** (`.form-error`): fundo `--danger-soft`, borda
+  1px `--danger-color`, texto `--danger-color`, `border-radius: 4px`,
+  `padding: 0.65rem 0.8rem` (padding vertical levemente menor que o horizontal),
+  `font-size: 0.9rem`. Texto em **Outfit ExtraLight (peso 200)**, não bold — é o
+  único texto de UI que foge do peso 400–600 padrão do corpo. Use
+  `white-space: pre-line` quando a mensagem puder ter múltiplas linhas.
 - **Ícones**: biblioteca `lucide-react`, stroke padrão, tamanho 20–24px na navbar.
 - **Motion**: transições de 0.15–0.4s `ease`/`cubic-bezier`; nada abrupto; respeitar
   `prefers-reduced-motion`.

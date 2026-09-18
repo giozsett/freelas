@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;800&family=Poppins:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;500;600;800&family=Poppins:wght@400;500;600;700;800&family=Open+Sans:wght@400;600;700&display=swap');
 
 @property --primary { syntax: '<color>'; inherits: true; initial-value: #FF826E; }
 @property --primary-hover { syntax: '<color>'; inherits: true; initial-value: #FF6B54; }
@@ -766,6 +766,12 @@ a { color: var(--text-color); text-decoration: none; }
 }
 .fn-brand__word {
   font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 1.3rem; text-transform: uppercase;
+  background: var(--primary-gradient-hover); -webkit-background-clip: text; background-clip: text;
+  color: transparent; letter-spacing: -0.5px;
+}
+
+.brand-gradient-text {
+  font-weight: 800; text-transform: uppercase;
   background: var(--primary-gradient-hover); -webkit-background-clip: text; background-clip: text;
   color: transparent; letter-spacing: -0.5px;
 }

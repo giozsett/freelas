@@ -65,7 +65,9 @@ class LoginAPI(APIView):
                 "user": UserSerializer(user).data,
                 "token": token.key
             })
-        return Response({"error": "Wrong Credentials"}, status=status.HTTP_400_BAD_REQUEST)
+        if not User.objects.filter(username=username).exists():
+            return Response({"error": "email_not_found"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "wrong_credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
 class UserAPI(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1439,12 +1441,15 @@ class AvaliacoesPendentesAPIView(APIView):
 
 import logging
 import stripe
+from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 from .models import Pagamento
 from .serializers import PagamentoSerializer
+
+PRAZO_ARREPENDIMENTO_DIAS = 7
 
 
 logger = logging.getLogger(__name__)
@@ -1613,6 +1618,128 @@ class CriarPreferenciaAssinaturaAPI(APIView):
         })
 
 
+class CancelarAssinaturaAPI(APIView):
+    """Cancela a assinatura paga do usuário.
+
+    Art. 49 do CDC: contratações fora do estabelecimento comercial (todo o
+    checkout do Freelas é online) dão direito a arrependimento com estorno
+    integral em até 7 dias corridos da contratação. Depois desse prazo, o
+    cancelamento só interrompe a renovação futura; o acesso ao plano pago
+    continua até o fim do período já pago.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        pagamento = Pagamento.objects.filter(
+            usuario=request.user,
+            tipo='assinatura',
+            status='pago',
+            mp_payment_id__isnull=False,
+        ).order_by('-criado_em').first()
+
+        if not pagamento or profile.subscription_plan == 'Gratuito':
+            return Response(
+                {'error': 'Nenhuma assinatura ativa para cancelar.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not _stripe_configurado():
+            return Response(
+                {'error': 'O cancelamento via Stripe ainda não está configurado.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        subscription_id = pagamento.mp_payment_id
+        try:
+            subscription = stripe.Subscription.retrieve(subscription_id).to_dict()
+        except stripe.error.StripeError as exc:
+            return Response(
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if subscription.get('status') == 'canceled':
+            return Response(
+                {'error': 'Esta assinatura já foi cancelada.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        inicio = datetime.fromtimestamp(subscription['start_date'], tz=dt_timezone.utc)
+        dentro_do_prazo = (timezone.now() - inicio) <= timedelta(days=PRAZO_ARREPENDIMENTO_DIAS)
+
+        if dentro_do_prazo:
+            try:
+                stripe.Subscription.delete(subscription_id)
+            except stripe.error.StripeError as exc:
+                return Response(
+                    {'error': getattr(exc, 'user_message', None) or str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            reembolsado = False
+            invoice_id = subscription.get('latest_invoice')
+            if invoice_id:
+                try:
+                    invoice = stripe.Invoice.retrieve(invoice_id).to_dict()
+                    payment_intent = invoice.get('payment_intent')
+                    if payment_intent:
+                        stripe.Refund.create(payment_intent=payment_intent)
+                        reembolsado = True
+                except stripe.error.StripeError:
+                    logger.warning(
+                        'Falha ao estornar a assinatura %s do usuário %s.',
+                        subscription_id, request.user.id,
+                    )
+
+            pagamento.status = 'cancelado'
+            pagamento.save(update_fields=['status', 'atualizado_em'])
+            profile.subscription_plan = 'Gratuito'
+            profile.subscription_cancel_at = None
+            profile.save(update_fields=['subscription_plan', 'subscription_cancel_at'])
+
+            criar_notificacao(
+                usuario=request.user,
+                tipo='pagamento',
+                titulo='Assinatura cancelada e estornada',
+                mensagem='Sua assinatura foi cancelada dentro do prazo de 7 dias e o valor pago foi estornado, conforme o Código de Defesa do Consumidor (Art. 49).',
+                link='/my-payments',
+            )
+            return Response({
+                'cancelado': True,
+                'reembolsado': reembolsado,
+                'plano_atual': 'Gratuito',
+            })
+
+        try:
+            subscription = stripe.Subscription.modify(
+                subscription_id, cancel_at_period_end=True,
+            ).to_dict()
+        except stripe.error.StripeError as exc:
+            return Response(
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        cancel_at = datetime.fromtimestamp(subscription['current_period_end'], tz=dt_timezone.utc)
+        profile.subscription_cancel_at = cancel_at
+        profile.save(update_fields=['subscription_cancel_at'])
+
+        criar_notificacao(
+            usuario=request.user,
+            tipo='pagamento',
+            titulo='Assinatura não será renovada',
+            mensagem=f'Sua assinatura não será mais renovada. Você continua com acesso ao plano {profile.subscription_plan} até {cancel_at.strftime("%d/%m/%Y")}.',
+            link='/my-payments',
+        )
+        return Response({
+            'cancelado': True,
+            'reembolsado': False,
+            'plano_atual': profile.subscription_plan,
+            'cancelamento_agendado_para': cancel_at.isoformat(),
+        })
+
+
 class CriarPreferenciaAcordoAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1730,6 +1857,77 @@ class CriarPreferenciaAcordoAPI(APIView):
         })
 
 
+def _processar_renovacao_stripe(invoice):
+    """Processa um evento `invoice.payment_succeeded` do Stripe.
+
+    Só a renovação mensal automática (billing_reason='subscription_cycle')
+    gera um novo registro de pagamento: a primeira cobrança de uma
+    assinatura já é registrada via `checkout.session.completed`.
+    """
+    if invoice.get('billing_reason') != 'subscription_cycle':
+        return False
+
+    subscription_id = invoice.get('subscription')
+    if not subscription_id:
+        return False
+
+    pagamento_anterior = Pagamento.objects.filter(
+        tipo='assinatura', mp_payment_id=subscription_id,
+    ).order_by('-criado_em').first()
+    if not pagamento_anterior:
+        logger.warning('Renovação Stripe sem assinatura correspondente: %s.', subscription_id)
+        return False
+
+    try:
+        valor = (Decimal(invoice.get('amount_paid')) / Decimal('100')).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError):
+        return False
+
+    _, created = Pagamento.objects.get_or_create(
+        referencia_externa=f"stripe:renovacao:{invoice.get('id')}",
+        defaults={
+            'usuario': pagamento_anterior.usuario,
+            'tipo': 'assinatura',
+            'status': 'pago',
+            'valor': valor,
+            'plano': pagamento_anterior.plano,
+            'mp_payment_id': subscription_id,
+            'forma_pagamento': 'stripe',
+            'aprovado_em': timezone.now(),
+        },
+    )
+    return created
+
+
+def _processar_assinatura_encerrada_stripe(subscription):
+    """Processa um evento `customer.subscription.deleted` do Stripe: aplica
+    o downgrade para o plano Gratuito quando um cancelamento agendado (fim
+    do período pago) finalmente é efetivado."""
+    subscription_id = subscription.get('id')
+    if not subscription_id:
+        return False
+
+    pagamento = Pagamento.objects.filter(
+        tipo='assinatura', mp_payment_id=subscription_id,
+    ).order_by('-criado_em').first()
+    if not pagamento:
+        return False
+
+    profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
+    profile.subscription_plan = 'Gratuito'
+    profile.subscription_cancel_at = None
+    profile.save(update_fields=['subscription_plan', 'subscription_cancel_at'])
+
+    criar_notificacao(
+        usuario=pagamento.usuario,
+        tipo='pagamento',
+        titulo='Assinatura encerrada',
+        mensagem='Sua assinatura chegou ao fim e seu plano voltou a ser Gratuito.',
+        link='/my-payments',
+    )
+    return True
+
+
 class StripeWebhookAPI(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -1756,6 +1954,14 @@ class StripeWebhookAPI(APIView):
 
         if event['type'] == 'checkout.session.completed':
             processed = _confirmar_pagamento_stripe(event['data']['object'].to_dict())
+            return Response({'status': 'processed' if processed else 'received'})
+
+        if event['type'] == 'invoice.payment_succeeded':
+            processed = _processar_renovacao_stripe(event['data']['object'].to_dict())
+            return Response({'status': 'processed' if processed else 'received'})
+
+        if event['type'] == 'customer.subscription.deleted':
+            processed = _processar_assinatura_encerrada_stripe(event['data']['object'].to_dict())
             return Response({'status': 'processed' if processed else 'received'})
 
         return Response({'status': 'ignored'})

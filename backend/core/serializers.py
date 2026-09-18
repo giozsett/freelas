@@ -18,8 +18,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias')
-        read_only_fields = ('foto_perfil', 'subscription_plan')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias')
+        read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at')
 
     def get_banner(self, obj):
         return obj.banner

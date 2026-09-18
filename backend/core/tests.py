@@ -1,8 +1,10 @@
+from datetime import timedelta, timezone as dt_timezone
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .models import (
@@ -28,6 +30,14 @@ class FakeStripeSession(dict):
         super().__init__(id=id, url=url)
         self.id = id
         self.url = url
+
+
+class FakeStripeObject(dict):
+    """Simula um StripeObject (Subscription, Invoice, etc.): assim como o SDK
+    real, expõe os dados via `.to_dict()` em vez de métodos de dict."""
+
+    def to_dict(self):
+        return dict(self)
 
 
 FAKE_PLANOS_PAGOS = {
@@ -728,6 +738,211 @@ class PagamentoAPITests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Report.objects.get(pk=response.data['id']).status, 'pending')
+
+
+class CancelamentoAssinaturaAPITests(TestCase):
+    """Cancelamento de assinatura: direito de arrependimento do Art. 49 do
+    CDC (estorno integral em até 7 dias da contratação) e, fora desse prazo,
+    apenas a suspensão da renovação automática ao fim do período pago."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.usuario = User.objects.create_user(
+            username='assinante@example.com',
+            email='assinante@example.com',
+            password='secret123',
+        )
+        self.usuario.profile.subscription_plan = 'Gold'
+        self.usuario.profile.save(update_fields=['subscription_plan'])
+        self.pagamento = Pagamento.objects.create(
+            usuario=self.usuario,
+            tipo='assinatura',
+            status='pago',
+            valor=Decimal('29.90'),
+            referencia_externa='sub:gold:1',
+            mp_payment_id='sub_123',
+            plano='Gold',
+            aprovado_em=timezone.now() - timedelta(days=2),
+        )
+        self.client.force_authenticate(self.usuario)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create')
+    @patch('core.views.stripe.Invoice.retrieve')
+    @patch('core.views.stripe.Subscription.delete')
+    @patch('core.views.stripe.Subscription.retrieve')
+    def test_cancelamento_dentro_de_7_dias_estorna_e_derruba_plano(
+        self, retrieve, delete, invoice_retrieve, refund_create,
+    ):
+        inicio = timezone.now() - timedelta(days=2)
+        retrieve.return_value = FakeStripeObject(
+            status='active',
+            start_date=int(inicio.timestamp()),
+            latest_invoice='in_123',
+        )
+        invoice_retrieve.return_value = FakeStripeObject(payment_intent='pi_123')
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['cancelado'])
+        self.assertTrue(response.data['reembolsado'])
+        self.assertEqual(response.data['plano_atual'], 'Gratuito')
+
+        delete.assert_called_once_with('sub_123')
+        refund_create.assert_called_once_with(payment_intent='pi_123')
+
+        self.usuario.profile.refresh_from_db()
+        self.assertEqual(self.usuario.profile.subscription_plan, 'Gratuito')
+        self.assertIsNone(self.usuario.profile.subscription_cancel_at)
+
+        self.pagamento.refresh_from_db()
+        self.assertEqual(self.pagamento.status, 'cancelado')
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Subscription.modify')
+    @patch('core.views.stripe.Subscription.retrieve')
+    def test_cancelamento_apos_7_dias_agenda_fim_do_periodo_sem_estorno(
+        self, retrieve, modify,
+    ):
+        self.pagamento.aprovado_em = timezone.now() - timedelta(days=10)
+        self.pagamento.save(update_fields=['aprovado_em'])
+
+        inicio = timezone.now() - timedelta(days=10)
+        fim_periodo = timezone.now() + timedelta(days=20)
+        retrieve.return_value = FakeStripeObject(
+            status='active',
+            start_date=int(inicio.timestamp()),
+            latest_invoice='in_123',
+        )
+        modify.return_value = FakeStripeObject(
+            status='active',
+            current_period_end=int(fim_periodo.timestamp()),
+        )
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['cancelado'])
+        self.assertFalse(response.data['reembolsado'])
+        self.assertEqual(response.data['plano_atual'], 'Gold')
+
+        modify.assert_called_once_with('sub_123', cancel_at_period_end=True)
+
+        self.usuario.profile.refresh_from_db()
+        self.assertEqual(self.usuario.profile.subscription_plan, 'Gold')
+        self.assertIsNotNone(self.usuario.profile.subscription_cancel_at)
+
+        self.pagamento.refresh_from_db()
+        self.assertEqual(self.pagamento.status, 'pago')
+
+    def test_cancelamento_sem_assinatura_ativa_retorna_erro(self):
+        self.pagamento.delete()
+        self.usuario.profile.subscription_plan = 'Gratuito'
+        self.usuario.profile.save(update_fields=['subscription_plan'])
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Subscription.retrieve')
+    def test_cancelamento_assinatura_ja_cancelada_no_stripe_retorna_conflito(self, retrieve):
+        retrieve.return_value = FakeStripeObject(status='canceled')
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 409)
+
+
+class WebhookRenovacaoAssinaturaAPITests(TestCase):
+    """Cobranças mensais automáticas do Stripe (renovação) devem aparecer no
+    histórico de pagamentos, e o fim efetivo de uma assinatura cancelada deve
+    derrubar o usuário para o plano Gratuito."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.usuario = User.objects.create_user(
+            username='renovacao@example.com',
+            email='renovacao@example.com',
+            password='secret123',
+        )
+        self.usuario.profile.subscription_plan = 'Gold'
+        self.usuario.profile.save(update_fields=['subscription_plan'])
+        self.pagamento = Pagamento.objects.create(
+            usuario=self.usuario,
+            tipo='assinatura',
+            status='pago',
+            valor=Decimal('29.90'),
+            referencia_externa='sub:gold:1',
+            mp_payment_id='sub_123',
+            plano='Gold',
+            aprovado_em=timezone.now() - timedelta(days=35),
+        )
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_renovacao_mensal_cria_novo_pagamento_no_historico(self, construct_event):
+        construct_event.return_value = {
+            'type': 'invoice.payment_succeeded',
+            'data': {'object': FakeStripeObject(
+                id='in_999',
+                subscription='sub_123',
+                billing_reason='subscription_cycle',
+                amount_paid=2990,
+            )},
+        }
+
+        response = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        renovacao = Pagamento.objects.get(referencia_externa='stripe:renovacao:in_999')
+        self.assertEqual(renovacao.usuario, self.usuario)
+        self.assertEqual(renovacao.status, 'pago')
+        self.assertEqual(renovacao.valor, Decimal('29.90'))
+        self.assertEqual(renovacao.plano, 'Gold')
+        self.assertEqual(renovacao.mp_payment_id, 'sub_123')
+        self.assertIsNotNone(renovacao.aprovado_em)
+
+        self.client.force_authenticate(self.usuario)
+        history = self.client.get('/api/pagamentos/historico/')
+        self.assertEqual(history.data['count'], 2)
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_primeira_cobranca_nao_duplica_pagamento_ja_registrado(self, construct_event):
+        construct_event.return_value = {
+            'type': 'invoice.payment_succeeded',
+            'data': {'object': FakeStripeObject(
+                id='in_first',
+                subscription='sub_123',
+                billing_reason='subscription_create',
+                amount_paid=2990,
+            )},
+        }
+
+        response = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Pagamento.objects.filter(usuario=self.usuario).count(), 1)
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_assinatura_encerrada_derruba_plano_para_gratuito(self, construct_event):
+        self.usuario.profile.subscription_cancel_at = timezone.now() + timedelta(days=5)
+        self.usuario.profile.save(update_fields=['subscription_cancel_at'])
+
+        construct_event.return_value = {
+            'type': 'customer.subscription.deleted',
+            'data': {'object': FakeStripeObject(id='sub_123')},
+        }
+
+        response = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.usuario.profile.refresh_from_db()
+        self.assertEqual(self.usuario.profile.subscription_plan, 'Gratuito')
+        self.assertIsNone(self.usuario.profile.subscription_cancel_at)
 
 
 class LimitesPlanoAPITests(TestCase):
