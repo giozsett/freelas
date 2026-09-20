@@ -6,6 +6,7 @@ from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
@@ -93,23 +94,89 @@ class ExcluirContaAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from django.db import transaction
+        from django.db.models import Q
+
+        from .models import (
+            Ad,
+            Avaliacao,
+            Candidatura,
+            Certificado,
+            Experiencia,
+            MensagemChat,
+            Notificacao,
+            AcordoServico,
+        )
+        from .serializers import _destruir_imagem_cloudinary
+
         senha = request.data.get('senha', '')
-        if not request.user.check_password(senha):
-            return Response({"error": "Senha incorreta."}, status=status.HTTP_400_BAD_REQUEST)
+        # Contas criadas por login social (Google/LinkedIn) não possuem senha:
+        # para elas, a confirmação textual "EXCLUIR" feita no frontend basta.
+        if request.user.has_usable_password():
+            if not request.user.check_password(senha):
+                return Response({"error": "Senha incorreta."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            profile = request.user.profile
-            profile.deletado = True
-            profile.nome_completo = "Usuário removido"
-            profile.email = f"deletado_{request.user.id}@freelas.local"
-            profile.bio = ""
-            profile.foto_perfil = None
-            profile.banner = None
-            profile.save()
+            with transaction.atomic():
+                user = request.user
+                profile = UserProfile.objects.filter(user=user).first()
 
-            user = request.user
-            user.is_active = False
-            user.save()
+                # Soft delete + anonimização da tabela 'usuarios' do Supabase
+                if profile:
+                    _destruir_imagem_cloudinary(profile.foto_perfil)
+                    _destruir_imagem_cloudinary(profile.banner)
+                    profile.deletado = True
+                    profile.nome_completo = "Usuário removido"
+                    profile.email = f"deletado_{user.id}@freelas.local"
+                    profile.nome_fantasia = None
+                    profile.bio = ""
+                    profile.bio_empresa = ""
+                    profile.nome_empresa = None
+                    profile.ramo_empresa = None
+                    profile.porte_empresa = None
+                    profile.cnpj = None
+                    profile.site_empresa = None
+                    profile.redes_sociais = []
+                    profile.skills = []
+                    profile.categories = []
+                    profile.cidade = ""
+                    profile.estado = ""
+                    profile.telefone = ""
+                    profile.curriculo = None
+                    profile.foto_perfil = None
+                    profile.banner = None
+                    profile.disponivel = False
+                    profile.save()
 
+                # Soft delete de todo o conteúdo criado pelo usuário
+                Ad.objects.filter(author=user).update(deletado=True)
+                Candidatura.objects.filter(user=user).update(deletado=True)
+                MensagemChat.objects.filter(remetente=user).update(deletado=True)
+                Notificacao.objects.filter(usuario=user).update(deletado=True)
+
+                if profile:
+                    Avaliacao.objects.filter(
+                        Q(avaliador=profile) | Q(avaliado=profile)
+                    ).update(deletado=True)
+                    Certificado.objects.filter(usuario=profile).update(deletado=True)
+                    Experiencia.objects.filter(usuario=profile).update(deletado=True)
+
+                # Os acordos são bilaterais (a outra parte continua usando): só
+                # anonimizamos o nome da parte excluída, mantendo o registro.
+                AcordoServico.objects.filter(
+                    candidatura__user=user
+                ).update(nome_prestador="Usuário removido")
+                AcordoServico.objects.filter(
+                    candidatura__ad__author=user
+                ).update(nome_contratante="Usuário removido")
+
+                user.first_name = ""
+                user.last_name = ""
+                user.is_active = False
+                user.save(update_fields=['first_name', 'last_name', 'is_active'])
+
+            # Os tokens caem fora da transação: mesmo que algo falhe antes,
+            # o usuário não permanece logado após tentar a exclusão.
             Token.objects.filter(user=request.user).delete()
 
             return Response({"mensagem": "Conta excluída com sucesso."}, status=status.HTTP_200_OK)
@@ -492,6 +559,13 @@ class PublicProfileAPIView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get_object(self):
+        # Perfis excluídos (soft delete) deixam de existir publicamente.
+        perfil = super().get_object()
+        if getattr(getattr(perfil, 'profile', None), 'deletado', False):
+            raise Http404("Usuário não encontrado.")
+        return perfil
+
 class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CandidaturaSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -504,7 +578,7 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             'ad__author', 'user',
         ).filter(
             Q(user=self.request.user) | Q(ad__author=self.request.user)
-        ).order_by('-enviado_em')
+        ).exclude(deletado=True).order_by('-enviado_em')
         user_id = self.request.query_params.get('user_id')
         ad_id = self.request.query_params.get('ad_id')
 
@@ -564,7 +638,10 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Candidatura.objects.filter(ad__author=self.request.user)
+        return Candidatura.objects.filter(
+            ad__author=self.request.user,
+            deletado=False,
+        )
 
     def patch(self, request, *args, **kwargs):
         from django.db import transaction
@@ -636,7 +713,8 @@ class CandidaturaRetrieveAPIView(generics.RetrieveAPIView):
     def get_queryset(self):
         from django.db.models import Q
         return Candidatura.objects.filter(
-            Q(user=self.request.user) | Q(ad__author=self.request.user)
+            Q(user=self.request.user) | Q(ad__author=self.request.user),
+            deletado=False,
         )
 
 
@@ -653,6 +731,7 @@ class NotificacaoListAPIView(generics.ListAPIView):
     def get_queryset(self):
         return Notificacao.objects.filter(
             usuario=self.request.user,
+            deletado=False,
         ).select_related('ad').order_by('-criado_em')[:50]
 
 
@@ -665,6 +744,7 @@ class NotificacaoNaoLidasAPIView(APIView):
         nao_lidas = Notificacao.objects.filter(
             usuario=request.user,
             lida=False,
+            deletado=False,
         )
         total = nao_lidas.count()
         por_tipo = dict(
@@ -702,6 +782,7 @@ class NotificacaoMarcarLidasAPIView(APIView):
         queryset = Notificacao.objects.filter(
             usuario=request.user,
             lida=False,
+            deletado=False,
         )
         tipos = request.data.get('tipos')
         if tipos:

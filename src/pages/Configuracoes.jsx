@@ -54,7 +54,9 @@ export default function Configuracoes() {
     }
   };
 
-  const podeExcluir = senha.trim() !== '' && confirmacao === 'EXCLUIR';
+  const temSenha = !!user?.tem_senha;
+
+  const podeExcluir = (temSenha ? senha.trim() !== '' : true) && confirmacao === 'EXCLUIR';
 
   const papelAtual = user?.profile?.papel === 'empresa' ? 'empresa' : user?.profile?.papel === 'freelancer' ? 'freelancer' : null;
 
@@ -101,7 +103,7 @@ export default function Configuracoes() {
   };
 
   const handleExcluirConta = async () => {
-    if (!senha.trim()) {
+    if (temSenha && !senha.trim()) {
       setErrorMsg('Digite sua senha atual para confirmar.');
       return;
     }
@@ -115,7 +117,7 @@ export default function Configuracoes() {
       const response = await fetch('http://localhost:8000/api/auth/excluir-conta/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-        body: JSON.stringify({ senha })
+        body: JSON.stringify(temSenha ? { senha } : {})
       });
       const data = await response.json();
       if (response.ok) {
@@ -272,17 +274,24 @@ export default function Configuracoes() {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha atual</label>
-                <input
-                  type="password"
-                  className="input"
-                  value={senha}
-                  onChange={(e) => setSenha(e.target.value)}
-                  placeholder="Digite sua senha atual"
-                  required
-                />
-              </div>
+              {temSenha ? (
+                <div>
+                  <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha atual</label>
+                  <input
+                    type="password"
+                    className="input"
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                    placeholder="Digite sua senha atual"
+                    required
+                  />
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, lineHeight: '1.5', margin: 0 }}>
+                  Como você entrou com o Google, LinkedIn, não precisa de senha. Apenas digite{' '}
+                  <strong>EXCLUIR</strong> abaixo para confirmar.
+                </p>
+              )}
               <div>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
                   Digite <strong>EXCLUIR</strong> para confirmar

@@ -192,6 +192,7 @@ class Candidatura(models.Model):
     # Django specific relations
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='candidaturas', null=True, blank=True)
     ad = models.ForeignKey('Ad', on_delete=models.CASCADE, related_name='candidaturas', null=True, blank=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'candidaturas'
@@ -476,6 +477,7 @@ class Avaliacao(models.Model):
     nota_geral = models.DecimalField(max_digits=3, decimal_places=2)
     comentario = models.TextField(blank=True, default='')
     criado_em = models.DateTimeField(auto_now_add=True, db_column='criada_em')
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'avaliacoes'
@@ -583,6 +585,7 @@ class Certificado(models.Model):
     arquivo = models.FileField(upload_to='certificados/', null=True, blank=True)
     exibir_perfil = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'certificados'
@@ -602,6 +605,7 @@ class Experiencia(models.Model):
     atual = models.BooleanField(default=False)
     descricao = models.TextField(blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'experiencias'
@@ -624,6 +628,7 @@ class MensagemChat(models.Model):
     texto = models.TextField(max_length=2000)
     lida = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'mensagens_chat'
@@ -658,6 +663,7 @@ class Notificacao(models.Model):
     link = models.CharField(max_length=255, blank=True, default='')
     lida = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'notificacoes'

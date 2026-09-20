@@ -1611,3 +1611,159 @@ class NotificacaoAPITests(TestCase):
         self.assertEqual(response.data['count'], 2)
         self.assertFalse(Notificacao.objects.filter(usuario=self.contratante).exists())
         self.assertTrue(Notificacao.objects.filter(pk=outro_usuario_notificacao.pk).exists())
+
+
+class ExcluirContaAPITests(TestCase):
+    """Fluxo de exclusão de conta com soft delete completo do conteúdo."""
+
+    SENHA = 'SenhaValida1@'
+
+    def setUp(self):
+        from rest_framework.authtoken.models import Token
+
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='apagar@example.com',
+            email='apagar@example.com',
+            password=self.SENHA,
+            first_name='Alice',
+            last_name='Removivel',
+        )
+        self.profile = UserProfile.objects.create(
+            user=self.user,
+            nome_completo='Alice Removivel',
+            email='apagar@example.com',
+            cidade='São Paulo',
+            bio='Uma biografia qualquer',
+            categories=['Design'],
+            skills=['Figma'],
+        )
+        self.token = Token.objects.create(user=self.user)
+
+        self.contratante = User.objects.create_user(
+            username='contratante-excl@example.com',
+            email='contratante-excl@example.com',
+            password=self.SENHA,
+        )
+        UserProfile.objects.create(
+            user=self.contratante,
+            nome_completo='Bia Contratante',
+            email='contratante-excl@example.com',
+        )
+        self.contratante_token = Token.objects.create(user=self.contratante)
+
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Projeto de teste',
+            description='Descrição',
+            price='500.00',
+            role='freelancer',
+        )
+        self.candidatura = Candidatura.objects.create(
+            user=self.user,
+            ad=self.ad,
+            mensagem='Quero participar',
+            status='pendente',
+            usuario_id=self.profile.id,
+        )
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Pendente Pagamento',
+            valor_acordado=500.0,
+            titulo_anuncio='Projeto de teste',
+            nome_contratante='Bia Contratante',
+            nome_prestador='Alice Removivel',
+            proposta_aceita='Quero participar',
+        )
+        self.mensagem = MensagemChat.objects.create(
+            acordo=self.acordo,
+            remetente=self.user,
+            texto='Olá!',
+        )
+        Notificacao.objects.create(usuario=self.user, tipo='sistema', titulo='Boas-vindas')
+
+    def _auth(self, token):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def test_user_serializer_expoe_tem_senha(self):
+        self._auth(self.token)
+        resp = self.client.get('/api/auth/user/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['tem_senha'])
+
+    def test_excluir_conta_recusa_senha_incorreta(self):
+        self._auth(self.token)
+        resp = self.client.post(
+            '/api/auth/excluir-conta/', {'senha': 'senha-errada'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertTrue(Token.objects.filter(user=self.user).exists())
+
+    def test_excluir_conta_faz_soft_delete_completo(self):
+        self._auth(self.token)
+        resp = self.client.post(
+            '/api/auth/excluir-conta/', {'senha': self.SENHA}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.ad.refresh_from_db()
+        self.candidatura.refresh_from_db()
+        self.mensagem.refresh_from_db()
+        self.acordo.refresh_from_db()
+
+        self.assertFalse(self.user.is_active)
+        self.assertTrue(self.profile.deletado)
+        self.assertEqual(self.profile.nome_completo, 'Usuário removido')
+        self.assertEqual(self.profile.cidade, '')
+        self.assertTrue(self.ad.deletado)
+        self.assertTrue(self.candidatura.deletado)
+        self.assertTrue(self.mensagem.deletado)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.user, deletado=True).exists())
+        self.assertEqual(self.acordo.nome_prestador, 'Usuário removido')
+        self.assertFalse(Token.objects.filter(user=self.user).exists())
+
+        login = self.client.post(
+            '/api/auth/login/',
+            {'username': 'apagar@example.com', 'password': self.SENHA},
+            format='json',
+        )
+        self.assertIn(login.status_code, (400, 401))
+
+    def test_excluir_conta_esconde_conteudo_do_outro_lado(self):
+        self._auth(self.token)
+        resp = self.client.post(
+            '/api/auth/excluir-conta/', {'senha': self.SENHA}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        # Perfil público some (404)
+        resp_perfil = self.client.get(f'/api/users/{self.user.id}/')
+        self.assertEqual(resp_perfil.status_code, 404)
+
+        # O contratante não vê mais a candidatura do usuário excluído
+        self._auth(self.contratante_token)
+        resp_cands = self.client.get(f'/api/candidaturas/?ad_id={self.ad.id}')
+        self.assertEqual(resp_cands.status_code, 200)
+        ids = [c['id'] for c in resp_cands.data]
+        self.assertNotIn(self.candidatura.id, ids)
+
+    def test_excluir_conta_social_sem_senha_nao_requer_senha(self):
+        from rest_framework.authtoken.models import Token
+
+        social = User.objects.create_user(
+            username='social-excl@example.com', email='social-excl@example.com',
+        )
+        UserProfile.objects.create(
+            user=social, nome_completo='Usuário Social', email='social-excl@example.com',
+        )
+        social_token = Token.objects.create(user=social)
+        self._auth(social_token)
+
+        resp_sem_senha = self.client.post('/api/auth/excluir-conta/', {}, format='json')
+        self.assertEqual(resp_sem_senha.status_code, 200)
+        social.refresh_from_db()
+        self.assertFalse(social.is_active)
