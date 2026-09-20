@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from .models import (
@@ -1323,6 +1324,42 @@ class AutenticacaoSenhaAPITests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    # ---------- Termo do perfil de freelancer ----------
+
+    def test_virar_freelancer_sem_aceitar_termo_e_recusado(self):
+        user = User.objects.create_user(
+            username='freela-sem-termo@example.com',
+            email='freela-sem-termo@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        self.client.force_authenticate(user)
+        response = self.client.patch(
+            '/api/auth/profile/',
+            {'papel': 'freelancer'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('aceitou_termos_freelancer', response.data)
+        user.refresh_from_db()
+        self.assertNotEqual(user.profile.papel, 'freelancer')
+
+    def test_virar_freelancer_aceitando_termo_e_aceito(self):
+        user = User.objects.create_user(
+            username='freela-com-termo@example.com',
+            email='freela-com-termo@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        self.client.force_authenticate(user)
+        response = self.client.patch(
+            '/api/auth/profile/',
+            {'papel': 'freelancer', 'aceitou_termos_freelancer': True},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.profile.papel, 'freelancer')
+        self.assertTrue(user.profile.aceitou_termos_freelancer)
+
 
 class CriteriosAvaliacaoAPITests(TestCase):
     """
@@ -1619,8 +1656,6 @@ class ExcluirContaAPITests(TestCase):
     SENHA = 'SenhaValida1@'
 
     def setUp(self):
-        from rest_framework.authtoken.models import Token
-
         self.client = APIClient()
         self.user = User.objects.create_user(
             username='apagar@example.com',
@@ -1629,15 +1664,14 @@ class ExcluirContaAPITests(TestCase):
             first_name='Alice',
             last_name='Removivel',
         )
-        self.profile = UserProfile.objects.create(
-            user=self.user,
-            nome_completo='Alice Removivel',
-            email='apagar@example.com',
-            cidade='São Paulo',
-            bio='Uma biografia qualquer',
-            categories=['Design'],
-            skills=['Figma'],
-        )
+        self.profile = UserProfile.objects.get(user=self.user)
+        self.profile.nome_completo = 'Alice Removivel'
+        self.profile.email = 'apagar@example.com'
+        self.profile.cidade = 'São Paulo'
+        self.profile.bio = 'Uma biografia qualquer'
+        self.profile.categories = ['Design']
+        self.profile.skills = ['Figma']
+        self.profile.save()
         self.token = Token.objects.create(user=self.user)
 
         self.contratante = User.objects.create_user(
@@ -1645,11 +1679,10 @@ class ExcluirContaAPITests(TestCase):
             email='contratante-excl@example.com',
             password=self.SENHA,
         )
-        UserProfile.objects.create(
-            user=self.contratante,
-            nome_completo='Bia Contratante',
-            email='contratante-excl@example.com',
-        )
+        perfil_contratante = UserProfile.objects.get(user=self.contratante)
+        perfil_contratante.nome_completo = 'Bia Contratante'
+        perfil_contratante.email = 'contratante-excl@example.com'
+        perfil_contratante.save()
         self.contratante_token = Token.objects.create(user=self.contratante)
 
         self.ad = Ad.objects.create(
@@ -1719,7 +1752,8 @@ class ExcluirContaAPITests(TestCase):
         self.assertTrue(self.profile.deletado)
         self.assertEqual(self.profile.nome_completo, 'Usuário removido')
         self.assertEqual(self.profile.cidade, '')
-        self.assertTrue(self.ad.deletado)
+        # O anúncio do contratante (que permanece ativo) não é escondido
+        self.assertFalse(self.ad.deletado)
         self.assertTrue(self.candidatura.deletado)
         self.assertTrue(self.mensagem.deletado)
         self.assertTrue(Notificacao.objects.filter(usuario=self.user, deletado=True).exists())
@@ -1740,7 +1774,9 @@ class ExcluirContaAPITests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
 
-        # Perfil público some (404)
+        # Perfil público some (404). O token do usuário excluído foi revogado,
+        # então a consulta deve ser feita de forma anônima.
+        self.client.credentials()
         resp_perfil = self.client.get(f'/api/users/{self.user.id}/')
         self.assertEqual(resp_perfil.status_code, 404)
 
@@ -1752,14 +1788,13 @@ class ExcluirContaAPITests(TestCase):
         self.assertNotIn(self.candidatura.id, ids)
 
     def test_excluir_conta_social_sem_senha_nao_requer_senha(self):
-        from rest_framework.authtoken.models import Token
-
         social = User.objects.create_user(
             username='social-excl@example.com', email='social-excl@example.com',
         )
-        UserProfile.objects.create(
-            user=social, nome_completo='Usuário Social', email='social-excl@example.com',
-        )
+        perfil_social = UserProfile.objects.get(user=social)
+        perfil_social.nome_completo = 'Usuário Social'
+        perfil_social.email = 'social-excl@example.com'
+        perfil_social.save()
         social_token = Token.objects.create(user=social)
         self._auth(social_token)
 

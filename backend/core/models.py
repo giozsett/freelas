@@ -38,6 +38,7 @@ class UserProfile(models.Model):
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     site_empresa = models.URLField(max_length=255, null=True, blank=True)
     aceitou_termos_empresa = models.BooleanField(default=False)
+    aceitou_termos_freelancer = models.BooleanField(default=False)
     banido = models.BooleanField(default=False, null=True, blank=True)
     deletado = models.BooleanField(default=False, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True, null=True, blank=True)

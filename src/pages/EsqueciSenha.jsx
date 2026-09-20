@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function EsqueciSenha() {
   const [etapa, setEtapa] = useState('email'); // 'email', 'codigo', 'nova_senha'
@@ -7,6 +8,8 @@ export default function EsqueciSenha() {
   const [codigo, setCodigo] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const navigate = useNavigate();
@@ -179,9 +182,18 @@ export default function EsqueciSenha() {
         </p>
         <form onSubmit={handleRedefinirSenha} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nova senha</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ fontWeight: '500' }}>Nova senha</label>
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               className="input"
               value={novaSenha}
               onChange={(e) => setNovaSenha(e.target.value)}
@@ -190,9 +202,18 @@ export default function EsqueciSenha() {
             />
           </div>
           <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a nova senha</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ fontWeight: '500' }}>Confirme a nova senha</label>
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
             <input
-              type="password"
+              type={showConfirmPassword ? 'text' : 'password'}
               className="input"
               value={confirmarSenha}
               onChange={(e) => setConfirmarSenha(e.target.value)}

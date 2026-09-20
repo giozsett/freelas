@@ -50,7 +50,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer')
         read_only_fields = ('foto_perfil', 'subscription_plan')
 
     def validate(self, attrs):
@@ -70,6 +70,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({'ramo_empresa': 'Informe o ramo/segmento da empresa.'})
                 if not (dados.get('bio_empresa') or (self.instance and self.instance.bio_empresa)):
                     raise serializers.ValidationError({'bio_empresa': 'Conte o que a empresa faz.'})
+        # Quando o pedido está alterando para freelancer, exige os termos do freelancer
+        if 'papel' in dados and dados['papel'] == 'freelancer':
+            termos_freelancer = dados.get('aceitou_termos_freelancer', self.instance.aceitou_termos_freelancer if self.instance else False)
+            if not termos_freelancer:
+                raise serializers.ValidationError({'aceitou_termos_freelancer': 'Você precisa aceitar os Termos de Uso do perfil de freelancer.'})
         return super().validate(attrs)
 
     def get_banner(self, obj):

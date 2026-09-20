@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
+import { Star, Award, HelpCircle, MessageCircle, CheckCircle, XCircle, Upload, Briefcase, Building2, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
@@ -149,6 +149,8 @@ export default function PublicProfile() {
           }}>
             {user.profile?.foto_perfil ? (
               <img src={user.profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+            ) : ehEmpresaCnpj ? (
+              <Building2 size={56} color="var(--primary)" />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
                 {nomeExibido.charAt(0)}
@@ -158,6 +160,12 @@ export default function PublicProfile() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{nomeExibido}</h1>
+              {ehEmpresaCnpj && (
+                <span className="selo-empresa">
+                  <Building2 size={14} />
+                  Empresa com CNPJ
+                </span>
+              )}
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',

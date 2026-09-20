@@ -194,6 +194,18 @@ a { color: var(--text-color); text-decoration: none; }
 .badge.salmon { background-color: var(--secondary); }
 .badge.purple { background-color: var(--secondary); }
 
+/* Selo de perfil de empresa (CNPJ) — pílula roxa fixa que identifica a conta como
+   empresa/contratante, independente do papel de quem está vendo o perfil. */
+.selo-empresa {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.3rem 0.8rem; border-radius: 999px;
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #7C3AED 0%, #4C1D95 70%);
+  border: 1px solid #6D28D9;
+  box-shadow: 0 2px 4px var(--shadow-color);
+}
+
 /* Link para anúncio/perfil de usuário: colorido por padrão, e no hover vira
    um "cardzinho" (contorno + fundo suave) em vez do sublinhado padrão de
    HTML puro. Reaproveitar em qualquer lugar que linke para /ad/:id ou

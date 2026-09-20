@@ -49,7 +49,11 @@ export default function Login() {
         login(data.user, data.token);
         navigate('/');
       } else {
-        setErrorMsg('E-mail ou senha incorretos.');
+        setErrorMsg(
+          data.error && data.error !== 'Wrong Credentials'
+            ? data.error
+            : 'E-mail ou senha incorretos.'
+        );
       }
     } catch (err) {
       setErrorMsg('E-mail ou senha incorretos.');

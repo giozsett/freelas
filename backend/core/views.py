@@ -33,6 +33,20 @@ from .validacao_senha import validar_forca_senha
 logger = logging.getLogger(__name__)
 
 
+def _conta_inexistente_response():
+    """Resposta padrão quando o email não existe ou a conta foi removida."""
+    return Response(
+        {'error': 'Você não possui uma conta. Faça cadastro para entrar no site.'},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _conta_foi_removida(user):
+    """True quando o usuário já excluiu a conta (soft delete)."""
+    perfil = UserProfile.objects.filter(user=user).first()
+    return bool(perfil and perfil.deletado)
+
+
 class RegisterAPI(generics.GenericAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
@@ -76,7 +90,19 @@ class LoginAPI(APIView):
     def post(self, request):
         username = request.data.get("username")
         password = request.data.get("password")
-        user = authenticate(username=username, password=password)
+
+        candidato = (
+            User.objects.select_related('profile').filter(email=username).first()
+            or User.objects.select_related('profile').filter(username=username).first()
+        )
+        # Email não cadastrado (ou conta já removida) não pode logar:
+        # devolve mensagem específica para o frontend orientar o cadastro.
+        if not candidato:
+            return _conta_inexistente_response()
+        if candidato.profile and candidato.profile.deletado:
+            return _conta_inexistente_response()
+
+        user = authenticate(username=candidato.username, password=password)
         if user:
             if VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists():
                 return Response(
@@ -860,7 +886,10 @@ class GoogleSocialLoginAPI(APIView):
                 user.last_name = user.last_name or last_name
                 user.save(update_fields=['first_name', 'last_name'])
         else:
-            if User.objects.filter(email__iexact=email).exists():
+            outra_conta = User.objects.filter(email__iexact=email).first()
+            if outra_conta:
+                if _conta_foi_removida(outra_conta):
+                    return _conta_inexistente_response()
                 return Response(
                     {
                         'error': 'Este email já está sendo utilizado.',
@@ -880,6 +909,10 @@ class GoogleSocialLoginAPI(APIView):
                 user=user,
                 extra_data=identity,
             )
+
+        # Conta removida (excluída pelo usuário) não volta a entrar por login social
+        if _conta_foi_removida(user):
+            return _conta_inexistente_response()
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -996,7 +1029,10 @@ class LinkedInSocialLoginAPI(APIView):
                 user.last_name = user.last_name or last_name
                 user.save(update_fields=['first_name', 'last_name'])
         else:
-            if User.objects.filter(email__iexact=email).exists():
+            outra_conta = User.objects.filter(email__iexact=email).first()
+            if outra_conta:
+                if _conta_foi_removida(outra_conta):
+                    return _conta_inexistente_response()
                 return Response(
                     {
                         'error': 'Este email já está sendo utilizado.',
@@ -1016,6 +1052,10 @@ class LinkedInSocialLoginAPI(APIView):
                 user=user,
                 extra_data=identity,
             )
+
+        # Conta removida (excluída pelo usuário) não volta a entrar por login social
+        if _conta_foi_removida(user):
+            return _conta_inexistente_response()
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
