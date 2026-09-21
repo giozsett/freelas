@@ -6,11 +6,40 @@ import string
 from django.utils import timezone
 
 class UserProfile(models.Model):
+    PAPEIS_USUARIO = (
+        ('freelancer', 'Freelancer'),
+        ('empresa', 'Empresa'),
+    )
+    TIPOS_EMPRESA = (
+        ('pessoa', 'Pessoa física contratante'),
+        ('cnpj', 'Empresa com CNPJ'),
+    )
+    PORTES_EMPRESA = (
+        ('autonomo', 'Autônomo'),
+        ('micro', 'Micro (até 9 funcionários)'),
+        ('pequena', 'Pequena (10 a 49)'),
+        ('media', 'Média (50 a 249)'),
+        ('grande', 'Grande (250+)'),
+    )
+
     # Campos da tabela 'usuarios' já existente
     nome_completo = models.CharField(max_length=255, null=True, blank=True)
     email = models.EmailField(unique=True, null=True, blank=True)
     nome_fantasia = models.CharField(max_length=255, null=True, blank=True)
+    papel = models.CharField(max_length=20, choices=PAPEIS_USUARIO, null=True, blank=True)
     reputacao = models.SmallIntegerField(default=0, null=True, blank=True)
+
+    # Perfil de empresa/contratante (preenchido no onboarding ao virar empresa)
+    tipo_empresa = models.CharField(max_length=20, choices=TIPOS_EMPRESA, null=True, blank=True)
+    nome_empresa = models.CharField(max_length=255, null=True, blank=True)
+    bio_empresa = models.TextField(null=True, blank=True)
+    ramo_empresa = models.CharField(max_length=255, null=True, blank=True)
+    ramos_atuacao = models.JSONField(blank=True, default=list)
+    porte_empresa = models.CharField(max_length=20, choices=PORTES_EMPRESA, null=True, blank=True)
+    cnpj = models.CharField(max_length=18, null=True, blank=True)
+    site_empresa = models.URLField(max_length=255, null=True, blank=True)
+    aceitou_termos_empresa = models.BooleanField(default=False)
+    aceitou_termos_freelancer = models.BooleanField(default=False)
     banido = models.BooleanField(default=False, null=True, blank=True)
     deletado = models.BooleanField(default=False, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True, null=True, blank=True)
@@ -22,6 +51,7 @@ class UserProfile(models.Model):
     categories = models.JSONField(blank=True, default=list)
     skills = models.JSONField(blank=True, default=list)
     subscription_plan = models.CharField(max_length=50, default='Gratuito')
+    subscription_cancel_at = models.DateTimeField(null=True, blank=True)
 
     # Novos campos (armazenam URLs públicas do Cloudinary)
     foto_perfil = models.URLField(max_length=500, null=True, blank=True)
@@ -165,6 +195,7 @@ class Candidatura(models.Model):
     # Django specific relations
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='candidaturas', null=True, blank=True)
     ad = models.ForeignKey('Ad', on_delete=models.CASCADE, related_name='candidaturas', null=True, blank=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'candidaturas'
@@ -449,6 +480,7 @@ class Avaliacao(models.Model):
     nota_geral = models.DecimalField(max_digits=3, decimal_places=2)
     comentario = models.TextField(blank=True, default='')
     criado_em = models.DateTimeField(auto_now_add=True, db_column='criada_em')
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'avaliacoes'
@@ -556,6 +588,7 @@ class Certificado(models.Model):
     arquivo = models.FileField(upload_to='certificados/', null=True, blank=True)
     exibir_perfil = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'certificados'
@@ -575,6 +608,7 @@ class Experiencia(models.Model):
     atual = models.BooleanField(default=False)
     descricao = models.TextField(blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'experiencias'
@@ -597,6 +631,7 @@ class MensagemChat(models.Model):
     texto = models.TextField(max_length=2000)
     lida = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'mensagens_chat'
@@ -631,6 +666,7 @@ class Notificacao(models.Model):
     link = models.CharField(max_length=255, blank=True, default='')
     lida = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
+    deletado = models.BooleanField(default=False, null=True, blank=True)
 
     class Meta:
         db_table = 'notificacoes'

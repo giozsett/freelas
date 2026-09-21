@@ -5,6 +5,7 @@ from rest_framework import generics, permissions, parsers
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
@@ -26,8 +27,23 @@ from .models import Certificado, InstituicaoEnsino, Experiencia
 from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.models import SocialAccount
+from .validacao_senha import validar_forca_senha
 
 logger = logging.getLogger(__name__)
+
+
+def _conta_inexistente_response():
+    """Resposta padrão quando o email não existe ou a conta foi removida."""
+    return Response(
+        {'error': 'Você não possui uma conta. Faça cadastro para entrar no site.'},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _conta_foi_removida(user):
+    """True quando o usuário já excluiu a conta (soft delete)."""
+    perfil = UserProfile.objects.filter(user=user).first()
+    return bool(perfil and perfil.deletado)
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -38,7 +54,6 @@ class RegisterAPI(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        token, created = Token.objects.get_or_create(user=user)
         # Cria o UserProfile imediatamente no cadastro comum
         UserProfile.objects.get_or_create(
             user=user,
@@ -47,9 +62,25 @@ class RegisterAPI(generics.GenericAPIView):
                 'email': user.email,
             }
         )
+        # Gera e envia o código de confirmação do email
+        verificacao, _ = VerificacaoEmail.objects.get_or_create(usuario=user)
+        verificacao.verificado = False
+        verificacao.gerar_codigo()
+        try:
+            send_mail(
+                subject='Confirme seu email - Freelas',
+                message=f'Olá, {user.first_name}!\n\nSeu código de confirmação é: {verificacao.codigo}\n\nEle expira em 10 minutos.\n\nEquipe Freelas',
+                from_email=None,
+                recipient_list=[user.email],
+            )
+        except Exception:
+            # Se falhar, o usuário pode solicitar um novo código na tela de verificação
+            pass
+        # Nenhum token emitido: o acesso só é liberado após confirmar o email
         return Response({
-            "user": UserSerializer(user, context=self.get_serializer_context()).data,
-            "token": token.key
+            'message': 'Cadastro realizado. Confirme seu email para entrar.',
+            'email': user.email,
+            'user': UserSerializer(user, context=self.get_serializer_context()).data,
         })
 
 class LoginAPI(APIView):
@@ -58,14 +89,130 @@ class LoginAPI(APIView):
     def post(self, request):
         username = request.data.get("username")
         password = request.data.get("password")
-        user = authenticate(username=username, password=password)
+
+        candidato = (
+            User.objects.select_related('profile').filter(email=username).first()
+            or User.objects.select_related('profile').filter(username=username).first()
+        )
+        # Email não cadastrado (ou conta já removida) não pode logar:
+        # devolve mensagem específica para o frontend orientar o cadastro.
+        if not candidato:
+            return _conta_inexistente_response()
+        if candidato.profile and candidato.profile.deletado:
+            return _conta_inexistente_response()
+
+        user = authenticate(username=candidato.username, password=password)
         if user:
+            if VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists():
+                return Response(
+                    {'error': 'Confirme seu email para poder entrar.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             token, created = Token.objects.get_or_create(user=user)
             return Response({
                 "user": UserSerializer(user).data,
                 "token": token.key
             })
-        return Response({"error": "Wrong Credentials"}, status=status.HTTP_400_BAD_REQUEST)
+        if not User.objects.filter(username=username).exists():
+            return Response({"error": "email_not_found"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "wrong_credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+class ExcluirContaAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from django.db import transaction
+        from django.db.models import Q
+
+        from .models import (
+            Ad,
+            Avaliacao,
+            Candidatura,
+            Certificado,
+            Experiencia,
+            MensagemChat,
+            Notificacao,
+            AcordoServico,
+        )
+        from .serializers import _destruir_imagem_cloudinary
+
+        senha = request.data.get('senha', '')
+        # Contas criadas por login social (Google/LinkedIn) não possuem senha:
+        # para elas, a confirmação textual "EXCLUIR" feita no frontend basta.
+        if request.user.has_usable_password():
+            if not request.user.check_password(senha):
+                return Response({"error": "Senha incorreta."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                user = request.user
+                profile = UserProfile.objects.filter(user=user).first()
+
+                # Soft delete + anonimização da tabela 'usuarios' do Supabase
+                if profile:
+                    _destruir_imagem_cloudinary(profile.foto_perfil)
+                    _destruir_imagem_cloudinary(profile.banner)
+                    profile.deletado = True
+                    profile.nome_completo = "Usuário removido"
+                    profile.email = f"deletado_{user.id}@freelas.local"
+                    profile.nome_fantasia = None
+                    profile.bio = ""
+                    profile.bio_empresa = ""
+                    profile.nome_empresa = None
+                    profile.ramo_empresa = None
+                    profile.porte_empresa = None
+                    profile.cnpj = None
+                    profile.site_empresa = None
+                    profile.redes_sociais = []
+                    profile.skills = []
+                    profile.categories = []
+                    profile.cidade = ""
+                    profile.estado = ""
+                    profile.telefone = ""
+                    profile.curriculo = None
+                    profile.foto_perfil = None
+                    profile.banner = None
+                    profile.disponivel = False
+                    profile.save()
+
+                # Soft delete de todo o conteúdo criado pelo usuário
+                Ad.objects.filter(author=user).update(deletado=True)
+                Candidatura.objects.filter(user=user).update(deletado=True)
+                MensagemChat.objects.filter(remetente=user).update(deletado=True)
+                Notificacao.objects.filter(usuario=user).update(deletado=True)
+
+                if profile:
+                    Avaliacao.objects.filter(
+                        Q(avaliador=profile) | Q(avaliado=profile)
+                    ).update(deletado=True)
+                    Certificado.objects.filter(usuario=profile).update(deletado=True)
+                    Experiencia.objects.filter(usuario=profile).update(deletado=True)
+
+                # Os acordos são bilaterais (a outra parte continua usando): só
+                # anonimizamos o nome da parte excluída, mantendo o registro.
+                AcordoServico.objects.filter(
+                    candidatura__user=user
+                ).update(nome_prestador="Usuário removido")
+                AcordoServico.objects.filter(
+                    candidatura__ad__author=user
+                ).update(nome_contratante="Usuário removido")
+
+                user.first_name = ""
+                user.last_name = ""
+                user.is_active = False
+                user.save(update_fields=['first_name', 'last_name', 'is_active'])
+
+            # Os tokens caem fora da transação: mesmo que algo falhe antes,
+            # o usuário não permanece logado após tentar a exclusão.
+            Token.objects.filter(user=request.user).delete()
+
+            return Response({"mensagem": "Conta excluída com sucesso."}, status=status.HTTP_200_OK)
+        except Exception:
+            logger.exception("Erro inesperado ao excluir a conta do usuário %s", request.user.id)
+            return Response(
+                {"error": "Erro interno ao excluir a conta. Tente novamente mais tarde."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class UserAPI(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -142,6 +289,8 @@ class FotoPerfilUploadAPIView(generics.UpdateAPIView):
         import cloudinary.uploader
         try:
             public_id = url.split('/image/upload/')[-1].split('?')[0]
+            if '.' in public_id.rsplit('/', 1)[-1]:
+                public_id = public_id.rsplit('.', 1)[0]
             cloudinary.uploader.destroy(public_id, resource_type='image', invalidate=True)
         except Exception:
             pass
@@ -205,7 +354,7 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.IsAuthenticated()]
+            return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
@@ -230,7 +379,8 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         # Uma denúncia nova nunca pode chegar do cliente já julgada, e quem
         # denunciou é sempre o usuário autenticado (nunca o que o cliente
         # mandar no corpo) — reporter já é read-only no serializer.
-        serializer.save(status='pending', reporter=self.request.user)
+        reporter = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(status='pending', reporter=reporter)
 
 class ReportUpdateAPIView(generics.UpdateAPIView):
     queryset = Report.objects.all()
@@ -436,6 +586,13 @@ class PublicProfileAPIView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get_object(self):
+        # Perfis excluídos (soft delete) deixam de existir publicamente.
+        perfil = super().get_object()
+        if getattr(getattr(perfil, 'profile', None), 'deletado', False):
+            raise Http404("Usuário não encontrado.")
+        return perfil
+
 class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CandidaturaSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -448,7 +605,7 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             'ad__author', 'user',
         ).filter(
             Q(user=self.request.user) | Q(ad__author=self.request.user)
-        ).order_by('-enviado_em')
+        ).exclude(deletado=True).order_by('-enviado_em')
         user_id = self.request.query_params.get('user_id')
         ad_id = self.request.query_params.get('ad_id')
 
@@ -508,7 +665,10 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Candidatura.objects.filter(ad__author=self.request.user)
+        return Candidatura.objects.filter(
+            ad__author=self.request.user,
+            deletado=False,
+        )
 
     def patch(self, request, *args, **kwargs):
         from django.db import transaction
@@ -567,7 +727,7 @@ class CandidaturaUpdateAPIView(generics.UpdateAPIView):
                     tipo='candidatura',
                     titulo='Candidatura recusada',
                     mensagem='Sua candidatura ao anúncio "{ad_titulo}" foi recusada.',
-                    link='/my-applications',
+                    link='/my-freelas?tab=candidaturas',
                     ad=candidatura.ad,
                 )
 
@@ -580,7 +740,8 @@ class CandidaturaRetrieveAPIView(generics.RetrieveAPIView):
     def get_queryset(self):
         from django.db.models import Q
         return Candidatura.objects.filter(
-            Q(user=self.request.user) | Q(ad__author=self.request.user)
+            Q(user=self.request.user) | Q(ad__author=self.request.user),
+            deletado=False,
         )
 
 
@@ -597,6 +758,7 @@ class NotificacaoListAPIView(generics.ListAPIView):
     def get_queryset(self):
         return Notificacao.objects.filter(
             usuario=self.request.user,
+            deletado=False,
         ).select_related('ad').order_by('-criado_em')[:50]
 
 
@@ -609,6 +771,7 @@ class NotificacaoNaoLidasAPIView(APIView):
         nao_lidas = Notificacao.objects.filter(
             usuario=request.user,
             lida=False,
+            deletado=False,
         )
         total = nao_lidas.count()
         por_tipo = dict(
@@ -646,6 +809,7 @@ class NotificacaoMarcarLidasAPIView(APIView):
         queryset = Notificacao.objects.filter(
             usuario=request.user,
             lida=False,
+            deletado=False,
         )
         tipos = request.data.get('tipos')
         if tipos:
@@ -723,7 +887,10 @@ class GoogleSocialLoginAPI(APIView):
                 user.last_name = user.last_name or last_name
                 user.save(update_fields=['first_name', 'last_name'])
         else:
-            if User.objects.filter(email__iexact=email).exists():
+            outra_conta = User.objects.filter(email__iexact=email).first()
+            if outra_conta:
+                if _conta_foi_removida(outra_conta):
+                    return _conta_inexistente_response()
                 return Response(
                     {
                         'error': 'Este email já está sendo utilizado.',
@@ -743,6 +910,10 @@ class GoogleSocialLoginAPI(APIView):
                 user=user,
                 extra_data=identity,
             )
+
+        # Conta removida (excluída pelo usuário) não volta a entrar por login social
+        if _conta_foi_removida(user):
+            return _conta_inexistente_response()
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -859,7 +1030,10 @@ class LinkedInSocialLoginAPI(APIView):
                 user.last_name = user.last_name or last_name
                 user.save(update_fields=['first_name', 'last_name'])
         else:
-            if User.objects.filter(email__iexact=email).exists():
+            outra_conta = User.objects.filter(email__iexact=email).first()
+            if outra_conta:
+                if _conta_foi_removida(outra_conta):
+                    return _conta_inexistente_response()
                 return Response(
                     {
                         'error': 'Este email já está sendo utilizado.',
@@ -879,6 +1053,10 @@ class LinkedInSocialLoginAPI(APIView):
                 user=user,
                 extra_data=identity,
             )
+
+        # Conta removida (excluída pelo usuário) não volta a entrar por login social
+        if _conta_foi_removida(user):
+            return _conta_inexistente_response()
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -1020,6 +1198,10 @@ class RedefinirSenhaAPI(APIView):
 
         if verificacao.codigo != codigo:
             return Response({'error': 'Código incorreto.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        erro_senha = validar_forca_senha(nova_senha)
+        if erro_senha:
+            return Response({'error': erro_senha}, status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(nova_senha)
         user.save()
@@ -1439,12 +1621,15 @@ class AvaliacoesPendentesAPIView(APIView):
 
 import logging
 import stripe
+from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 from .models import Pagamento
 from .serializers import PagamentoSerializer
+
+PRAZO_ARREPENDIMENTO_DIAS = 7
 
 
 logger = logging.getLogger(__name__)
@@ -1613,6 +1798,128 @@ class CriarPreferenciaAssinaturaAPI(APIView):
         })
 
 
+class CancelarAssinaturaAPI(APIView):
+    """Cancela a assinatura paga do usuário.
+
+    Art. 49 do CDC: contratações fora do estabelecimento comercial (todo o
+    checkout do Freelas é online) dão direito a arrependimento com estorno
+    integral em até 7 dias corridos da contratação. Depois desse prazo, o
+    cancelamento só interrompe a renovação futura; o acesso ao plano pago
+    continua até o fim do período já pago.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        pagamento = Pagamento.objects.filter(
+            usuario=request.user,
+            tipo='assinatura',
+            status='pago',
+            mp_payment_id__isnull=False,
+        ).order_by('-criado_em').first()
+
+        if not pagamento or profile.subscription_plan == 'Gratuito':
+            return Response(
+                {'error': 'Nenhuma assinatura ativa para cancelar.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not _stripe_configurado():
+            return Response(
+                {'error': 'O cancelamento via Stripe ainda não está configurado.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        subscription_id = pagamento.mp_payment_id
+        try:
+            subscription = stripe.Subscription.retrieve(subscription_id).to_dict()
+        except stripe.error.StripeError as exc:
+            return Response(
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if subscription.get('status') == 'canceled':
+            return Response(
+                {'error': 'Esta assinatura já foi cancelada.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        inicio = datetime.fromtimestamp(subscription['start_date'], tz=dt_timezone.utc)
+        dentro_do_prazo = (timezone.now() - inicio) <= timedelta(days=PRAZO_ARREPENDIMENTO_DIAS)
+
+        if dentro_do_prazo:
+            try:
+                stripe.Subscription.delete(subscription_id)
+            except stripe.error.StripeError as exc:
+                return Response(
+                    {'error': getattr(exc, 'user_message', None) or str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            reembolsado = False
+            invoice_id = subscription.get('latest_invoice')
+            if invoice_id:
+                try:
+                    invoice = stripe.Invoice.retrieve(invoice_id).to_dict()
+                    payment_intent = invoice.get('payment_intent')
+                    if payment_intent:
+                        stripe.Refund.create(payment_intent=payment_intent)
+                        reembolsado = True
+                except stripe.error.StripeError:
+                    logger.warning(
+                        'Falha ao estornar a assinatura %s do usuário %s.',
+                        subscription_id, request.user.id,
+                    )
+
+            pagamento.status = 'cancelado'
+            pagamento.save(update_fields=['status', 'atualizado_em'])
+            profile.subscription_plan = 'Gratuito'
+            profile.subscription_cancel_at = None
+            profile.save(update_fields=['subscription_plan', 'subscription_cancel_at'])
+
+            criar_notificacao(
+                usuario=request.user,
+                tipo='pagamento',
+                titulo='Assinatura cancelada e estornada',
+                mensagem='Sua assinatura foi cancelada dentro do prazo de 7 dias e o valor pago foi estornado, conforme o Código de Defesa do Consumidor (Art. 49).',
+                link='/my-payments',
+            )
+            return Response({
+                'cancelado': True,
+                'reembolsado': reembolsado,
+                'plano_atual': 'Gratuito',
+            })
+
+        try:
+            subscription = stripe.Subscription.modify(
+                subscription_id, cancel_at_period_end=True,
+            ).to_dict()
+        except stripe.error.StripeError as exc:
+            return Response(
+                {'error': getattr(exc, 'user_message', None) or str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        cancel_at = datetime.fromtimestamp(subscription['current_period_end'], tz=dt_timezone.utc)
+        profile.subscription_cancel_at = cancel_at
+        profile.save(update_fields=['subscription_cancel_at'])
+
+        criar_notificacao(
+            usuario=request.user,
+            tipo='pagamento',
+            titulo='Assinatura não será renovada',
+            mensagem=f'Sua assinatura não será mais renovada. Você continua com acesso ao plano {profile.subscription_plan} até {cancel_at.strftime("%d/%m/%Y")}.',
+            link='/my-payments',
+        )
+        return Response({
+            'cancelado': True,
+            'reembolsado': False,
+            'plano_atual': profile.subscription_plan,
+            'cancelamento_agendado_para': cancel_at.isoformat(),
+        })
+
+
 class CriarPreferenciaAcordoAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1730,6 +2037,77 @@ class CriarPreferenciaAcordoAPI(APIView):
         })
 
 
+def _processar_renovacao_stripe(invoice):
+    """Processa um evento `invoice.payment_succeeded` do Stripe.
+
+    Só a renovação mensal automática (billing_reason='subscription_cycle')
+    gera um novo registro de pagamento: a primeira cobrança de uma
+    assinatura já é registrada via `checkout.session.completed`.
+    """
+    if invoice.get('billing_reason') != 'subscription_cycle':
+        return False
+
+    subscription_id = invoice.get('subscription')
+    if not subscription_id:
+        return False
+
+    pagamento_anterior = Pagamento.objects.filter(
+        tipo='assinatura', mp_payment_id=subscription_id,
+    ).order_by('-criado_em').first()
+    if not pagamento_anterior:
+        logger.warning('Renovação Stripe sem assinatura correspondente: %s.', subscription_id)
+        return False
+
+    try:
+        valor = (Decimal(invoice.get('amount_paid')) / Decimal('100')).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError):
+        return False
+
+    _, created = Pagamento.objects.get_or_create(
+        referencia_externa=f"stripe:renovacao:{invoice.get('id')}",
+        defaults={
+            'usuario': pagamento_anterior.usuario,
+            'tipo': 'assinatura',
+            'status': 'pago',
+            'valor': valor,
+            'plano': pagamento_anterior.plano,
+            'mp_payment_id': subscription_id,
+            'forma_pagamento': 'stripe',
+            'aprovado_em': timezone.now(),
+        },
+    )
+    return created
+
+
+def _processar_assinatura_encerrada_stripe(subscription):
+    """Processa um evento `customer.subscription.deleted` do Stripe: aplica
+    o downgrade para o plano Gratuito quando um cancelamento agendado (fim
+    do período pago) finalmente é efetivado."""
+    subscription_id = subscription.get('id')
+    if not subscription_id:
+        return False
+
+    pagamento = Pagamento.objects.filter(
+        tipo='assinatura', mp_payment_id=subscription_id,
+    ).order_by('-criado_em').first()
+    if not pagamento:
+        return False
+
+    profile, _ = UserProfile.objects.get_or_create(user=pagamento.usuario)
+    profile.subscription_plan = 'Gratuito'
+    profile.subscription_cancel_at = None
+    profile.save(update_fields=['subscription_plan', 'subscription_cancel_at'])
+
+    criar_notificacao(
+        usuario=pagamento.usuario,
+        tipo='pagamento',
+        titulo='Assinatura encerrada',
+        mensagem='Sua assinatura chegou ao fim e seu plano voltou a ser Gratuito.',
+        link='/my-payments',
+    )
+    return True
+
+
 class StripeWebhookAPI(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -1756,6 +2134,14 @@ class StripeWebhookAPI(APIView):
 
         if event['type'] == 'checkout.session.completed':
             processed = _confirmar_pagamento_stripe(event['data']['object'].to_dict())
+            return Response({'status': 'processed' if processed else 'received'})
+
+        if event['type'] == 'invoice.payment_succeeded':
+            processed = _processar_renovacao_stripe(event['data']['object'].to_dict())
+            return Response({'status': 'processed' if processed else 'received'})
+
+        if event['type'] == 'customer.subscription.deleted':
+            processed = _processar_assinatura_encerrada_stripe(event['data']['object'].to_dict())
             return Response({'status': 'processed' if processed else 'received'})
 
         return Response({'status': 'ignored'})

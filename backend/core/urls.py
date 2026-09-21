@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     EnviarCodigoVerificacaoAPI, RegisterAPI, LoginAPI, UserAPI, UserProfileAPIView,
+    ExcluirContaAPIView,
     ReportListCreateAPIView, ReportUpdateAPIView, AdListCreateAPIView, AdRetrieveAPIView,
     AdLimiteMensalAPIView, CandidaturaLimiteMensalAPIView,
     PublicProfileAPIView, CandidaturaListCreateAPIView, CandidaturaUpdateAPIView,
@@ -9,7 +10,7 @@ from .views import (
     AcordoServicoListCreateAPIView, AcordoServicoRetrieveUpdateAPIView,
     FotoPerfilUploadAPIView, CertificadoListCreateAPIView, CertificadoRetrieveUpdateDestroyAPIView,
     InstituicaoEnsinoListAPIView, ExperienciaListCreateAPIView, ExperienciaRetrieveUpdateDestroyAPIView,
-    CriarPreferenciaAssinaturaAPI, CriarPreferenciaAcordoAPI,
+    CriarPreferenciaAssinaturaAPI, CancelarAssinaturaAPI, CriarPreferenciaAcordoAPI,
     DecidirCancelamentoAcordoAPI, StripeWebhookAPI,
     PagamentoHistoricoAPIView, ConcluirAcordoAPI,
     SolicitarCancelamentoAcordoAPI, SolicitacaoAlteracaoAdminListAPIView,
@@ -27,6 +28,7 @@ urlpatterns = [
     path('api/auth/user/', UserAPI.as_view(), name='user'),
     path('api/auth/profile/', UserProfileAPIView.as_view(), name='profile'),
     path('api/auth/profile/foto/', FotoPerfilUploadAPIView.as_view(), name='profile-foto'),
+    path('api/auth/excluir-conta/', ExcluirContaAPIView.as_view(), name='excluir-conta'),
     path('api/certificados/', CertificadoListCreateAPIView.as_view(), name='certificado-list'),
     path('api/certificados/<int:pk>/', CertificadoRetrieveUpdateDestroyAPIView.as_view(), name='certificado-detail'),
     path('api/instituicoes/', InstituicaoEnsinoListAPIView.as_view(), name='instituicoes-list'),
@@ -57,6 +59,7 @@ urlpatterns = [
     path('api/avaliacoes/', AvaliacaoListCreateAPIView.as_view(), name='avaliacao-list'),
     path('api/avaliacoes/pendentes/', AvaliacoesPendentesAPIView.as_view(), name='avaliacao-pendentes'),
     path('api/pagamentos/assinatura/', CriarPreferenciaAssinaturaAPI.as_view(), name='pagamento-assinatura'),
+    path('api/pagamentos/assinatura/cancelar/', CancelarAssinaturaAPI.as_view(), name='pagamento-assinatura-cancelar'),
     path('api/pagamentos/acordo/', CriarPreferenciaAcordoAPI.as_view(), name='pagamento-acordo'),
     path('api/pagamentos/webhook/', StripeWebhookAPI.as_view(), name='pagamento-webhook'),
     path('api/pagamentos/historico/', PagamentoHistoricoAPIView.as_view(), name='pagamento-historico'),

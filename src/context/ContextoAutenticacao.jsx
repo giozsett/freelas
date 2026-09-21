@@ -51,8 +51,12 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
   };
 
+  const ajustarPapel = (papel) => {
+    setUser(prev => (prev ? { ...prev, profile: { ...prev.profile, papel } } : prev));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, ajustarPapel }}>
       {children}
     </AuthContext.Provider>
   );

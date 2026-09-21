@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   Star,
   CreditCard,
+  CircleDollarSign,
   Wallet,
   LogOut,
   Settings,
@@ -33,23 +34,30 @@ const NOTIF_ICON = {
 };
 
 // Pendências de candidatura aparecem em "Meus Anúncios" quando o papel ativo é
-// contratante (quem recebe candidaturas) e em "Minhas Candidaturas" quando é
-// freelancer (quem se candidatou) — mesma regra da navbar anterior.
+// contratante (quem recebe candidaturas) e em "Meus freelas" quando é freelancer
+// (quem se candidatou — a aba de candidaturas fica dentro de Meus freelas).
 function montarSecoesMenu(porTipo, role) {
+  const nomeFreelas = role === 'freelancer' ? 'Meus freelas' : 'Minhas contratações';
   return [
     {
       titulo: 'Conta',
       itens: [
         { icon: UserRound, to: '/profile', label: 'Meu perfil', tipos: [] },
-        { icon: Settings, to: '/plans', label: 'Planos e assinatura', tipos: [] },
+        { icon: CircleDollarSign, to: '/plans', label: 'Planos e assinatura', tipos: [] },
+        { icon: Settings, to: '/settings', label: 'Configurações', tipos: [] },
       ],
     },
     {
       titulo: 'Atividade',
       itens: [
         { icon: FileText, to: '/my-ads', label: 'Meus anúncios', tipos: ['candidatura'], count: role === 'contractor' ? porTipo.candidatura || 0 : 0 },
-        { icon: ClipboardCheck, to: '/my-applications', label: 'Minhas candidaturas', tipos: ['candidatura'], count: role === 'freelancer' ? porTipo.candidatura || 0 : 0 },
-        { icon: HandCoins, to: '/my-freelas', label: 'Meus freelas', tipos: ['acordo'], count: porTipo.acordo || 0 },
+        {
+          icon: HandCoins,
+          to: '/my-freelas',
+          label: nomeFreelas,
+          tipos: role === 'freelancer' ? ['acordo', 'candidatura'] : ['acordo'],
+          count: (porTipo.acordo || 0) + (role === 'freelancer' ? porTipo.candidatura || 0 : 0),
+        },
         { icon: Star, to: '/my-reviews', label: 'Minhas avaliações', tipos: ['avaliacao'], count: porTipo.avaliacao || 0 },
       ],
     },
@@ -65,7 +73,7 @@ function montarSecoesMenu(porTipo, role) {
 export default function BarraNavegacao() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const { role, toggleRole } = useRole();
+  const { role } = useRole();
   const { naoLidas, porTipo, notificacoes, chatNaoLidas, carregarLista, marcarLidas, limparNotificacoes } = useNotificacoes();
   const navigate = useNavigate();
   const location = useLocation();
@@ -174,32 +182,6 @@ export default function BarraNavegacao() {
 
   const menuSecoes = montarSecoesMenu(porTipo, role);
 
-  const RoleSwitch = () => (
-    <div className={`fn-segmented fn-segmented--role ${role === 'contractor' ? 'is-second' : ''}`}>
-      <span className="fn-segmented__thumb" />
-      <button
-        type="button"
-        className={`fn-segmented__opt ${role === 'freelancer' ? 'is-active' : ''}`}
-        onClick={() => role !== 'freelancer' && toggleRole()}
-        aria-pressed={role === 'freelancer'}
-        title="Freelancer"
-      >
-        <Briefcase size={14} />
-        <span className="fn-segmented__opt-label">Freelancer</span>
-      </button>
-      <button
-        type="button"
-        className={`fn-segmented__opt ${role === 'contractor' ? 'is-active' : ''}`}
-        onClick={() => role !== 'contractor' && toggleRole()}
-        aria-pressed={role === 'contractor'}
-        title="Contratante"
-      >
-        <HandCoins size={14} />
-        <span className="fn-segmented__opt-label">Contratante</span>
-      </button>
-    </div>
-  );
-
   // eslint-disable-next-line react/prop-types -- componente interno, sem contrato de props formal
   const UserMenuContent = ({ onNavigate }) => (
     <>
@@ -215,7 +197,7 @@ export default function BarraNavegacao() {
         </div>
         <span className="fn-role-chip">
           {role === 'freelancer' ? <Briefcase size={12} /> : <HandCoins size={12} />}
-          {role === 'freelancer' ? 'Freelancer' : 'Contratante'}
+          {role === 'freelancer' ? 'Freelancer' : 'Empresa'}
         </span>
       </div>
 
@@ -302,9 +284,8 @@ export default function BarraNavegacao() {
           <span className="fn-brand__word">Freelas</span>
         </Link>
 
-        {/* ── Controles centrais (papel + tema) — ocultos em telas estreitas ── */}
+        {/* ── Controles centrais (tema) — ocultos em telas estreitas ── */}
         <div className="fn-center">
-          <RoleSwitch />
           <ThemeToggle className="fn-theme-btn" />
         </div>
 
@@ -393,7 +374,6 @@ export default function BarraNavegacao() {
             </div>
 
             <div className="fn-drawer__controls">
-              <RoleSwitch />
               <ThemeToggle className="fn-theme-btn" />
             </div>
 

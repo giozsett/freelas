@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import BarraNavegacao from './components/BarraNavegacao';
 import Inicio from './pages/Inicio';
 import Perfil from './pages/Perfil';
@@ -11,7 +11,6 @@ import Conversa from './pages/Conversa';
 import EditarPerfil from './pages/EditarPerfil';
 import Planos from './pages/Planos';
 import MeusAnuncios from './pages/MeusAnuncios';
-import MinhasCandidaturas from './pages/MinhasCandidaturas';
 import PerfilPublico from './pages/PerfilPublico';
 import GerenciarCandidaturas from './pages/GerenciarCandidaturas';
 import RotaPrivada from './components/RotaPrivada';
@@ -24,15 +23,19 @@ import EsqueciSenha from './pages/EsqueciSenha';
 import LinkedinCallback from './components/LinkedinCallback';
 import MeusFreelas from './pages/MeusFreelas';
 import MinhasAvaliacoes from './pages/MinhasAvaliacoes';
+import Configuracoes from './pages/Configuracoes';
+import EscolherPapel from './pages/EscolherPapel';
+import CriarPerfilEmpresa from './pages/CriarPerfilEmpresa';
 import { ProvedorDialogo } from './context/ContextoDialogo';
 
-function App() {
+function ConteudoApp() {
+  const location = useLocation();
+  const isPaginaAutenticacao = location.pathname === '/login' || location.pathname === '/register';
+
   return (
-    <ProvedorDialogo>
-    <Router>
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <BarraNavegacao />
-        <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem', flex: 1, width: '100%' }}>
+        <div className="container" style={{ marginTop: '2rem', marginBottom: isPaginaAutenticacao ? '1.5rem' : '4rem', flex: isPaginaAutenticacao ? '0 1 auto' : 1, width: '100%' }}>
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/login" element={<Login />} />
@@ -48,20 +51,31 @@ function App() {
           <Route path="/plans" element={<Planos />} />
           <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
           <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
-          <Route path="/my-applications" element={<RotaPrivada><MinhasCandidaturas /></RotaPrivada>} />
-          <Route path="/user/:id" element={<PerfilPublico />} />
+          <Route path="/my-applications" element={<RotaPrivada><Navigate to="/my-freelas?tab=candidaturas" replace /></RotaPrivada>} />
+          <Route path="/user/:id" element={<RotaPrivada><PerfilPublico /></RotaPrivada>} />
           <Route path="/moderator-login" element={<LoginModerador />} />
           <Route path="/moderation-panel" element={<PainelModeracao />} />
           <Route path="/subscription-setup" element={<RotaPrivada><ConfigurarAssinatura /></RotaPrivada>} />
           <Route path="/my-payments" element={<RotaPrivada><MeusPagamentos /></RotaPrivada>} />
           <Route path="/my-freelas" element={<RotaPrivada><MeusFreelas /></RotaPrivada>} />
           <Route path="/my-reviews" element={<RotaPrivada><MinhasAvaliacoes /></RotaPrivada>} />
+          <Route path="/settings" element={<RotaPrivada><Configuracoes /></RotaPrivada>} />
           <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+          <Route path="/escolher-papel" element={<RotaPrivada><EscolherPapel /></RotaPrivada>} />
+          <Route path="/criar-perfil-empresa" element={<RotaPrivada><CriarPerfilEmpresa /></RotaPrivada>} />
         </Routes>
       </div>
       <Rodape />
       </div>
-    </Router>
+  );
+}
+
+function App() {
+  return (
+    <ProvedorDialogo>
+      <Router>
+        <ConteudoApp />
+      </Router>
     </ProvedorDialogo>
   );
 }

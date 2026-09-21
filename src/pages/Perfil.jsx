@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Circle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
+import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Circle, Upload, Briefcase, Building2, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
@@ -61,7 +61,14 @@ export default function Profile() {
           redes_sociais: data.redes_sociais || [],
           email_visivel: data.email_visivel !== undefined ? data.email_visivel : true,
           telefone_visivel: data.telefone_visivel !== undefined ? data.telefone_visivel : true,
-          curriculo: data.curriculo || null
+          curriculo: data.curriculo || null,
+          tipo_empresa: data.tipo_empresa || null,
+          nome_empresa: data.nome_empresa || '',
+          bio_empresa: data.bio_empresa || '',
+          ramo_empresa: data.ramo_empresa || '',
+          porte_empresa: data.porte_empresa || '',
+          cnpj: data.cnpj || '',
+          site_empresa: data.site_empresa || '',
         });
       })
       .catch(err => console.error(err));
@@ -105,6 +112,12 @@ export default function Profile() {
     plan: profile.subscription_plan
   };
 
+  const ehEmpresaCnpj = authUser?.profile?.papel === 'empresa' && profile.tipo_empresa === 'cnpj';
+  const nomeExibido = ehEmpresaCnpj && profile.nome_empresa ? profile.nome_empresa : userContext.name;
+  const bioExibida = ehEmpresaCnpj && profile.bio_empresa
+    ? profile.bio_empresa
+    : (profile.bio || "Adicione uma biografia no botão 'Editar'.");
+
   return (
     <div className="profile-page">
       <div className="card profile-card fade-in">
@@ -119,15 +132,23 @@ export default function Profile() {
           <div style={{ marginTop: profile.banner ? '-40px' : '0', width: '150px', height: '150px', borderRadius: '50%', background: 'var(--holo-gradient)', border: '4px solid var(--surface-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {profile.foto_perfil ? (
               <img src={profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+            ) : ehEmpresaCnpj ? (
+              <Building2 size={56} color="var(--primary)" />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
-                {userContext.name.charAt(0)}
+                {nomeExibido.charAt(0)}
               </span>
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{userContext.name}</h1>
+              <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{nomeExibido}</h1>
+              {ehEmpresaCnpj && (
+                <span className="selo-empresa">
+                  <Building2 size={14} />
+                  Empresa com CNPJ
+                </span>
+              )}
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -215,8 +236,8 @@ export default function Profile() {
         )}
 
         <section className="profile-section">
-          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Sobre Mim</h2>
-          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{profile.bio || "Adicione uma biografia no botão 'Editar'."}</p>
+          <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>{ehEmpresaCnpj ? 'Sobre a Empresa' : 'Sobre Mim'}</h2>
+          <p style={{ fontSize: '1.2rem', lineHeight: 1.8 }}>{bioExibida}</p>
         </section>
 
         <section className="profile-section">

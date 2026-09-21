@@ -274,7 +274,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="fade-in">
         <div className="ads-toolbar">
-          <h2>{role === 'freelancer' ? 'Vagas de Contratantes' : 'Serviços Freelancers'}</h2>
+          <h2>{role === 'freelancer' ? 'Vagas de freelancer' : 'Vagas de contratante'}</h2>
           {!adsLoading && filteredAds.length > 0 && (
             <span className="ads-toolbar__count">
               Mostrando {inicioPagina + 1}–{Math.min(inicioPagina + PAGE_SIZE, filteredAds.length)} de {filteredAds.length} anúncios

@@ -61,11 +61,11 @@ export default function LimitePlano({ recurso }) {
         background: 'var(--surface-color)',
         border: '1px solid var(--border-color)',
         borderRadius: '10px',
-        padding: '1rem',
-        marginBottom: '1.5rem',
+        padding: '0.6rem 1rem',
+        marginBottom: '1rem',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.6rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: ilimitado ? 0 : '0.6rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Icon size={16} color={cor} />
           <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{rotulo}</span>

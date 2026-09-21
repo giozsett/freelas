@@ -145,7 +145,9 @@ def enviar_mensagem(acordo, remetente, texto):
 def listar_mensagens(acordo_id):
     from .models import MensagemChat
 
-    qs = MensagemChat.objects.filter(acordo_id=acordo_id).select_related('remetente__profile')
+    qs = MensagemChat.objects.filter(
+        acordo_id=acordo_id, deletado=False,
+    ).select_related('remetente__profile')
     return [_serializar_mensagem(m) for m in qs]
 
 
@@ -153,7 +155,7 @@ def ultima_mensagem(acordo_id):
     from .models import MensagemChat
 
     msg = (
-        MensagemChat.objects.filter(acordo_id=acordo_id)
+        MensagemChat.objects.filter(acordo_id=acordo_id, deletado=False)
         .select_related('remetente__profile')
         .order_by('-criado_em')
         .first()
@@ -165,7 +167,9 @@ def nao_lidas(acordo_id, user_id):
     from .models import MensagemChat
 
     return (
-        MensagemChat.objects.filter(acordo_id=acordo_id, lida=False)
+        MensagemChat.objects.filter(
+            acordo_id=acordo_id, lida=False, deletado=False,
+        )
         .exclude(remetente_id=user_id)
         .count()
     )
@@ -177,7 +181,9 @@ def total_nao_lidas(acordo_ids, user_id):
     from .models import MensagemChat
 
     return (
-        MensagemChat.objects.filter(acordo_id__in=list(acordo_ids), lida=False)
+        MensagemChat.objects.filter(
+            acordo_id__in=list(acordo_ids), lida=False, deletado=False,
+        )
         .exclude(remetente_id=user_id)
         .count()
     )

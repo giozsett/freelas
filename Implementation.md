@@ -11,6 +11,9 @@
 - A plataforma cobra uma taxa de 10% sobre o valor total de cada acordo fechado.
 - Cada anúncio possui um prazo de 30 dias, após isso ele é considerado como vencido, para preservar o sistema de planos de assinatura.
 - Usuários que fizerem muitas denúncias em um curto período de tempo deve tomar um soft ban, suas denúncias não serão mais consideradas por um tempo.
+- Direito de arrependimento (Art. 49 do CDC): como a contratação de assinaturas ocorre inteiramente fora do estabelecimento comercial (checkout online), o usuário pode cancelar em até 7 dias corridos da contratação e recebe estorno integral do valor pago via Stripe, com o plano voltando a ser Gratuito imediatamente.
+- Após esse prazo de 7 dias, o cancelamento não gera estorno: apenas interrompe a renovação automática, e o usuário mantém acesso ao plano pago até o fim do período já pago.
+- Assinaturas pagas são renovadas automaticamente a cada 1 mês via Stripe, até que o usuário cancele.
 
 
 ### Páginas
@@ -49,6 +52,7 @@
 
 #### Telas
 - Meus pagamentos: histórico de pagamentos já realizados.
+    Também é possível cancelar a assinatura atual nesta tela; o cancelamento é feito via API do Stripe e segue a regra de arrependimento do Art. 49 do CDC.
 
 
 ### PLANOS E ASSINATURAS

@@ -1,8 +1,11 @@
+from datetime import timedelta, timezone as dt_timezone
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.utils import timezone
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from .models import (
@@ -28,6 +31,14 @@ class FakeStripeSession(dict):
         super().__init__(id=id, url=url)
         self.id = id
         self.url = url
+
+
+class FakeStripeObject(dict):
+    """Simula um StripeObject (Subscription, Invoice, etc.): assim como o SDK
+    real, expõe os dados via `.to_dict()` em vez de métodos de dict."""
+
+    def to_dict(self):
+        return dict(self)
 
 
 FAKE_PLANOS_PAGOS = {
@@ -168,13 +179,13 @@ class PagamentoAPITests(TestCase):
         )
         construct_event.return_value = {
             'type': 'checkout.session.completed',
-            'data': {'object': {
+            'data': {'object': FakeStripeObject({
                 'client_reference_id': pagamento.referencia_externa,
                 'amount_total': 125000,
                 'currency': 'brl',
                 'payment_status': 'paid',
                 'payment_intent': 'pi_teste123',
-            }},
+            })},
         }
 
         response = self.client.post(
@@ -730,6 +741,211 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(Report.objects.get(pk=response.data['id']).status, 'pending')
 
 
+class CancelamentoAssinaturaAPITests(TestCase):
+    """Cancelamento de assinatura: direito de arrependimento do Art. 49 do
+    CDC (estorno integral em até 7 dias da contratação) e, fora desse prazo,
+    apenas a suspensão da renovação automática ao fim do período pago."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.usuario = User.objects.create_user(
+            username='assinante@example.com',
+            email='assinante@example.com',
+            password='secret123',
+        )
+        self.usuario.profile.subscription_plan = 'Gold'
+        self.usuario.profile.save(update_fields=['subscription_plan'])
+        self.pagamento = Pagamento.objects.create(
+            usuario=self.usuario,
+            tipo='assinatura',
+            status='pago',
+            valor=Decimal('29.90'),
+            referencia_externa='sub:gold:1',
+            mp_payment_id='sub_123',
+            plano='Gold',
+            aprovado_em=timezone.now() - timedelta(days=2),
+        )
+        self.client.force_authenticate(self.usuario)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create')
+    @patch('core.views.stripe.Invoice.retrieve')
+    @patch('core.views.stripe.Subscription.delete')
+    @patch('core.views.stripe.Subscription.retrieve')
+    def test_cancelamento_dentro_de_7_dias_estorna_e_derruba_plano(
+        self, retrieve, delete, invoice_retrieve, refund_create,
+    ):
+        inicio = timezone.now() - timedelta(days=2)
+        retrieve.return_value = FakeStripeObject(
+            status='active',
+            start_date=int(inicio.timestamp()),
+            latest_invoice='in_123',
+        )
+        invoice_retrieve.return_value = FakeStripeObject(payment_intent='pi_123')
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['cancelado'])
+        self.assertTrue(response.data['reembolsado'])
+        self.assertEqual(response.data['plano_atual'], 'Gratuito')
+
+        delete.assert_called_once_with('sub_123')
+        refund_create.assert_called_once_with(payment_intent='pi_123')
+
+        self.usuario.profile.refresh_from_db()
+        self.assertEqual(self.usuario.profile.subscription_plan, 'Gratuito')
+        self.assertIsNone(self.usuario.profile.subscription_cancel_at)
+
+        self.pagamento.refresh_from_db()
+        self.assertEqual(self.pagamento.status, 'cancelado')
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Subscription.modify')
+    @patch('core.views.stripe.Subscription.retrieve')
+    def test_cancelamento_apos_7_dias_agenda_fim_do_periodo_sem_estorno(
+        self, retrieve, modify,
+    ):
+        self.pagamento.aprovado_em = timezone.now() - timedelta(days=10)
+        self.pagamento.save(update_fields=['aprovado_em'])
+
+        inicio = timezone.now() - timedelta(days=10)
+        fim_periodo = timezone.now() + timedelta(days=20)
+        retrieve.return_value = FakeStripeObject(
+            status='active',
+            start_date=int(inicio.timestamp()),
+            latest_invoice='in_123',
+        )
+        modify.return_value = FakeStripeObject(
+            status='active',
+            current_period_end=int(fim_periodo.timestamp()),
+        )
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['cancelado'])
+        self.assertFalse(response.data['reembolsado'])
+        self.assertEqual(response.data['plano_atual'], 'Gold')
+
+        modify.assert_called_once_with('sub_123', cancel_at_period_end=True)
+
+        self.usuario.profile.refresh_from_db()
+        self.assertEqual(self.usuario.profile.subscription_plan, 'Gold')
+        self.assertIsNotNone(self.usuario.profile.subscription_cancel_at)
+
+        self.pagamento.refresh_from_db()
+        self.assertEqual(self.pagamento.status, 'pago')
+
+    def test_cancelamento_sem_assinatura_ativa_retorna_erro(self):
+        self.pagamento.delete()
+        self.usuario.profile.subscription_plan = 'Gratuito'
+        self.usuario.profile.save(update_fields=['subscription_plan'])
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Subscription.retrieve')
+    def test_cancelamento_assinatura_ja_cancelada_no_stripe_retorna_conflito(self, retrieve):
+        retrieve.return_value = FakeStripeObject(status='canceled')
+
+        response = self.client.post('/api/pagamentos/assinatura/cancelar/')
+
+        self.assertEqual(response.status_code, 409)
+
+
+class WebhookRenovacaoAssinaturaAPITests(TestCase):
+    """Cobranças mensais automáticas do Stripe (renovação) devem aparecer no
+    histórico de pagamentos, e o fim efetivo de uma assinatura cancelada deve
+    derrubar o usuário para o plano Gratuito."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.usuario = User.objects.create_user(
+            username='renovacao@example.com',
+            email='renovacao@example.com',
+            password='secret123',
+        )
+        self.usuario.profile.subscription_plan = 'Gold'
+        self.usuario.profile.save(update_fields=['subscription_plan'])
+        self.pagamento = Pagamento.objects.create(
+            usuario=self.usuario,
+            tipo='assinatura',
+            status='pago',
+            valor=Decimal('29.90'),
+            referencia_externa='sub:gold:1',
+            mp_payment_id='sub_123',
+            plano='Gold',
+            aprovado_em=timezone.now() - timedelta(days=35),
+        )
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_renovacao_mensal_cria_novo_pagamento_no_historico(self, construct_event):
+        construct_event.return_value = {
+            'type': 'invoice.payment_succeeded',
+            'data': {'object': FakeStripeObject(
+                id='in_999',
+                subscription='sub_123',
+                billing_reason='subscription_cycle',
+                amount_paid=2990,
+            )},
+        }
+
+        response = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        renovacao = Pagamento.objects.get(referencia_externa='stripe:renovacao:in_999')
+        self.assertEqual(renovacao.usuario, self.usuario)
+        self.assertEqual(renovacao.status, 'pago')
+        self.assertEqual(renovacao.valor, Decimal('29.90'))
+        self.assertEqual(renovacao.plano, 'Gold')
+        self.assertEqual(renovacao.mp_payment_id, 'sub_123')
+        self.assertIsNotNone(renovacao.aprovado_em)
+
+        self.client.force_authenticate(self.usuario)
+        history = self.client.get('/api/pagamentos/historico/')
+        self.assertEqual(history.data['count'], 2)
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_primeira_cobranca_nao_duplica_pagamento_ja_registrado(self, construct_event):
+        construct_event.return_value = {
+            'type': 'invoice.payment_succeeded',
+            'data': {'object': FakeStripeObject(
+                id='in_first',
+                subscription='sub_123',
+                billing_reason='subscription_create',
+                amount_paid=2990,
+            )},
+        }
+
+        response = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Pagamento.objects.filter(usuario=self.usuario).count(), 1)
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_assinatura_encerrada_derruba_plano_para_gratuito(self, construct_event):
+        self.usuario.profile.subscription_cancel_at = timezone.now() + timedelta(days=5)
+        self.usuario.profile.save(update_fields=['subscription_cancel_at'])
+
+        construct_event.return_value = {
+            'type': 'customer.subscription.deleted',
+            'data': {'object': FakeStripeObject(id='sub_123')},
+        }
+
+        response = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.usuario.profile.refresh_from_db()
+        self.assertEqual(self.usuario.profile.subscription_plan, 'Gratuito')
+        self.assertIsNone(self.usuario.profile.subscription_cancel_at)
+
+
 class LimitesPlanoAPITests(TestCase):
     """Cada plano de assinatura limita quantos anúncios e candidaturas o
     usuário pode enviar por mês (Gratuito: 3 anúncios / 5 candidaturas,
@@ -1036,7 +1252,7 @@ class CadastroConflitoEmailTests(TestCase):
         resp = self.client.post('/api/auth/register/', {
             'username': 'novo_usuario',
             'email': self.fake_identity['email'],
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Novo',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -1047,7 +1263,7 @@ class CadastroConflitoEmailTests(TestCase):
         resp = self.client.post('/api/auth/register/', {
             'username': 'outro_usuario',
             'email': self.fake_identity['email'],
-            'password': 'senha12345',
+            'password': 'Abcdef1@',
             'first_name': 'Outro',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -1070,6 +1286,67 @@ class CadastroConflitoEmailTests(TestCase):
         resp2 = self._post_google()
         self.assertEqual(resp2.status_code, 200)
         self.assertEqual(resp2.data['token'], token1)
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class VerificacaoEmailTests(TestCase):
+    """Cadastro manual exige confirmação do email antes de entrar no site."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def _registrar(self):
+        return self.client.post('/api/auth/register/', {
+            'username': 'novo@example.com',
+            'email': 'novo@example.com',
+            'password': 'Abcdef1@',
+            'first_name': 'Novo',
+        }, format='json')
+
+    def test_registro_nao_emite_token_e_cria_codigo(self):
+        resp = self._registrar()
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('token', resp.data)
+        user = User.objects.get(email='novo@example.com')
+        verificacao = VerificacaoEmail.objects.get(usuario=user)
+        self.assertFalse(verificacao.verificado)
+        self.assertTrue(verificacao.codigo)
+
+    def test_login_bloqueado_antes_de_confirmar_email(self):
+        self._registrar()
+        resp = self.client.post('/api/auth/login/', {
+            'username': 'novo@example.com',
+            'password': 'Abcdef1@',
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('Confirme seu email', str(resp.data))
+
+    def test_codigo_incorreto_rejeitado(self):
+        self._registrar()
+        resp = self.client.post('/api/auth/verificar-codigo/', {
+            'email': 'novo@example.com',
+            'codigo': '000000',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_confirma_email_e_libera_acesso(self):
+        self._registrar()
+        user = User.objects.get(email='novo@example.com')
+        codigo = VerificacaoEmail.objects.get(usuario=user).codigo
+
+        resp = self.client.post('/api/auth/verificar-codigo/', {
+            'email': 'novo@example.com',
+            'codigo': codigo,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('token', resp.data)
+        self.assertTrue(VerificacaoEmail.objects.get(usuario=user).verificado)
+
+        login = self.client.post('/api/auth/login/', {
+            'username': 'novo@example.com',
+            'password': 'Abcdef1@',
+        }, format='json')
+        self.assertEqual(login.status_code, 200)
 
 
 class AutenticacaoSenhaAPITests(TestCase):
@@ -1159,9 +1436,10 @@ class AutenticacaoSenhaAPITests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn('token', response.data)
+        self.assertNotIn('token', response.data)
         user = User.objects.get(username='valida@example.com')
         self.assertTrue(user.check_password(self.SENHA_VALIDA))
+        self.assertTrue(VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists())
 
     # ---------- Redefinição de senha (RedefinirSenhaAPI) ----------
 
@@ -1253,6 +1531,42 @@ class AutenticacaoSenhaAPITests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+    # ---------- Termo do perfil de freelancer ----------
+
+    def test_virar_freelancer_sem_aceitar_termo_e_recusado(self):
+        user = User.objects.create_user(
+            username='freela-sem-termo@example.com',
+            email='freela-sem-termo@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        self.client.force_authenticate(user)
+        response = self.client.patch(
+            '/api/auth/profile/',
+            {'papel': 'freelancer'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('aceitou_termos_freelancer', response.data)
+        user.refresh_from_db()
+        self.assertNotEqual(user.profile.papel, 'freelancer')
+
+    def test_virar_freelancer_aceitando_termo_e_aceito(self):
+        user = User.objects.create_user(
+            username='freela-com-termo@example.com',
+            email='freela-com-termo@example.com',
+            password=self.SENHA_VALIDA,
+        )
+        self.client.force_authenticate(user)
+        response = self.client.patch(
+            '/api/auth/profile/',
+            {'papel': 'freelancer', 'aceitou_termos_freelancer': True},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.profile.papel, 'freelancer')
+        self.assertTrue(user.profile.aceitou_termos_freelancer)
 
 
 class CriteriosAvaliacaoAPITests(TestCase):
@@ -1481,6 +1795,105 @@ class PerfilBioEReputacaoAPITests(TestCase):
         self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)
 
 
+class RamosAtuacaoEmpresaAPITests(TestCase):
+    """
+    Ramos de atuação da empresa: lista de até 3 ramos escolhidos no cadastro.
+    `ramo_empresa` (texto) passa a ser derivado dos ramos escolhidos.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='ramos@example.com',
+            email='ramos@example.com',
+            password='secret123',
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(self.user)
+
+    def _payload_empresa(self, **extra):
+        payload = {
+            'papel': 'empresa',
+            'tipo_empresa': 'cnpj',
+            'aceitou_termos_empresa': True,
+            'nome_empresa': 'Clínica Pet Feliz',
+            'bio_empresa': 'Cuidamos de animais.',
+        }
+        payload.update(extra)
+        return payload
+
+    def test_cadastro_empresa_grava_ramos_e_deriva_ramo_texto(self):
+        response = self.client.patch(
+            '/api/auth/profile/',
+            self._payload_empresa(ramos_atuacao=['Saúde e Bem-estar', 'Pet e Veterinário']),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, ['Saúde e Bem-estar', 'Pet e Veterinário'])
+        self.assertEqual(self.profile.ramo_empresa, 'Saúde e Bem-estar, Pet e Veterinário')
+
+    def test_aceita_ate_tres_ramos(self):
+        ramos = ['Educação', 'Indústria', 'Agronegócio']
+        response = self.client.patch(
+            '/api/auth/profile/', self._payload_empresa(ramos_atuacao=ramos), format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, ramos)
+
+    def test_rejeita_mais_de_tres_ramos(self):
+        response = self.client.patch(
+            '/api/auth/profile/',
+            self._payload_empresa(ramos_atuacao=['Educação', 'Indústria', 'Agronegócio', 'Outros']),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ramos_atuacao', response.data)
+
+    def test_rejeita_ramos_repetidos_e_valores_invalidos(self):
+        casos = [
+            ['Educação', 'Educação'],
+            ['Educação', 123],
+            ['   '],
+            ['x' * 61],
+            'Educação',
+        ]
+        for ramos in casos:
+            with self.subTest(ramos=ramos):
+                response = self.client.patch(
+                    '/api/auth/profile/', {'ramos_atuacao': ramos}, format='json',
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('ramos_atuacao', response.data)
+
+    def test_patch_sem_ramos_nao_altera_ramos_existentes(self):
+        self.profile.ramos_atuacao = ['Educação']
+        self.profile.ramo_empresa = 'Educação'
+        self.profile.save()
+
+        response = self.client.patch('/api/auth/profile/', {'bio': 'Nova bio'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, ['Educação'])
+        self.assertEqual(self.profile.ramo_empresa, 'Educação')
+
+    def test_limpar_ramos_nao_apaga_ramo_texto_legado(self):
+        self.profile.ramo_empresa = 'Padaria artesanal'
+        self.profile.save()
+
+        response = self.client.patch('/api/auth/profile/', {'ramos_atuacao': []}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, [])
+        self.assertEqual(self.profile.ramo_empresa, 'Padaria artesanal')
+
+
 class NotificacaoAPITests(TestCase):
     """
     Cobre o bug em que a notificação de candidatura continuava exibindo o
@@ -1542,3 +1955,157 @@ class NotificacaoAPITests(TestCase):
         self.assertEqual(response.data['count'], 2)
         self.assertFalse(Notificacao.objects.filter(usuario=self.contratante).exists())
         self.assertTrue(Notificacao.objects.filter(pk=outro_usuario_notificacao.pk).exists())
+
+
+class ExcluirContaAPITests(TestCase):
+    """Fluxo de exclusão de conta com soft delete completo do conteúdo."""
+
+    SENHA = 'SenhaValida1@'
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='apagar@example.com',
+            email='apagar@example.com',
+            password=self.SENHA,
+            first_name='Alice',
+            last_name='Removivel',
+        )
+        self.profile = UserProfile.objects.get(user=self.user)
+        self.profile.nome_completo = 'Alice Removivel'
+        self.profile.email = 'apagar@example.com'
+        self.profile.cidade = 'São Paulo'
+        self.profile.bio = 'Uma biografia qualquer'
+        self.profile.categories = ['Design']
+        self.profile.skills = ['Figma']
+        self.profile.save()
+        self.token = Token.objects.create(user=self.user)
+
+        self.contratante = User.objects.create_user(
+            username='contratante-excl@example.com',
+            email='contratante-excl@example.com',
+            password=self.SENHA,
+        )
+        perfil_contratante = UserProfile.objects.get(user=self.contratante)
+        perfil_contratante.nome_completo = 'Bia Contratante'
+        perfil_contratante.email = 'contratante-excl@example.com'
+        perfil_contratante.save()
+        self.contratante_token = Token.objects.create(user=self.contratante)
+
+        self.ad = Ad.objects.create(
+            author=self.contratante,
+            title='Projeto de teste',
+            description='Descrição',
+            price='500.00',
+            role='freelancer',
+        )
+        self.candidatura = Candidatura.objects.create(
+            user=self.user,
+            ad=self.ad,
+            mensagem='Quero participar',
+            status='pendente',
+            usuario_id=self.profile.id,
+        )
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura,
+            status_acordo='Pendente Pagamento',
+            valor_acordado=500.0,
+            titulo_anuncio='Projeto de teste',
+            nome_contratante='Bia Contratante',
+            nome_prestador='Alice Removivel',
+            proposta_aceita='Quero participar',
+        )
+        self.mensagem = MensagemChat.objects.create(
+            acordo=self.acordo,
+            remetente=self.user,
+            texto='Olá!',
+        )
+        Notificacao.objects.create(usuario=self.user, tipo='sistema', titulo='Boas-vindas')
+
+    def _auth(self, token):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def test_user_serializer_expoe_tem_senha(self):
+        self._auth(self.token)
+        resp = self.client.get('/api/auth/user/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['tem_senha'])
+
+    def test_excluir_conta_recusa_senha_incorreta(self):
+        self._auth(self.token)
+        resp = self.client.post(
+            '/api/auth/excluir-conta/', {'senha': 'senha-errada'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertTrue(Token.objects.filter(user=self.user).exists())
+
+    def test_excluir_conta_faz_soft_delete_completo(self):
+        self._auth(self.token)
+        resp = self.client.post(
+            '/api/auth/excluir-conta/', {'senha': self.SENHA}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.ad.refresh_from_db()
+        self.candidatura.refresh_from_db()
+        self.mensagem.refresh_from_db()
+        self.acordo.refresh_from_db()
+
+        self.assertFalse(self.user.is_active)
+        self.assertTrue(self.profile.deletado)
+        self.assertEqual(self.profile.nome_completo, 'Usuário removido')
+        self.assertEqual(self.profile.cidade, '')
+        # O anúncio do contratante (que permanece ativo) não é escondido
+        self.assertFalse(self.ad.deletado)
+        self.assertTrue(self.candidatura.deletado)
+        self.assertTrue(self.mensagem.deletado)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.user, deletado=True).exists())
+        self.assertEqual(self.acordo.nome_prestador, 'Usuário removido')
+        self.assertFalse(Token.objects.filter(user=self.user).exists())
+
+        login = self.client.post(
+            '/api/auth/login/',
+            {'username': 'apagar@example.com', 'password': self.SENHA},
+            format='json',
+        )
+        self.assertIn(login.status_code, (400, 401))
+
+    def test_excluir_conta_esconde_conteudo_do_outro_lado(self):
+        self._auth(self.token)
+        resp = self.client.post(
+            '/api/auth/excluir-conta/', {'senha': self.SENHA}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        # Perfil público some (404). O token do usuário excluído foi revogado,
+        # então a consulta deve ser feita de forma anônima.
+        self.client.credentials()
+        resp_perfil = self.client.get(f'/api/users/{self.user.id}/')
+        self.assertEqual(resp_perfil.status_code, 404)
+
+        # O contratante não vê mais a candidatura do usuário excluído
+        self._auth(self.contratante_token)
+        resp_cands = self.client.get(f'/api/candidaturas/?ad_id={self.ad.id}')
+        self.assertEqual(resp_cands.status_code, 200)
+        ids = [c['id'] for c in resp_cands.data]
+        self.assertNotIn(self.candidatura.id, ids)
+
+    def test_excluir_conta_social_sem_senha_nao_requer_senha(self):
+        social = User.objects.create_user(
+            username='social-excl@example.com', email='social-excl@example.com',
+        )
+        perfil_social = UserProfile.objects.get(user=social)
+        perfil_social.nome_completo = 'Usuário Social'
+        perfil_social.email = 'social-excl@example.com'
+        perfil_social.save()
+        social_token = Token.objects.create(user=social)
+        self._auth(social_token)
+
+        resp_sem_senha = self.client.post('/api/auth/excluir-conta/', {}, format='json')
+        self.assertEqual(resp_sem_senha.status_code, 200)
+        social.refresh_from_db()
+        self.assertFalse(social.is_active)

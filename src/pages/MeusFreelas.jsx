@@ -5,13 +5,14 @@ import {
   Briefcase, User, Calendar, MessageSquare, AlertCircle,
   CheckCircle, ChevronDown, Bell, Check, X, Clock,
   FileText, HelpCircle, TrendingUp, Edit, Star, Ban,
-  Wallet, CircleCheck, CircleDot, CircleX
+  Wallet, CircleCheck, CircleDot, CircleX, Send
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 import { useNotificacoes } from '../context/ContextoNotificacao';
 import { useDialogo } from '../context/ContextoDialogo';
 import useScrollEdges from '../hooks/useScrollEdges';
+import { CandidaturasView } from './MinhasCandidaturas';
 
 function AgreementSteps({ status, isPaid }) {
   const steps = [
@@ -109,6 +110,24 @@ export default function MeusFreelas() {
   const navigate = useNavigate();
   const isFreelancer = role === 'freelancer';
   const tabsScrollRef = useScrollEdges();
+
+  const [viewTab, setViewTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return isFreelancer && params.get('tab') === 'candidaturas' ? 'candidaturas' : 'freelas';
+  });
+
+  const handleSwitchView = (tab) => {
+    if (tab === 'candidaturas' && !isFreelancer) return;
+    setViewTab(tab);
+    navigate(tab === 'candidaturas' ? '/my-freelas?tab=candidaturas' : '/my-freelas', { replace: true });
+  };
+
+  useEffect(() => {
+    if (!isFreelancer && viewTab === 'candidaturas') {
+      setViewTab('freelas');
+      navigate('/my-freelas', { replace: true });
+    }
+  }, [isFreelancer, viewTab, navigate]);
 
   useEffect(() => { marcarLidas(['acordo']); }, [marcarLidas]);
 
@@ -281,6 +300,11 @@ export default function MeusFreelas() {
 
   const userRoleInAgreement = (app) => isContractorOfAgreement(app) ? 'contratante' : 'freelancer';
 
+  // Separação estrita por papel: freelancer vê só os acordos em que atua como
+  // freelancer; empresa vê só os acordos em que atua como contratante.
+  const papelDoUsuario = isFreelancer ? 'freelancer' : 'contratante';
+  const agreementsVisiveis = agreements.filter(app => userRoleInAgreement(app) === papelDoUsuario);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get('checkout');
@@ -346,13 +370,13 @@ export default function MeusFreelas() {
     .catch(err => { console.error(err); showStatus('Erro ao processar decisão.', 'error'); });
   };
 
-  const pendingPaymentAgreements = agreements.filter(app => app.status_acordo === 'Pendente Pagamento');
-  const activeAgreements = agreements.filter(app => app.status_acordo === 'Ativo');
-  const completedAgreements = agreements.filter(app => app.status_acordo === 'Concluído');
-  const cancelledAgreements = agreements.filter(app => app.status_acordo === 'Cancelado');
+  const pendingPaymentAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Pendente Pagamento');
+  const activeAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Ativo');
+  const completedAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Concluído');
+  const cancelledAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Cancelado');
   const historyAgreements = agreementTab === 'concluidos' ? completedAgreements : cancelledAgreements;
 
-  const receivedRequests = agreements.filter(app => (
+  const receivedRequests = agreementsVisiveis.filter(app => (
     app.tem_solicitacao && app.solicitado_por !== userRoleInAgreement(app)
   ));
 
@@ -385,14 +409,46 @@ export default function MeusFreelas() {
             <Briefcase size={26} />
           </div>
           <div>
-            <h1>Meus Freelas</h1>
+            <h1>{isFreelancer ? 'Meus Freelas' : 'Minhas contratações'}</h1>
             <p className="mf-page-header__desc">
-              Gerencie seus acordos de serviço em andamento, concluídos e cancelados.
+              {isFreelancer
+                ? 'Gerencie seus acordos de serviço e acompanhe o status das suas candidaturas.'
+                : 'Gerencie suas contratações e acompanhe o status dos acordos com os freelancers.'}
             </p>
           </div>
         </div>
       </div>
 
+      {/* View switch: Meus freelas / Minhas candidaturas */}
+      <div className="mf-view-switch" role="tablist" aria-label="Alternar entre as visões da página">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewTab === 'freelas'}
+          className={`mf-view-switch__btn ${viewTab === 'freelas' ? 'is-active' : ''}`}
+          onClick={() => handleSwitchView('freelas')}
+        >
+          <Briefcase size={17} />
+          {isFreelancer ? 'Meus freelas' : 'Minhas contratações'}
+        </button>
+        {isFreelancer && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewTab === 'candidaturas'}
+            className={`mf-view-switch__btn ${viewTab === 'candidaturas' ? 'is-active' : ''}`}
+            onClick={() => handleSwitchView('candidaturas')}
+          >
+            <Send size={17} />
+            Minhas candidaturas
+          </button>
+        )}
+      </div>
+
+      {isFreelancer && viewTab === 'candidaturas' && <CandidaturasView />}
+
+      {viewTab === 'freelas' && (
+      <>
       {/* Summary bar */}
       <div className="mf-summary">
         <div className={`mf-summary__item ${pendingPaymentAgreements.length > 0 ? 'mf-summary__item--atencao' : ''}`}>
@@ -977,6 +1033,7 @@ export default function MeusFreelas() {
         </div>
       )}
 
+      </>)}
     </div>
   );
 }

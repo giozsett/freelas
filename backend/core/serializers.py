@@ -8,6 +8,20 @@ from django.utils import timezone
 from rest_framework import serializers
 from .models import UserProfile
 from .notificacoes import criar_notificacao
+from .validacao_senha import validar_forca_senha
+
+def _destruir_imagem_cloudinary(url):
+    """Apaga um asset do Cloudinary a partir da URL salva no banco (best-effort)."""
+    if not url or 'res.cloudinary.com' not in url:
+        return
+    import cloudinary.uploader
+    try:
+        public_id = url.split('/image/upload/')[-1].split('?')[0]
+        if '.' in public_id.rsplit('/', 1)[-1]:
+            public_id = public_id.rsplit('.', 1)[0]
+        cloudinary.uploader.destroy(public_id, resource_type='image', invalidate=True)
+    except Exception:
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -15,21 +29,93 @@ class UserProfileSerializer(serializers.ModelSerializer):
     certificados = serializers.SerializerMethodField()
     experiencias = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
+    papel = serializers.ChoiceField(
+        choices=[('freelancer', 'Freelancer'), ('empresa', 'Empresa')],
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
+    tipo_empresa = serializers.ChoiceField(
+        choices=[('pessoa', 'Pessoa física contratante'), ('cnpj', 'Empresa com CNPJ')],
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
+    porte_empresa = serializers.ChoiceField(
+        choices=[('autonomo', 'Autônomo'), ('micro', 'Micro'), ('pequena', 'Pequena'), ('media', 'Média'), ('grande', 'Grande')],
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias')
-        read_only_fields = ('foto_perfil', 'subscription_plan')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'ramos_atuacao', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer')
+        read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at')
+
+    MAX_RAMOS_ATUACAO = 3
+    MAX_TAMANHO_RAMO = 60
+
+    def validate_ramos_atuacao(self, value):
+        # Em multipart a lista chega como string JSON
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                raise serializers.ValidationError('Envie os ramos de atuação como uma lista.')
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Envie os ramos de atuação como uma lista.')
+        if len(value) > self.MAX_RAMOS_ATUACAO:
+            raise serializers.ValidationError(f'Escolha no máximo {self.MAX_RAMOS_ATUACAO} ramos de atuação.')
+        ramos = []
+        for ramo in value:
+            if not isinstance(ramo, str) or not ramo.strip():
+                raise serializers.ValidationError('Cada ramo de atuação deve ser um texto não vazio.')
+            ramo = ramo.strip()
+            if len(ramo) > self.MAX_TAMANHO_RAMO:
+                raise serializers.ValidationError(f'Cada ramo pode ter no máximo {self.MAX_TAMANHO_RAMO} caracteres.')
+            if ramo in ramos:
+                raise serializers.ValidationError('Não repita o mesmo ramo de atuação.')
+            ramos.append(ramo)
+        return ramos
+
+    def validate(self, attrs):
+        dados = attrs
+        # `ramo_empresa` (texto) é derivado dos ramos escolhidos; uma lista vazia
+        # não apaga o texto que já existia (empresas cadastradas antes dos ramos).
+        if dados.get('ramos_atuacao'):
+            dados['ramo_empresa'] = ', '.join(dados['ramos_atuacao'])
+        # Quando o pedido está alterando para empresa, exige o perfil de contratante
+        if 'papel' in dados and dados['papel'] == 'empresa':
+            tipo = dados.get('tipo_empresa', self.instance.tipo_empresa if self.instance else None)
+            termos = dados.get('aceitou_termos_empresa', self.instance.aceitou_termos_empresa if self.instance else False)
+            if not tipo:
+                raise serializers.ValidationError({'tipo_empresa': 'Escolha como você vai atuar: pessoa física contratante ou empresa com CNPJ.'})
+            if not termos:
+                raise serializers.ValidationError({'aceitou_termos_empresa': 'Você precisa aceitar os Termos de Uso do perfil de empresa/contratante.'})
+            if tipo == 'cnpj':
+                if not (dados.get('nome_empresa') or (self.instance and self.instance.nome_empresa)):
+                    raise serializers.ValidationError({'nome_empresa': 'Informe o nome da empresa.'})
+                if not (dados.get('ramo_empresa') or (self.instance and self.instance.ramo_empresa)):
+                    raise serializers.ValidationError({'ramo_empresa': 'Informe o ramo/segmento da empresa.'})
+                if not (dados.get('bio_empresa') or (self.instance and self.instance.bio_empresa)):
+                    raise serializers.ValidationError({'bio_empresa': 'Conte o que a empresa faz.'})
+        # Quando o pedido está alterando para freelancer, exige os termos do freelancer
+        if 'papel' in dados and dados['papel'] == 'freelancer':
+            termos_freelancer = dados.get('aceitou_termos_freelancer', self.instance.aceitou_termos_freelancer if self.instance else False)
+            if not termos_freelancer:
+                raise serializers.ValidationError({'aceitou_termos_freelancer': 'Você precisa aceitar os Termos de Uso do perfil de freelancer.'})
+        return super().validate(attrs)
 
     def get_banner(self, obj):
         return obj.banner
 
     def get_certificados(self, obj):
-        certificados = obj.certificados.filter(exibir_perfil=True)
+        certificados = obj.certificados.filter(exibir_perfil=True, deletado=False)
         return CertificadoSerializer(certificados, many=True, context=self.context).data
 
     def get_experiencias(self, obj):
-        experiencias = obj.experiencias.all()
+        experiencias = obj.experiencias.filter(deletado=False)
         return ExperienciaSerializer(experiencias, many=True, context=self.context).data
 
     def update(self, instance, validated_data):
@@ -45,12 +131,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     folder='banners',
                     resource_type='image',
                 )
-                instance.banner = resposta.get('secure_url') or resposta.get('url')
             except Exception:
                 logger.exception('Falha ao enviar banner para o Cloudinary')
                 raise serializers.ValidationError({'banner': 'Não foi possível enviar a imagem do banner.'})
+            _destruir_imagem_cloudinary(instance.banner)
+            instance.banner = resposta.get('secure_url') or resposta.get('url')
             instance.save(update_fields=['banner', 'atualizado_em'])
         elif 'banner' in self.initial_data and banner_val in (None, ''):
+            _destruir_imagem_cloudinary(instance.banner)
             instance.banner = None
             instance.save(update_fields=['banner', 'atualizado_em'])
 
@@ -90,14 +178,19 @@ class UserSerializer(serializers.ModelSerializer):
     resumo_avaliacoes = serializers.SerializerMethodField()
     avaliacoes_recebidas = serializers.SerializerMethodField()
     reputacao = serializers.SerializerMethodField()
+    tem_senha = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name', 'profile',
             'resumo_avaliacoes', 'avaliacoes_recebidas', 'reputacao', 'is_staff',
+            'tem_senha',
         )
         read_only_fields = ('is_staff',)
+
+    def get_tem_senha(self, obj):
+        return obj.has_usable_password()
 
     def get_resumo_avaliacoes(self, obj):
         result = {
@@ -106,7 +199,9 @@ class UserSerializer(serializers.ModelSerializer):
         }
         if not hasattr(obj, 'profile'):
             return result
-        aggregates = obj.profile.avaliacoes_recebidas.values('papel_avaliado').annotate(
+        aggregates = obj.profile.avaliacoes_recebidas.filter(
+            deletado=False,
+        ).values('papel_avaliado').annotate(
             nota=Avg('nota_geral'),
             total=Count('id'),
         )
@@ -122,7 +217,7 @@ class UserSerializer(serializers.ModelSerializer):
             return []
         queryset = obj.profile.avaliacoes_recebidas.select_related(
             'avaliador__user', 'acordo',
-        ).all()
+        ).filter(deletado=False)
         return AvaliacaoSerializer(queryset, many=True, context=self.context).data
 
     def get_reputacao(self, obj):
@@ -159,6 +254,12 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError('Este nome de usuário já está sendo utilizado.')
+        return value
+
+    def validate_password(self, value):
+        erro = validar_forca_senha(value)
+        if erro:
+            raise serializers.ValidationError(erro)
         return value
 
     def create(self, validated_data):
@@ -378,10 +479,13 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
 
     criterios_qs = CriterioAvaliacao.objects.filter(
         avaliacao__avaliado=profile,
+        avaliacao__deletado=False,
         papel_avaliado=papel,
     )
 
-    total_avaliacoes = profile.avaliacoes_recebidas.filter(papel_avaliado=papel).count()
+    total_avaliacoes = profile.avaliacoes_recebidas.filter(
+        papel_avaliado=papel, deletado=False,
+    ).count()
     completude_itens = _completude_perfil_itens(profile)
     completude = min(100, sum(item['pontos'] for item in completude_itens if item['atendido']))
     bonus_completude = round(completude * 0.30)
@@ -508,7 +612,9 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
             'completude_perfil_detalhe': completude_itens,
         }
 
-    media_geral_val = profile.avaliacoes_recebidas.filter(papel_avaliado=papel).aggregate(
+    media_geral_val = profile.avaliacoes_recebidas.filter(
+        papel_avaliado=papel, deletado=False,
+    ).aggregate(
         media=Avg('nota_geral')
     )['media']
     media_num = float(media_geral_val or 5.0)

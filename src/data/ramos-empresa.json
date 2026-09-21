@@ -1,0 +1,29 @@
+{
+  "maxSelecionados": 3,
+  "ramos": [
+    "Saúde e Bem-estar",
+    "Educação",
+    "Tecnologia e Software",
+    "Varejo e Comércio",
+    "Alimentação e Restaurantes",
+    "Construção e Engenharia",
+    "Indústria",
+    "Serviços Financeiros",
+    "Jurídico e Contabilidade",
+    "Marketing e Publicidade",
+    "Mídia e Comunicação",
+    "Eventos e Entretenimento",
+    "Turismo e Hospedagem",
+    "Transporte e Logística",
+    "Imobiliário",
+    "Agronegócio",
+    "Beleza e Estética",
+    "Moda e Vestuário",
+    "Automotivo",
+    "Energia e Sustentabilidade",
+    "Pet e Veterinário",
+    "ONGs e Terceiro Setor",
+    "Setor Público",
+    "Outros"
+  ]
+}

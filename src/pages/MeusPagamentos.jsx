@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Ban,
   ChevronLeft,
   ChevronRight,
   CreditCard,
@@ -8,6 +9,7 @@ import {
   History,
   Shield,
   Star,
+  X,
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
@@ -20,12 +22,17 @@ export default function MyPayments() {
   const { token } = useAuth();
   const { marcarLidas } = useNotificacoes();
   const [subscriptionPlan, setSubscriptionPlan] = useState('Gratuito');
+  const [subscriptionCancelAt, setSubscriptionCancelAt] = useState(null);
   const [history, setHistory] = useState([]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [cancelResult, setCancelResult] = useState(null);
 
   useEffect(() => {
     marcarLidas(['pagamento']);
@@ -56,6 +63,7 @@ export default function MyPayments() {
           historyResponse.json(),
         ]);
         setSubscriptionPlan(profileData.subscription_plan || 'Gratuito');
+        setSubscriptionCancelAt(profileData.subscription_cancel_at || null);
         setHistory(Array.isArray(historyData.results) ? historyData.results : []);
         setTotalCount(Number(historyData.count) || 0);
       } catch (error) {
@@ -101,6 +109,47 @@ export default function MyPayments() {
     style: 'currency',
     currency: 'BRL',
   });
+
+  const formatShortDate = (dateString) => {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const handleCancelSubscription = async () => {
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const response = await fetch(`${API}/api/pagamentos/assinatura/cancelar/`, {
+        method: 'POST',
+        headers: { Authorization: `Token ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Não foi possível cancelar a assinatura.');
+      }
+      setCancelResult(data);
+      if (data.reembolsado) {
+        setSubscriptionPlan('Gratuito');
+        setSubscriptionCancelAt(null);
+      } else if (data.cancelamento_agendado_para) {
+        setSubscriptionCancelAt(data.cancelamento_agendado_para);
+      }
+    } catch (error) {
+      setCancelError(error.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const closeCancelModal = () => {
+    setIsCancelModalOpen(false);
+    setCancelError('');
+    setCancelResult(null);
+  };
 
   const formatBrand = (brand) => {
     const brands = {
@@ -159,9 +208,26 @@ export default function MyPayments() {
                 {subscriptionPlan}
               </div>
             </div>
-            <Link to="/plans" className="btn" style={{ padding: '0.6rem 1.2rem' }}>
-              Alterar Plano
-            </Link>
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <Link to="/plans" className="btn" style={{ padding: '0.6rem 1.2rem' }}>
+                Alterar Plano
+              </Link>
+              {subscriptionPlan !== 'Gratuito' && !subscriptionCancelAt && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '0.6rem 1.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  onClick={() => setIsCancelModalOpen(true)}
+                >
+                  <Ban size={16} /> Cancelar assinatura
+                </button>
+              )}
+            </div>
+            {subscriptionCancelAt && (
+              <div style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '8px', background: 'var(--warning-soft)', borderLeft: '4px solid var(--warning-color)', fontSize: '0.9rem' }}>
+                Sua assinatura não será renovada. Você continua com acesso ao plano {subscriptionPlan} até {formatShortDate(subscriptionCancelAt)}.
+              </div>
+            )}
           </div>
 
           <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', background: 'rgba(12, 140, 233, 0.03)', border: '1px dashed var(--border-color)' }}>
@@ -248,6 +314,64 @@ export default function MyPayments() {
                   </div>
                 )}
               </div>
+          </div>
+        </div>
+      )}
+
+      {isCancelModalOpen && (
+        <div className="mf-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !isCancelling) closeCancelModal(); }}>
+          <div className="mf-modal" style={{ borderTopColor: 'var(--danger-color)' }}>
+            <button
+              type="button"
+              onClick={closeCancelModal}
+              disabled={isCancelling}
+              style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+              aria-label="Fechar"
+            >
+              <X size={22} />
+            </button>
+            <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Ban size={22} color="var(--danger-color)" /> Cancelar assinatura
+            </h2>
+
+            {cancelResult ? (
+              <>
+                <p style={{ lineHeight: 1.5 }}>
+                  {cancelResult.reembolsado
+                    ? 'Sua assinatura foi cancelada e o valor pago foi estornado, conforme o direito de arrependimento do Código de Defesa do Consumidor (Art. 49). Seu plano voltou a ser Gratuito.'
+                    : `Sua assinatura não será mais renovada. Você continua com acesso ao plano ${subscriptionPlan} até ${formatShortDate(cancelResult.cancelamento_agendado_para)}.`}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn" onClick={closeCancelModal}>Entendi</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ opacity: 0.8, lineHeight: 1.5, fontSize: '0.92rem' }}>
+                  Conforme o Art. 49 do Código de Defesa do Consumidor, cancelamentos feitos em até 7 dias da contratação recebem estorno integral e o plano volta a ser Gratuito na hora.
+                  Após esse prazo, o cancelamento apenas interrompe a próxima cobrança: você mantém acesso ao plano atual até o fim do período já pago.
+                </p>
+                {cancelError && (
+                  <div role="alert" className="form-error" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--danger-color)', background: 'var(--danger-soft)' }}>
+                    {cancelError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={closeCancelModal} disabled={isCancelling}>
+                    Manter assinatura
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={handleCancelSubscription}
+                    disabled={isCancelling}
+                    style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)' }}
+                  >
+                    {isCancelling ? 'Cancelando...' : 'Confirmar cancelamento'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

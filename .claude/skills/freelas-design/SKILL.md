@@ -123,6 +123,21 @@ Sempre usar o par cor+`-soft` (ex.: `--danger-color` no texto/ícone,
 - **Switch/alternância de papel**: trilho com `--primary-gradient`, thumb
   circular `--surface-color`, texto do rótulo oculto/visível por
   opacidade+translação (~114px de curso), transição `cubic-bezier(0.68,-0.55,0.27,1.55)`.
+- **Mensagem de erro de formulário** (`.form-error`): fundo `--danger-soft`, borda
+  1px `--danger-color`, texto `--danger-color`, `border-radius: 4px`,
+  `padding: 0.65rem 0.8rem` (padding vertical levemente menor que o horizontal),
+  `font-size: 0.9rem`. Texto em **Outfit ExtraLight (peso 200)**, não bold — é o
+  único texto de UI que foge do peso 400–600 padrão do corpo. Use
+  `white-space: pre-line` quando a mensagem puder ter múltiplas linhas.
+- **Indicação de campo obrigatório/opcional** (labels de formulário): campos
+  obrigatórios levam um `*` em `var(--danger-color)` logo após o texto do label
+  (`<span style={{ color: 'var(--danger-color)' }}>*</span>`). Campos opcionais
+  levam o sufixo "(opcional)" via componente `src/components/Opcional.jsx`:
+  `font-size: 0.8rem` (menor que o label), `font-weight: 400` (não herda o 500 do
+  label) e cor `var(--text-secondary)` (cinza, mais claro que o título). Nunca
+  escreva "(opcional)" como texto puro dentro do label, nunca use `*` para
+  opcionais, e não marque campos que sempre têm valor (selects com padrão,
+  toggles). Numa mesma tela, use só uma das duas marcações por campo.
 - **Ícones**: biblioteca `lucide-react`, stroke padrão, tamanho 20–24px na navbar.
 - **Motion**: transições de 0.15–0.4s `ease`/`cubic-bezier`; nada abrupto; respeitar
   `prefers-reduced-motion`.
