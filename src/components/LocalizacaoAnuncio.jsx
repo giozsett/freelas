@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import Opcional from './Opcional';
 
 const IBGE_API = 'https://servicodados.ibge.gov.br/api/v1/localidades';
 
@@ -61,15 +62,15 @@ export default function LocalizacaoAnuncio({ value, onChange, cidadeObrigatoria 
       </div>
       <div className="location-address-grid">
         <div className="location-field">
-          <label>Bairro</label>
+          <label>Bairro <Opcional /></label>
           <input className="input" value={value.bairro} onChange={(event) => atualizar('bairro', event.target.value)} placeholder="Ex: Centro" />
         </div>
         <div className="location-field">
-          <label>Rua ou logradouro</label>
+          <label>Rua ou logradouro <Opcional /></label>
           <input className="input" value={value.address} onChange={(event) => atualizar('address', event.target.value)} placeholder="Ex: Rua das Flores" />
         </div>
         <div className="location-field location-number-field">
-          <label>Número</label>
+          <label>Número <Opcional /></label>
           <input className="input" value={value.addressNumber} onChange={(event) => atualizar('addressNumber', event.target.value)} placeholder="123" />
         </div>
       </div>

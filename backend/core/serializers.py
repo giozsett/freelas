@@ -50,11 +50,41 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'ramos_atuacao', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer')
         read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at')
+
+    MAX_RAMOS_ATUACAO = 3
+    MAX_TAMANHO_RAMO = 60
+
+    def validate_ramos_atuacao(self, value):
+        # Em multipart a lista chega como string JSON
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                raise serializers.ValidationError('Envie os ramos de atuação como uma lista.')
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Envie os ramos de atuação como uma lista.')
+        if len(value) > self.MAX_RAMOS_ATUACAO:
+            raise serializers.ValidationError(f'Escolha no máximo {self.MAX_RAMOS_ATUACAO} ramos de atuação.')
+        ramos = []
+        for ramo in value:
+            if not isinstance(ramo, str) or not ramo.strip():
+                raise serializers.ValidationError('Cada ramo de atuação deve ser um texto não vazio.')
+            ramo = ramo.strip()
+            if len(ramo) > self.MAX_TAMANHO_RAMO:
+                raise serializers.ValidationError(f'Cada ramo pode ter no máximo {self.MAX_TAMANHO_RAMO} caracteres.')
+            if ramo in ramos:
+                raise serializers.ValidationError('Não repita o mesmo ramo de atuação.')
+            ramos.append(ramo)
+        return ramos
 
     def validate(self, attrs):
         dados = attrs
+        # `ramo_empresa` (texto) é derivado dos ramos escolhidos; uma lista vazia
+        # não apaga o texto que já existia (empresas cadastradas antes dos ramos).
+        if dados.get('ramos_atuacao'):
+            dados['ramo_empresa'] = ', '.join(dados['ramos_atuacao'])
         # Quando o pedido está alterando para empresa, exige o perfil de contratante
         if 'papel' in dados and dados['papel'] == 'empresa':
             tipo = dados.get('tipo_empresa', self.instance.tipo_empresa if self.instance else None)

@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, UserRound, Check, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import Opcional from '../components/Opcional';
+import SeletorRamos from '../components/SeletorRamos';
+import SeletorUnico from '../components/SeletorUnico';
+import { MAX_RAMOS_EMPRESA, PORTES_EMPRESA } from '../constants/options';
 
 const API_URL = 'http://localhost:8000';
 
@@ -13,7 +17,7 @@ export default function CriarPerfilEmpresa() {
   const [tipo, setTipo] = useState(null);
   const [form, setForm] = useState({
     nome_empresa: '',
-    ramo_empresa: '',
+    ramos_atuacao: [],
     porte_empresa: '',
     cnpj: '',
     site_empresa: '',
@@ -33,7 +37,7 @@ export default function CriarPerfilEmpresa() {
 
   const conferirForm = () => {
     if (!form.nome_empresa.trim()) return 'Informe o nome da empresa.';
-    if (!form.ramo_empresa.trim()) return 'Informe o ramo/segmento da empresa.';
+    if (form.ramos_atuacao.length === 0) return 'Escolha ao menos um ramo de atuação da empresa.';
     if (!form.bio_empresa.trim()) return 'Conte o que a empresa faz.';
     if (form.site_empresa && !/^https?:\/\/.+\..+/.test(form.site_empresa)) return 'O site precisa começar com http:// ou https://.';
     return '';
@@ -55,7 +59,7 @@ export default function CriarPerfilEmpresa() {
         aceitou_termos_empresa: true,
         ...(tipo === 'cnpj' ? {
           nome_empresa: form.nome_empresa.trim(),
-          ramo_empresa: form.ramo_empresa.trim(),
+          ramos_atuacao: form.ramos_atuacao,
           porte_empresa: form.porte_empresa,
           cnpj: form.cnpj.trim(),
           site_empresa: form.site_empresa.trim(),
@@ -69,7 +73,7 @@ export default function CriarPerfilEmpresa() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const msg = data.nome_empresa || data.ramo_empresa || data.bio_empresa || data.tipo_empresa || data.aceitou_termos_empresa || 'Não foi possível criar o perfil de empresa.';
+        const msg = data.nome_empresa || data.ramos_atuacao || data.ramo_empresa || data.bio_empresa || data.tipo_empresa || data.aceitou_termos_empresa || 'Não foi possível criar o perfil de empresa.';
         throw new Error(Array.isArray(msg) ? msg[0] : msg);
       }
       ajustarPapel('empresa');
@@ -146,34 +150,35 @@ export default function CriarPerfilEmpresa() {
             <h2 style={{ fontSize: '1.1rem', marginBottom: '1.25rem' }}>Dados da empresa</h2>
             <div style={estilos.formulario}>
               <div>
-                <label style={estilos.label}>Nome da empresa *</label>
+                <label style={estilos.label}>Nome da empresa <Obrigatorio /></label>
                 <input className="input" style={{ width: '100%' }} value={form.nome_empresa} onChange={atualizar('nome_empresa')} placeholder="Ex.: Clínica Pet Feliz LTDA" />
               </div>
               <div>
-                <label style={estilos.label}>Ramo / segmento *</label>
-                <input className="input" style={{ width: '100%' }} value={form.ramo_empresa} onChange={atualizar('ramo_empresa')} placeholder="Ex.: Saúde, Tecnologia..." />
+                <label style={estilos.label}>Ramo de atuação (até {MAX_RAMOS_EMPRESA}) <Obrigatorio /></label>
+                <SeletorRamos
+                  valor={form.ramos_atuacao}
+                  onChange={(ramos) => setForm(prev => ({ ...prev, ramos_atuacao: ramos }))}
+                />
               </div>
               <div>
-                <label style={estilos.label}>Porte da empresa (opcional)</label>
-                <select className="input" style={{ width: '100%' }} value={form.porte_empresa} onChange={atualizar('porte_empresa')}>
-                  <option value="">Selecione...</option>
-                  <option value="autonomo">Autônomo</option>
-                  <option value="micro">Micro (até 9 funcionários)</option>
-                  <option value="pequena">Pequena (10 a 49)</option>
-                  <option value="media">Média (50 a 249)</option>
-                  <option value="grande">Grande (250+)</option>
-                </select>
+                <label style={estilos.label}>Porte da empresa <Opcional /></label>
+                <SeletorUnico
+                  valor={form.porte_empresa}
+                  opcoes={PORTES_EMPRESA}
+                  ariaLabel="Porte da empresa"
+                  onChange={(porte) => setForm(prev => ({ ...prev, porte_empresa: porte }))}
+                />
               </div>
               <div>
-                <label style={estilos.label}>CNPJ (opcional)</label>
+                <label style={estilos.label}>CNPJ <Opcional /></label>
                 <input className="input" style={{ width: '100%' }} value={form.cnpj} onChange={atualizar('cnpj')} placeholder="00.000.000/0000-00" />
               </div>
               <div>
-                <label style={estilos.label}>Site da empresa (opcional)</label>
+                <label style={estilos.label}>Site da empresa <Opcional /></label>
                 <input className="input" style={{ width: '100%' }} value={form.site_empresa} onChange={atualizar('site_empresa')} placeholder="https://..." />
               </div>
               <div>
-                <label style={estilos.label}>O que a empresa faz? *</label>
+                <label style={estilos.label}>O que a empresa faz? <Obrigatorio /></label>
                 <textarea className="input" rows={4} style={{ width: '100%', resize: 'vertical' }} value={form.bio_empresa} onChange={atualizar('bio_empresa')} placeholder="Descreva a empresa: área de atuação, serviços, porte e o tipo de profissional que procura..." />
               </div>
             </div>
@@ -210,7 +215,7 @@ export default function CriarPerfilEmpresa() {
                     <strong>{form.nome_empresa}</strong>
                   </div>
                   {Object.entries({
-                    'Ramo / segmento': form.ramo_empresa,
+                    'Ramo de atuação': form.ramos_atuacao.join(', '),
                     'Porte': form.porte_empresa ? (`${form.porte_empresa[0].toUpperCase()}${form.porte_empresa.slice(1)}`) : 'Não informado',
                     'CNPJ': form.cnpj || 'Não informado',
                     'Site': form.site_empresa || 'Não informado',
@@ -267,6 +272,8 @@ export default function CriarPerfilEmpresa() {
     </div>
   );
 }
+
+const Obrigatorio = () => <span style={{ color: 'var(--danger-color)' }}>*</span>;
 
 const estilos = {
   circulo: {

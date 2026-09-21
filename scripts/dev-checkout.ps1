@@ -141,7 +141,7 @@ $ngrokExe = if ($ngrokCmd -is [System.Management.Automation.CommandInfo]) { $ngr
 
 if (-not (Test-Path $PythonExe)) {
     Write-Host "O ambiente virtual nao foi encontrado em $PythonExe" -ForegroundColor Red
-    Write-Host 'Crie com: cd backend; python -m venv .venv; .\.venv\Scripts\Activate.ps1; pip install -r requirements.txt' -ForegroundColor Red
+    Write-Host 'Crie com: cd backend; python -m venv venv; .\venv\Scripts\Activate.ps1; pip install -r ..\requirements.txt' -ForegroundColor Red
     exit 1
 }
 

@@ -34,6 +34,7 @@ class UserProfile(models.Model):
     nome_empresa = models.CharField(max_length=255, null=True, blank=True)
     bio_empresa = models.TextField(null=True, blank=True)
     ramo_empresa = models.CharField(max_length=255, null=True, blank=True)
+    ramos_atuacao = models.JSONField(blank=True, default=list)
     porte_empresa = models.CharField(max_length=20, choices=PORTES_EMPRESA, null=True, blank=True)
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     site_empresa = models.URLField(max_length=255, null=True, blank=True)

@@ -6,6 +6,7 @@ import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/opti
 import DisponibilidadeSemanal, { disponibilidadeVazia } from '../components/DisponibilidadeSemanal';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
 import LimitePlano from '../components/LimitePlano';
+import Opcional from '../components/Opcional';
 
 export default function CreateAd() {
   const limiteDescricao = 1000;
@@ -218,7 +219,7 @@ export default function CreateAd() {
           </div>
 
           <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5)</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5) <Opcional /></label>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
               <select
                 className="input"

@@ -4,6 +4,9 @@ import { Trash2, AlertTriangle, Briefcase, Building2, UserRound } from 'lucide-r
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 import { useDialogo } from '../context/ContextoDialogo';
+import SeletorRamos from '../components/SeletorRamos';
+import SeletorUnico from '../components/SeletorUnico';
+import { MAX_RAMOS_EMPRESA, PORTES_EMPRESA } from '../constants/options';
 
 export default function Configuracoes() {
   const { token, logout, user, ajustarPapel } = useAuth();
@@ -22,7 +25,7 @@ export default function Configuracoes() {
   const [erroPapel, setErroPapel] = useState('');
   const [dadosEmpresa, setDadosEmpresa] = useState(() => ({
     nome_empresa: user?.profile?.nome_empresa || '',
-    ramo_empresa: user?.profile?.ramo_empresa || '',
+    ramos_atuacao: user?.profile?.ramos_atuacao || [],
     porte_empresa: user?.profile?.porte_empresa || '',
     cnpj: user?.profile?.cnpj || '',
     site_empresa: user?.profile?.site_empresa || '',
@@ -38,9 +41,13 @@ export default function Configuracoes() {
   };
 
   const salvarDadosEmpresa = async () => {
-    setSalvandoEmpresa(true);
     setErroEmpresa('');
     setSucessoEmpresa(false);
+    if (dadosEmpresa.ramos_atuacao.length === 0) {
+      setErroEmpresa('Escolha ao menos um ramo de atuação da empresa.');
+      return;
+    }
+    setSalvandoEmpresa(true);
     try {
       const response = await fetch('http://localhost:8000/api/auth/profile/', {
         method: 'PATCH',
@@ -236,19 +243,23 @@ export default function Configuracoes() {
               <input className="input" style={{ width: '100%' }} value={dadosEmpresa.nome_empresa} onChange={atualizarEmpresa('nome_empresa')} />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Ramo / segmento *</label>
-              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.ramo_empresa} onChange={atualizarEmpresa('ramo_empresa')} />
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Ramo de atuação (até {MAX_RAMOS_EMPRESA}) *</label>
+              <SeletorRamos
+                valor={dadosEmpresa.ramos_atuacao}
+                onChange={(ramos) => setDadosEmpresa(prev => ({ ...prev, ramos_atuacao: ramos }))}
+              />
+              {dadosEmpresa.ramos_atuacao.length === 0 && user?.profile?.ramo_empresa && (
+                <p className="combo__hint">Ramo cadastrado anteriormente: {user.profile.ramo_empresa}. Escolha na lista para atualizar.</p>
+              )}
             </div>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Porte</label>
-              <select className="input" style={{ width: '100%' }} value={dadosEmpresa.porte_empresa} onChange={atualizarEmpresa('porte_empresa')}>
-                <option value="">Selecione...</option>
-                <option value="autonomo">Autônomo</option>
-                <option value="micro">Micro (até 9 funcionários)</option>
-                <option value="pequena">Pequena (10 a 49)</option>
-                <option value="media">Média (50 a 249)</option>
-                <option value="grande">Grande (250+)</option>
-              </select>
+              <SeletorUnico
+                valor={dadosEmpresa.porte_empresa}
+                opcoes={PORTES_EMPRESA}
+                ariaLabel="Porte da empresa"
+                onChange={(porte) => setDadosEmpresa(prev => ({ ...prev, porte_empresa: porte }))}
+              />
             </div>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>CNPJ (opcional)</label>

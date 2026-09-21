@@ -1795,6 +1795,105 @@ class PerfilBioEReputacaoAPITests(TestCase):
         self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)
 
 
+class RamosAtuacaoEmpresaAPITests(TestCase):
+    """
+    Ramos de atuação da empresa: lista de até 3 ramos escolhidos no cadastro.
+    `ramo_empresa` (texto) passa a ser derivado dos ramos escolhidos.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='ramos@example.com',
+            email='ramos@example.com',
+            password='secret123',
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(self.user)
+
+    def _payload_empresa(self, **extra):
+        payload = {
+            'papel': 'empresa',
+            'tipo_empresa': 'cnpj',
+            'aceitou_termos_empresa': True,
+            'nome_empresa': 'Clínica Pet Feliz',
+            'bio_empresa': 'Cuidamos de animais.',
+        }
+        payload.update(extra)
+        return payload
+
+    def test_cadastro_empresa_grava_ramos_e_deriva_ramo_texto(self):
+        response = self.client.patch(
+            '/api/auth/profile/',
+            self._payload_empresa(ramos_atuacao=['Saúde e Bem-estar', 'Pet e Veterinário']),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, ['Saúde e Bem-estar', 'Pet e Veterinário'])
+        self.assertEqual(self.profile.ramo_empresa, 'Saúde e Bem-estar, Pet e Veterinário')
+
+    def test_aceita_ate_tres_ramos(self):
+        ramos = ['Educação', 'Indústria', 'Agronegócio']
+        response = self.client.patch(
+            '/api/auth/profile/', self._payload_empresa(ramos_atuacao=ramos), format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, ramos)
+
+    def test_rejeita_mais_de_tres_ramos(self):
+        response = self.client.patch(
+            '/api/auth/profile/',
+            self._payload_empresa(ramos_atuacao=['Educação', 'Indústria', 'Agronegócio', 'Outros']),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ramos_atuacao', response.data)
+
+    def test_rejeita_ramos_repetidos_e_valores_invalidos(self):
+        casos = [
+            ['Educação', 'Educação'],
+            ['Educação', 123],
+            ['   '],
+            ['x' * 61],
+            'Educação',
+        ]
+        for ramos in casos:
+            with self.subTest(ramos=ramos):
+                response = self.client.patch(
+                    '/api/auth/profile/', {'ramos_atuacao': ramos}, format='json',
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('ramos_atuacao', response.data)
+
+    def test_patch_sem_ramos_nao_altera_ramos_existentes(self):
+        self.profile.ramos_atuacao = ['Educação']
+        self.profile.ramo_empresa = 'Educação'
+        self.profile.save()
+
+        response = self.client.patch('/api/auth/profile/', {'bio': 'Nova bio'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, ['Educação'])
+        self.assertEqual(self.profile.ramo_empresa, 'Educação')
+
+    def test_limpar_ramos_nao_apaga_ramo_texto_legado(self):
+        self.profile.ramo_empresa = 'Padaria artesanal'
+        self.profile.save()
+
+        response = self.client.patch('/api/auth/profile/', {'ramos_atuacao': []}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.ramos_atuacao, [])
+        self.assertEqual(self.profile.ramo_empresa, 'Padaria artesanal')
+
+
 class NotificacaoAPITests(TestCase):
     """
     Cobre o bug em que a notificação de candidatura continuava exibindo o
