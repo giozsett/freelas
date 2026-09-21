@@ -34,7 +34,7 @@ export default function LocalizacaoAnuncio({ value, onChange, cidadeObrigatoria 
     <div className="location-fields">
       <div className="form-row">
         <div style={{ flex: 1 }}>
-          <label>Estado{cidadeObrigatoria ? ' *' : ''}</label>
+          <label>Estado{cidadeObrigatoria && <> <span style={{ color: 'var(--danger-color)' }}>*</span></>}</label>
           <select
             className="input"
             value={value.estado}
@@ -46,7 +46,7 @@ export default function LocalizacaoAnuncio({ value, onChange, cidadeObrigatoria 
           </select>
         </div>
         <div style={{ flex: 2 }}>
-          <label>Cidade{cidadeObrigatoria ? ' *' : ''}</label>
+          <label>Cidade{cidadeObrigatoria && <> <span style={{ color: 'var(--danger-color)' }}>*</span></>}</label>
           <select
             className="input"
             value={value.cidade}

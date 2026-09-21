@@ -50,7 +50,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer')
         read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at')
 
     def validate(self, attrs):
@@ -70,17 +70,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({'ramo_empresa': 'Informe o ramo/segmento da empresa.'})
                 if not (dados.get('bio_empresa') or (self.instance and self.instance.bio_empresa)):
                     raise serializers.ValidationError({'bio_empresa': 'Conte o que a empresa faz.'})
+        # Quando o pedido está alterando para freelancer, exige os termos do freelancer
+        if 'papel' in dados and dados['papel'] == 'freelancer':
+            termos_freelancer = dados.get('aceitou_termos_freelancer', self.instance.aceitou_termos_freelancer if self.instance else False)
+            if not termos_freelancer:
+                raise serializers.ValidationError({'aceitou_termos_freelancer': 'Você precisa aceitar os Termos de Uso do perfil de freelancer.'})
         return super().validate(attrs)
 
     def get_banner(self, obj):
         return obj.banner
 
     def get_certificados(self, obj):
-        certificados = obj.certificados.filter(exibir_perfil=True)
+        certificados = obj.certificados.filter(exibir_perfil=True, deletado=False)
         return CertificadoSerializer(certificados, many=True, context=self.context).data
 
     def get_experiencias(self, obj):
-        experiencias = obj.experiencias.all()
+        experiencias = obj.experiencias.filter(deletado=False)
         return ExperienciaSerializer(experiencias, many=True, context=self.context).data
 
     def update(self, instance, validated_data):
@@ -143,14 +148,19 @@ class UserSerializer(serializers.ModelSerializer):
     resumo_avaliacoes = serializers.SerializerMethodField()
     avaliacoes_recebidas = serializers.SerializerMethodField()
     reputacao = serializers.SerializerMethodField()
+    tem_senha = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name', 'profile',
             'resumo_avaliacoes', 'avaliacoes_recebidas', 'reputacao', 'is_staff',
+            'tem_senha',
         )
         read_only_fields = ('is_staff',)
+
+    def get_tem_senha(self, obj):
+        return obj.has_usable_password()
 
     def get_resumo_avaliacoes(self, obj):
         result = {
@@ -159,7 +169,9 @@ class UserSerializer(serializers.ModelSerializer):
         }
         if not hasattr(obj, 'profile'):
             return result
-        aggregates = obj.profile.avaliacoes_recebidas.values('papel_avaliado').annotate(
+        aggregates = obj.profile.avaliacoes_recebidas.filter(
+            deletado=False,
+        ).values('papel_avaliado').annotate(
             nota=Avg('nota_geral'),
             total=Count('id'),
         )
@@ -175,7 +187,7 @@ class UserSerializer(serializers.ModelSerializer):
             return []
         queryset = obj.profile.avaliacoes_recebidas.select_related(
             'avaliador__user', 'acordo',
-        ).all()
+        ).filter(deletado=False)
         return AvaliacaoSerializer(queryset, many=True, context=self.context).data
 
     def get_reputacao(self, obj):
@@ -437,10 +449,13 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
 
     criterios_qs = CriterioAvaliacao.objects.filter(
         avaliacao__avaliado=profile,
+        avaliacao__deletado=False,
         papel_avaliado=papel,
     )
 
-    total_avaliacoes = profile.avaliacoes_recebidas.filter(papel_avaliado=papel).count()
+    total_avaliacoes = profile.avaliacoes_recebidas.filter(
+        papel_avaliado=papel, deletado=False,
+    ).count()
     completude_itens = _completude_perfil_itens(profile)
     completude = min(100, sum(item['pontos'] for item in completude_itens if item['atendido']))
     bonus_completude = round(completude * 0.30)
@@ -567,7 +582,9 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
             'completude_perfil_detalhe': completude_itens,
         }
 
-    media_geral_val = profile.avaliacoes_recebidas.filter(papel_avaliado=papel).aggregate(
+    media_geral_val = profile.avaliacoes_recebidas.filter(
+        papel_avaliado=papel, deletado=False,
+    ).aggregate(
         media=Avg('nota_geral')
     )['media']
     media_num = float(media_geral_val or 5.0)

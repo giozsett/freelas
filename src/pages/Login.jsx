@@ -58,7 +58,11 @@ export default function Login() {
       } else if (data.error === 'email_not_found') {
         setErrorMsg('Email inválido. Confira o email digitado ou cadastre-se se ainda não tiver uma conta.');
       } else {
-        setErrorMsg('E-mail ou senha incorretos.');
+        setErrorMsg(
+          data.error && data.error !== 'Wrong Credentials'
+            ? data.error
+            : 'E-mail ou senha incorretos.'
+        );
       }
     } catch (err) {
       setErrorMsg('E-mail ou senha incorretos.');

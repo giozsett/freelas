@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Circle, Upload, Briefcase, MapPin, Calendar, Mail, Phone } from 'lucide-react';
+import { Star, Edit3, Award, Zap, MessageCircle, CheckCircle, XCircle, Circle, Upload, Briefcase, Building2, MapPin, Calendar, Mail, Phone } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
@@ -132,6 +132,8 @@ export default function Profile() {
           <div style={{ marginTop: profile.banner ? '-40px' : '0', width: '150px', height: '150px', borderRadius: '50%', background: 'var(--holo-gradient)', border: '4px solid var(--surface-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {profile.foto_perfil ? (
               <img src={profile.foto_perfil} alt="Foto" onClick={() => setViewingPhoto(true)} className="avatar-clickable" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
+            ) : ehEmpresaCnpj ? (
+              <Building2 size={56} color="var(--primary)" />
             ) : (
               <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)', opacity: 0.6, textTransform: 'uppercase' }}>
                 {nomeExibido.charAt(0)}
@@ -141,6 +143,12 @@ export default function Profile() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '3rem', margin: 0, textTransform: 'capitalize' }}>{nomeExibido}</h1>
+              {ehEmpresaCnpj && (
+                <span className="selo-empresa">
+                  <Building2 size={14} />
+                  Empresa com CNPJ
+                </span>
+              )}
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',

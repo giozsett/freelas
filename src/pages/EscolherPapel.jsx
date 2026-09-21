@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Building2, Check } from 'lucide-react';
+import { Briefcase, Building2, Check, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 
@@ -12,6 +12,8 @@ export default function EscolherPapel() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(null);
   const [erro, setErro] = useState('');
+  const [termoFreelancerOpen, setTermoFreelancerOpen] = useState(false);
+  const [aceitouTermoFreelancer, setAceitouTermoFreelancer] = useState(false);
 
   const opcoes = [
     {
@@ -49,8 +51,21 @@ export default function EscolherPapel() {
       navigate('/criar-perfil-empresa', { replace: true });
       return;
     }
-    setSaving(valor);
+    // Freelancer exige aceitar o termo de freelancer
     setErro('');
+    setAceitouTermoFreelancer(false);
+    setTermoFreelancerOpen(true);
+  };
+
+  const confirmarFreelancer = async () => {
+    if (!aceitouTermoFreelancer) {
+      setErro('Você precisa aceitar os Termos de Uso do perfil de freelancer.');
+      setTermoFreelancerOpen(false);
+      return;
+    }
+    setTermoFreelancerOpen(false);
+    setErro('');
+    setSaving('freelancer');
     try {
       const res = await fetch(`${API_URL}/api/auth/profile/`, {
         method: 'PATCH',
@@ -58,10 +73,10 @@ export default function EscolherPapel() {
           'Content-Type': 'application/json',
           'Authorization': `Token ${token}`,
         },
-        body: JSON.stringify({ papel: valor }),
+        body: JSON.stringify({ papel: 'freelancer', aceitou_termos_freelancer: true }),
       });
       if (!res.ok) throw new Error('Não foi possível salvar sua escolha. Tente novamente.');
-      ajustarPapel(valor);
+      ajustarPapel('freelancer');
       const primeiraVez = sessionStorage.getItem('freelas_primeira_vez');
       sessionStorage.removeItem('freelas_primeira_vez');
       navigate(primeiraVez ? '/subscription-setup' : '/', { replace: true });
@@ -135,6 +150,62 @@ export default function EscolherPapel() {
       </div>
 
       {erro && <p style={styles.erro}>{erro}</p>}
+
+      {termoFreelancerOpen && (
+        <div style={styles.overlay}>
+          <div className="card" style={styles.modal}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <Briefcase size={24} color="var(--primary)" />
+              <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Mudar para Freelancer</h2>
+            </div>
+
+            <div style={styles.termo}>
+              <strong style={{ display: 'block', marginBottom: '0.6rem' }}>
+                Como funciona a conta Freelancer
+              </strong>
+              <ol style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', lineHeight: '1.5' }}>
+                <li>
+                  Ao atuar como <strong>Freelancer</strong>, você oferece seus serviços na plataforma: publica anúncios oferecendo seu trabalho, se candidata aos anúncios dos contratantes, recebe propostas e firma acordos de serviço com quem contratar.
+                </li>
+                <li>
+                  A aba <strong>&ldquo;Minhas candidaturas&rdquo;</strong> fica disponível para você acompanhar e gerenciar suas candidaturas.
+                </li>
+                <li>
+                  Ao prestar um serviço, este perfil firma acordos como freelancer, com as obrigações legais, fiscais e de responsabilidade previstas nos Termos de Uso gerais da plataforma.
+                </li>
+                <li>
+                  Você pode mudar para <strong>Empresa/Contratante</strong> a qualquer momento, quando quiser.
+                </li>
+              </ol>
+            </div>
+
+            <label style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginTop: '1rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+              <input type="checkbox" checked={aceitouTermoFreelancer} onChange={(e) => setAceitouTermoFreelancer(e.target.checked)} style={{ marginTop: '0.15rem' }} />
+              <span>
+                Li e concordo com o termo acima e confirmo que vou atuar como <strong>Freelancer</strong>.
+              </span>
+            </label>
+
+            {erro && (
+              <p style={{ color: 'var(--danger-color)', fontSize: '0.9rem', marginTop: '0.75rem' }}>{erro}</p>
+            )}
+
+            <div style={styles.modalBotoes}>
+              <button className="btn btn-secondary" onClick={() => { setTermoFreelancerOpen(false); setErro(''); }} disabled={!!saving}>
+                Cancelar
+              </button>
+              <button
+                className="btn"
+                disabled={!aceitouTermoFreelancer || !!saving}
+                style={{ opacity: aceitouTermoFreelancer && !saving ? 1 : 0.5, cursor: aceitouTermoFreelancer && !saving ? 'pointer' : 'not-allowed' }}
+                onClick={confirmarFreelancer}
+              >
+                {saving ? 'Salvando...' : <><ShieldCheck size={17} /> Confirmar e virar Freelancer</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -213,5 +284,24 @@ const styles = {
   erro: {
     color: 'var(--danger-color)',
     marginTop: '1.25rem',
+  },
+  overlay: {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+  },
+  modal: {
+    width: '100%', maxWidth: '520px', maxHeight: '90vh',
+    display: 'flex', flexDirection: 'column', overflowY: 'auto',
+  },
+  termo: {
+    background: 'var(--secondary)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '10px',
+    padding: '1rem',
+    fontSize: '0.9rem',
+  },
+  modalBotoes: {
+    display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1.5rem',
   },
 };

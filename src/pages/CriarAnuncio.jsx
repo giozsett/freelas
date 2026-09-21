@@ -158,7 +158,7 @@ export default function CreateAd() {
         </div>
       )}
       <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Postar Novo Anúncio</h1>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
         <span className={role === 'freelancer' ? 'badge purple' : 'badge green'} style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
           {role === 'freelancer' ? 'Criar anúncio como freelancer' : 'Criar anúncio como contratante'}
         </span>
@@ -168,7 +168,7 @@ export default function CreateAd() {
         <form className="ad-form" onSubmit={handleSubmit}>
           
           <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Título do Anúncio</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Título do Anúncio <span style={{ color: 'var(--danger-color)' }}>*</span></label>
             <input 
               type="text" 
               className="input" 
@@ -192,7 +192,7 @@ export default function CreateAd() {
                 </select>
              </div>
              <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor (R$)</label>
+                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor (R$) <span style={{ color: 'var(--danger-color)' }}>*</span></label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input 
                     type="text" 
@@ -285,7 +285,7 @@ export default function CreateAd() {
 
           {role === 'contractor' ? (
              <div>
-               <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Data/Prazo</label>
+               <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Data/Prazo <span style={{ color: 'var(--danger-color)' }}>*</span></label>
                <input 
                  type="date" 
                  className="input custom-date-input" 
@@ -301,7 +301,7 @@ export default function CreateAd() {
           )}
 
           <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Descrição Detalhada</label>
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Descrição Detalhada <span style={{ color: 'var(--danger-color)' }}>*</span></label>
             <textarea 
               className="input" 
               rows="6"

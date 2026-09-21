@@ -651,11 +651,6 @@ export default function Conversa() {
             >
               <X size={16} />
             </button>
-            <div className="chat-details__avatar">
-              <Avatar nome={outraParte?.nome} foto={outraParte?.foto_perfil} tamanho={48} />
-              <h3>{outraParte?.nome || 'Participante'}</h3>
-              {outraParte?.papel && <span className="chat-papel-tag">{PAPEL_LABEL[outraParte.papel] || outraParte.papel}</span>}
-            </div>
             <div className="chat-details__section">
               <span className="chat-details__label">Acordo</span>
               <div className="chat-details__row"><span>Anúncio</span><span>{chat.titulo_anuncio}</span></div>

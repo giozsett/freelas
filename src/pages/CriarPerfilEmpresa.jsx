@@ -154,7 +154,7 @@ export default function CriarPerfilEmpresa() {
                 <input className="input" style={{ width: '100%' }} value={form.ramo_empresa} onChange={atualizar('ramo_empresa')} placeholder="Ex.: Saúde, Tecnologia..." />
               </div>
               <div>
-                <label style={estilos.label}>Porte da empresa</label>
+                <label style={estilos.label}>Porte da empresa (opcional)</label>
                 <select className="input" style={{ width: '100%' }} value={form.porte_empresa} onChange={atualizar('porte_empresa')}>
                   <option value="">Selecione...</option>
                   <option value="autonomo">Autônomo</option>
@@ -230,12 +230,16 @@ export default function CriarPerfilEmpresa() {
                 Termos de Uso — Perfil de empresa/contratante
               </strong>
               <p style={{ fontSize: '0.85rem', lineHeight: '1.6', margin: 0 }}>
-                Declaro que estou criando um perfil de <strong>empresa/contratante</strong> no Freelas. As informações
-                prestadas identificam a organização representada e passam a compor o perfil exibido publicamente enquanto
-                a conta atuar como empresa. Tenho autoridade para representar esta organização e me responsabilizo pela
-                veracidade dos dados informados. Ao contratar serviços, este perfil firma acordos como contratante, com
-                as obrigações legais, fiscais de e responsabilidade previstas nos Termos de Uso gerais da plataforma.
-                Entendo que posso voltar a atuar como freelancer a qualquer momento usando o mesmo perfil pessoal.
+                Declaro que estou criando um perfil de <strong>empresa/contratante</strong> no Freelas. Ao atuar como
+                Empresa, minha conta passa a ser uma <strong>Contratante</strong>: posso publicar anúncios em busca de
+                um serviço, receber propostas de freelancers e contratar profissionais — tanto como <strong>pessoa
+                física</strong> (sem CNPJ, usando meu perfil pessoal) quanto como <strong>empresa com CNPJ</strong> (usando
+                o perfil da organização). As informações prestadas identificam a organização representada e passam a
+                compor o perfil exibido publicamente enquanto a conta atuar como empresa. Tenho autoridade para
+                representar esta organização e me responsabilizo pela veracidade dos dados informados. Ao contratar
+                serviços, este perfil firma acordos como contratante, com as obrigações legais, fiscais e de
+                responsabilidade previstas nos Termos de Uso gerais da plataforma. Entendo que posso voltar a atuar
+                como freelancer a qualquer momento usando o mesmo perfil pessoal.
               </p>
             </div>
 
