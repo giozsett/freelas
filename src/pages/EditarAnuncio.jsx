@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
-import DisponibilidadeSemanal, { disponibilidadeVazia, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
 
 export default function EditAd() {
@@ -29,9 +28,7 @@ export default function EditAd() {
   });
   
   const [deadline, setDeadline] = useState('');
-  const [availability, setAvailability] = useState(disponibilidadeVazia);
   
-  const [adRole, setAdRole] = useState('freelancer');
   const [isLoading, setIsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState('');
 
@@ -70,8 +67,6 @@ export default function EditAd() {
         });
         setDescription(data.description || data.descricao || '');
         setDeadline(data.deadline || '');
-        setAvailability(normalizarDisponibilidade(data.availability));
-        setAdRole(data.role || 'freelancer');
         setIsLoading(false);
       })
       .catch(err => {
@@ -127,9 +122,7 @@ export default function EditAd() {
       cidade: locationType === 'presencial' ? localizacao.cidade : '',
       bairro: locationType === 'presencial' ? localizacao.bairro : '',
       description,
-      role: adRole,
-      deadline: adRole === 'contractor' ? deadline : '',
-      availability: adRole === 'freelancer' ? availability : ''
+      deadline,
     };
 
     try {
@@ -173,8 +166,8 @@ export default function EditAd() {
     <div className="ad-form-page">
       <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Editar Anúncio</h1>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <span className={adRole === 'freelancer' ? 'badge purple' : 'badge green'} style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
-          {adRole === 'freelancer' ? 'Editando anúncio como freelancer' : 'Editando anúncio como contratante'}
+        <span className="badge green" style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
+          Editando vaga
         </span>
       </div>
       <div className="card ad-form-card">
@@ -296,7 +289,6 @@ export default function EditAd() {
             </div>
           )}
 
-          {adRole === 'contractor' ? (
              <div>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Data/Prazo</label>
                 <input 
@@ -309,16 +301,13 @@ export default function EditAd() {
                   required
                 />
              </div>
-          ) : (
-             <DisponibilidadeSemanal value={availability} onChange={setAvailability} />
-          )}
 
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Descrição Detalhada</label>
             <textarea 
               className="input" 
               rows="6"
-              placeholder="Descreva o que você oferece ou o que você precisa..."
+              placeholder="Descreva o serviço que você precisa..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={limiteDescricao}

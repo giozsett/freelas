@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
-import { useRole } from '../context/ContextoPapel';
 import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
-import DisponibilidadeSemanal, { disponibilidadeVazia } from '../components/DisponibilidadeSemanal';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
 import LimitePlano from '../components/LimitePlano';
 import Opcional from '../components/Opcional';
 
 export default function CreateAd() {
   const limiteDescricao = 1000;
-  const { role } = useRole();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIAS_SERVICO[0]);
   const [skills, setSkills] = useState([]);
@@ -29,7 +26,6 @@ export default function CreateAd() {
   });
   
   const [deadline, setDeadline] = useState('');
-  const [availability, setAvailability] = useState(disponibilidadeVazia);
   const [submitError, setSubmitError] = useState('');
   const [limiteAtingido, setLimiteAtingido] = useState(false);
 
@@ -97,9 +93,7 @@ export default function CreateAd() {
       cidade: locationType === 'presencial' ? localizacao.cidade : '',
       bairro: locationType === 'presencial' ? localizacao.bairro : '',
       description,
-      role,
       deadline,
-      availability
     };
 
     try {
@@ -160,8 +154,8 @@ export default function CreateAd() {
       )}
       <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Postar Novo Anúncio</h1>
       <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-        <span className={role === 'freelancer' ? 'badge purple' : 'badge green'} style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
-          {role === 'freelancer' ? 'Criar anúncio como freelancer' : 'Criar anúncio como contratante'}
+        <span className="badge green" style={{ fontSize: '0.9rem', padding: '0.4rem 1rem' }}>
+          Nova vaga para freelancers
         </span>
       </div>
       <LimitePlano recurso="anuncios" />
@@ -284,7 +278,6 @@ export default function CreateAd() {
             </div>
           )}
 
-          {role === 'contractor' ? (
              <div>
                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Data/Prazo <span style={{ color: 'var(--danger-color)' }}>*</span></label>
                <input 
@@ -297,16 +290,13 @@ export default function CreateAd() {
                  required
                />
              </div>
-          ) : (
-             <DisponibilidadeSemanal value={availability} onChange={setAvailability} />
-          )}
 
           <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Descrição Detalhada <span style={{ color: 'var(--danger-color)' }}>*</span></label>
             <textarea 
               className="input" 
               rows="6"
-              placeholder="Descreva o que você oferece ou o que você precisa..."
+              placeholder="Descreva o serviço que você precisa..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={limiteDescricao}

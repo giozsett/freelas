@@ -1,10 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { Camera, User, Plus, Trash2, Upload, ToggleLeft, ToggleRight, Briefcase, Pencil, Check } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
-import { CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS } from '../constants/options';
+import {
+  CATEGORIAS_SERVICO, HABILIDADES_PROFISSIONAIS, MAX_RAMOS_EMPRESA, MAX_SERVICOS_CONTRATADOS, PORTES_EMPRESA,
+} from '../constants/options';
+import SeletorMultiplo from '../components/SeletorMultiplo';
+import SeletorRamos from '../components/SeletorRamos';
+import SeletorUnico from '../components/SeletorUnico';
 import { calcularTempo } from '../utils/calcularTempo';
 import ModalCrop from '../components/ModalCrop';
 import { useDialogo } from '../context/ContextoDialogo';
@@ -52,7 +57,9 @@ export default function EditProfile() {
   const { alerta } = useDialogo();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [activeEditTab, setActiveEditTab] = useState('identidade');
+  // O lápis de uma seção do perfil pode pedir para abrir direto na aba dela
+  const location = useLocation();
+  const [activeEditTab, setActiveEditTab] = useState(location.state?.aba || 'identidade');
   const tabsScrollRef = useScrollEdges();
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState([{ name: '', level: 'iniciante' }]);
@@ -66,6 +73,17 @@ export default function EditProfile() {
   const [curriculoPreview, setCurriculoPreview] = useState(null);
   const [bannerRemovido, setBannerRemovido] = useState(false);
   const [fotoRemovido, setFotoRemovido] = useState(false);
+
+  // Perfil de contratante: o que contrata, como trabalha e (com CNPJ) os dados da empresa
+  const ehContratante = role === 'contractor';
+  const ehEmpresaCnpj = ehContratante && authUser?.profile?.tipo_empresa === 'cnpj';
+  const [servicosContratados, setServicosContratados] = useState([]);
+  const [comoTrabalha, setComoTrabalha] = useState('');
+  const [empresa, setEmpresa] = useState({
+    nome_empresa: '', bio_empresa: '', ramos_atuacao: [], porte_empresa: '', cnpj: '', site_empresa: '',
+    ano_fundacao: '', responsavel_nome: '', responsavel_cargo: '',
+  });
+  const atualizarEmpresa = (campo) => (e) => setEmpresa(prev => ({ ...prev, [campo]: e.target.value }));
 
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
@@ -143,6 +161,19 @@ export default function EditProfile() {
       if (data.redes_sociais && Array.isArray(data.redes_sociais)) setRedesSociais(data.redes_sociais);
       if (data.email_visivel !== undefined) setEmailVisivel(data.email_visivel);
       if (data.telefone_visivel !== undefined) setTelefoneVisivel(data.telefone_visivel);
+      setServicosContratados(data.servicos_contratados || []);
+      setComoTrabalha(data.como_trabalha || '');
+      setEmpresa({
+        nome_empresa: data.nome_empresa || '',
+        bio_empresa: data.bio_empresa || '',
+        ramos_atuacao: data.ramos_atuacao || [],
+        porte_empresa: data.porte_empresa || '',
+        cnpj: data.cnpj || '',
+        site_empresa: data.site_empresa || '',
+        ano_fundacao: data.ano_fundacao ? String(data.ano_fundacao) : '',
+        responsavel_nome: data.responsavel_nome || '',
+        responsavel_cargo: data.responsavel_cargo || '',
+      });
     })
     .catch(err => console.error(err));
 
@@ -202,7 +233,9 @@ export default function EditProfile() {
   // (backend/core/serializers.py) para os selos de pontos atualizarem na
   // hora, sem precisar salvar o formulário primeiro.
   const fotoAtendida = Boolean(fotoPreview) && !fotoRemovido;
-  const bioAtendida = bio.trim().length >= 20;
+  const bioAtendida = (ehEmpresaCnpj ? empresa.bio_empresa : bio).trim().length >= 20;
+  const servicosAtendidos = servicosContratados.length > 0;
+  const comoTrabalhaAtendido = comoTrabalha.trim().length >= 20;
   const cidadeAtendida = Boolean(cidade);
   const contatoAtendido = useMemo(
     () => Boolean((telefone && telefoneVisivel) || redesSociais.some(r => (r.url || '').trim() !== '')),
@@ -263,6 +296,20 @@ export default function EditProfile() {
         return;
       }
 
+      if (ehEmpresaCnpj) {
+        const pendencia = !empresa.nome_empresa.trim() ? 'Informe o nome da empresa.'
+          : empresa.ramos_atuacao.length === 0 ? 'Escolha ao menos um ramo de atuação da empresa.'
+          : !empresa.bio_empresa.trim() ? 'Conte o que a empresa faz.'
+          : empresa.site_empresa && !/^https?:\/\/.+\..+/.test(empresa.site_empresa) ? 'O site precisa começar com http:// ou https://.'
+          : '';
+        if (pendencia) {
+          setActiveEditTab('atuacao');
+          await alerta(pendencia, { titulo: 'Dados da empresa incompletos', variante: 'perigo' });
+          setEnviando(false);
+          return;
+        }
+      }
+
       const userPatchRes = await fetch(`${API}/api/auth/user/`, {
         method: 'PATCH',
         headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
@@ -285,6 +332,15 @@ export default function EditProfile() {
       formData.append('redes_sociais', JSON.stringify(redesSociais));
       formData.append('email_visivel', emailVisivel);
       formData.append('telefone_visivel', telefoneVisivel);
+      if (ehContratante) {
+        formData.append('servicos_contratados', JSON.stringify(servicosContratados));
+        formData.append('como_trabalha', comoTrabalha);
+      }
+      if (ehEmpresaCnpj) {
+        ['nome_empresa', 'bio_empresa', 'porte_empresa', 'cnpj', 'site_empresa', 'ano_fundacao', 'responsavel_nome', 'responsavel_cargo']
+          .forEach(campo => formData.append(campo, empresa[campo].trim()));
+        formData.append('ramos_atuacao', JSON.stringify(empresa.ramos_atuacao));
+      }
       if (banner) {
         formData.append('banner', banner);
       }
@@ -298,7 +354,14 @@ export default function EditProfile() {
         body: formData
       });
 
-      if (!response.ok) throw new Error('Erro ao salvar perfil');
+      if (!response.ok) {
+        // Mostra a mensagem de validação do backend (ex.: ano de fundação inválido)
+        const erros = await response.json().catch(() => ({}));
+        const mensagem = Object.values(erros).flat().find(m => typeof m === 'string');
+        const erro = new Error('Erro ao salvar perfil');
+        erro.mensagemUsuario = mensagem;
+        throw erro;
+      }
 
       if (bannerRemovido) {
         await fetch(`${API}/api/auth/profile/`, {
@@ -355,7 +418,7 @@ export default function EditProfile() {
       navigate('/profile');
     } catch(err) {
       console.error(err);
-      await alerta('Erro ao salvar. Tente novamente.', { titulo: 'Não foi possível salvar', variante: 'perigo' });
+      await alerta(err.mensagemUsuario || 'Erro ao salvar. Tente novamente.', { titulo: 'Não foi possível salvar', variante: 'perigo' });
     } finally {
       setEnviando(false);
     }
@@ -557,24 +620,30 @@ export default function EditProfile() {
     setCropTarget(null);
   };
 
+  // Contratante não tem "Formação e experiência": a aba de atuação vira a de contratações
+  const rotuloAtuacao = ehContratante
+    ? (ehEmpresaCnpj ? 'Empresa e contratações' : 'Contratações')
+    : 'Atuação profissional';
+  const abasEdicao = [
+    ['identidade', 'Identidade e perfil'],
+    ['contato', 'Localização e contato'],
+    ['atuacao', rotuloAtuacao],
+    ...(ehContratante ? [] : [['historico', 'Formação e experiência']]),
+  ];
+
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Editar Perfil</h1>
       <div className="card">
         <div className="edit-profile-tabs scroll-fade scroll-fade--bg" role="tablist" aria-label="Seções da edição do perfil" ref={tabsScrollRef}>
-          {[
-            ['identidade', 'Identidade e perfil'],
-            ['contato', 'Localização e contato'],
-            ['atuacao', 'Atuação profissional'],
-            ['historico', 'Formação e experiência'],
-          ].map(([id, label]) => (
+          {abasEdicao.map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={activeEditTab === id} className={`profile-tab-option${activeEditTab === id ? ' selected' : ''}`} onClick={() => setActiveEditTab(id)}>
               {label}
             </button>
           ))}
         </div>
         <h2 className="edit-profile-section-title">
-          {{ identidade: 'Identidade e apresentação', contato: 'Localização e contato', atuacao: 'Atuação profissional', historico: 'Formação e experiência' }[activeEditTab]}
+          {{ identidade: 'Identidade e apresentação', contato: 'Localização e contato', atuacao: rotuloAtuacao, historico: 'Formação e experiência' }[activeEditTab]}
         </h2>
         <form className="edit-profile-form tab-content-animation" data-active-tab={activeEditTab} onSubmit={handleSave}>
 
@@ -726,6 +795,7 @@ export default function EditProfile() {
             )}
           </div>
 
+          {!ehContratante && (<>
           {/* Curriculo */}
           <div data-section="identidade">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Currículo (PDF)</label>
@@ -781,6 +851,7 @@ export default function EditProfile() {
               </div>
             )}
           </div>
+          </>)}
 
           {/* Name */}
           <div data-section="identidade">
@@ -807,6 +878,7 @@ export default function EditProfile() {
             </div>
           </div>
 
+          {!ehContratante && (<>
           {/* Working Status */}
           <div data-section="identidade" style={{
             display: 'flex',
@@ -839,6 +911,7 @@ export default function EditProfile() {
               {disponivel ? 'Disponível' : 'Indisponível'}
             </button>
           </div>
+          </>)}
 
           {/* Estado e Cidade */}
           <div data-section="contato">
@@ -967,6 +1040,7 @@ export default function EditProfile() {
             </div>
           </div>
 
+          {!ehEmpresaCnpj && (<>
           {/* Bio */}
           <div data-section="atuacao">
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
@@ -985,12 +1059,10 @@ export default function EditProfile() {
               placeholder={BIO_PLACEHOLDER[role] || BIO_PLACEHOLDER.freelancer}
               style={{ resize: 'none' }}
             ></textarea>
-            {role === 'contractor' && authUser?.profile?.tipo_empresa === 'cnpj' && (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                Como sua conta é uma empresa com CNPJ, o texto exibido no perfil é o de <strong>Sobre a Empresa</strong>, editável em Configurações &gt; Dados da empresa.
-              </p>
-            )}
           </div>
+
+          </>)}
+          {!ehContratante && (<>
 
           {/* Categories */}
           <div data-section="atuacao">
@@ -1046,6 +1118,85 @@ export default function EditProfile() {
               </button>
             </div>
           </div>
+          </>)}
+
+          {/* Dados da empresa (contratante com CNPJ) */}
+          {ehEmpresaCnpj && (<>
+          <div data-section="atuacao">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nome da empresa *</label>
+            <input className="input" value={empresa.nome_empresa} onChange={atualizarEmpresa('nome_empresa')} placeholder="Ex.: Clínica Pet Feliz LTDA" />
+          </div>
+
+          <div data-section="atuacao">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              O que a empresa faz * <PontosBadge pontos={20} atendido={bioAtendida} />
+            </label>
+            <textarea className="input" rows="4" style={{ resize: 'vertical' }} value={empresa.bio_empresa} onChange={atualizarEmpresa('bio_empresa')}
+              placeholder="Área de atuação, serviços oferecidos e porte da empresa..." />
+          </div>
+
+          <div data-section="atuacao">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Ramos de atuação (até {MAX_RAMOS_EMPRESA}) *</label>
+            <SeletorRamos valor={empresa.ramos_atuacao} onChange={(ramos) => setEmpresa(prev => ({ ...prev, ramos_atuacao: ramos }))} />
+          </div>
+
+          <div data-section="atuacao" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Porte</label>
+              <SeletorUnico valor={empresa.porte_empresa} opcoes={PORTES_EMPRESA} ariaLabel="Porte da empresa"
+                onChange={(porte) => setEmpresa(prev => ({ ...prev, porte_empresa: porte }))} />
+            </div>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Ano de fundação</label>
+              <input className="input" type="number" min="1800" max={new Date().getFullYear()} value={empresa.ano_fundacao}
+                onChange={atualizarEmpresa('ano_fundacao')} placeholder="Ex.: 2015" />
+            </div>
+          </div>
+
+          <div data-section="atuacao" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Responsável pelas contratações</label>
+              <input className="input" maxLength={120} value={empresa.responsavel_nome} onChange={atualizarEmpresa('responsavel_nome')} placeholder="Nome" />
+            </div>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Cargo do responsável</label>
+              <input className="input" maxLength={80} value={empresa.responsavel_cargo} onChange={atualizarEmpresa('responsavel_cargo')} placeholder="Ex.: Gerente de marketing" />
+            </div>
+          </div>
+
+          <div data-section="atuacao" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>CNPJ (opcional)</label>
+              <input className="input" value={empresa.cnpj} onChange={atualizarEmpresa('cnpj')} />
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0' }}>Não aparece no perfil público.</p>
+            </div>
+            <div>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Site (opcional)</label>
+              <input className="input" value={empresa.site_empresa} onChange={atualizarEmpresa('site_empresa')} placeholder="https://..." />
+            </div>
+          </div>
+          </>)}
+
+          {/* O que contrata e como trabalha (todo contratante) */}
+          {ehContratante && (<>
+          <div data-section="atuacao">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Serviços que contrata <PontosBadge pontos={15} atendido={servicosAtendidos} />
+            </label>
+            <SeletorMultiplo valor={servicosContratados} onChange={setServicosContratados} opcoes={CATEGORIAS_SERVICO}
+              maximo={MAX_SERVICOS_CONTRATADOS} singular="serviço" plural="serviços" />
+          </div>
+
+          <div data-section="atuacao">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>
+              Como trabalha com freelancers <PontosBadge pontos={30} atendido={comoTrabalhaAtendido} />
+            </label>
+            <textarea className="input" rows="4" maxLength={1000} style={{ resize: 'vertical' }} value={comoTrabalha}
+              onChange={(e) => setComoTrabalha(e.target.value)}
+              placeholder="Como você passa o briefing, com que frequência faz reuniões, em quanto tempo dá retorno sobre as entregas..." />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0' }}>{comoTrabalha.length}/1000</p>
+          </div>
+          </>)}
 
           {/* Certificates Section */}
           <div data-section="historico">

@@ -1,12 +1,18 @@
-from datetime import timedelta, timezone as dt_timezone
+from datetime import date, timedelta, timezone as dt_timezone
 from decimal import Decimal
+from io import StringIO
+from unittest import skipUnless
 from unittest.mock import patch
 
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.models import User
+from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
+import stripe
 
 from .models import (
     Ad,
@@ -39,6 +45,14 @@ class FakeStripeObject(dict):
 
     def to_dict(self):
         return dict(self)
+
+
+def _criar_usuario_com_papel(email, papel, nome):
+    user = User.objects.create_user(username=email, email=email, password='secret123', first_name=nome)
+    user.profile.papel = papel
+    user.profile.nome_completo = nome
+    user.profile.save(update_fields=['papel', 'nome_completo'])
+    return user
 
 
 FAKE_PLANOS_PAGOS = {
@@ -425,7 +439,7 @@ class PagamentoAPITests(TestCase):
     def test_acordo_sem_pagamento_nao_pode_ser_concluido(self):
         self.acordo.status_acordo = 'Ativo'
         self.acordo.save(update_fields=['status_acordo'])
-        self.client.force_authenticate(self.freelancer)
+        self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
             f'/api/acordos/{self.acordo.id}/concluir/',
@@ -443,7 +457,7 @@ class PagamentoAPITests(TestCase):
         checkout real que ainda existe no sistema."""
         self.acordo.status_acordo = 'Ativo'
         self.acordo.save(update_fields=['status_acordo'])
-        self.client.force_authenticate(self.freelancer)
+        self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
             f'/api/acordos/{self.acordo.id}/concluir/',
@@ -466,7 +480,7 @@ class PagamentoAPITests(TestCase):
     def test_acordo_ativo_legado_nao_pode_ser_concluido_fora_do_debug(self):
         self.acordo.status_acordo = 'Ativo'
         self.acordo.save(update_fields=['status_acordo'])
-        self.client.force_authenticate(self.freelancer)
+        self.client.force_authenticate(self.contratante)
 
         response = self.client.post(
             f'/api/acordos/{self.acordo.id}/concluir/',
@@ -483,7 +497,7 @@ class PagamentoAPITests(TestCase):
 
         request = self.client.post(
             f'/api/acordos/{self.acordo.id}/solicitar-cancelamento/',
-            {'justificativa': 'O escopo não poderá mais ser executado conforme combinado.'},
+            {'motivo': 'desistencia', 'justificativa': 'O escopo não poderá mais ser executado conforme combinado.'},
             format='json',
         )
         self.assertEqual(request.status_code, 201)
@@ -542,7 +556,7 @@ class PagamentoAPITests(TestCase):
         self.client.force_authenticate(self.freelancer)
         request = self.client.post(
             f'/api/acordos/{self.acordo.id}/solicitar-cancelamento/',
-            {'justificativa': 'O serviço não poderá continuar conforme o planejamento.'},
+            {'motivo': 'outro', 'justificativa': 'O serviço não poderá continuar conforme o planejamento.'},
             format='json',
         )
         self.assertEqual(request.status_code, 201)
@@ -723,7 +737,8 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(pending.status, 'procedente')
         self.assertEqual(pending.comment, 'Descrição da denúncia.')
 
-    def test_denuncia_publica_sempre_nasce_pendente(self):
+    def test_denuncia_sempre_nasce_pendente(self):
+        self.client.force_authenticate(self.contratante)
         response = self.client.post(
             '/api/reports/',
             {
@@ -964,6 +979,10 @@ class LimitesPlanoAPITests(TestCase):
             password='secret123',
         )
 
+    def _definir_papel(self, papel):
+        self.user.profile.papel = papel
+        self.user.profile.save(update_fields=['papel'])
+
     def _criar_ads_do_outro_anunciante(self, quantidade):
         return [
             Ad.objects.create(
@@ -981,7 +1000,6 @@ class LimitesPlanoAPITests(TestCase):
             'description': 'Descrição do serviço.',
             'price': '100.00',
             'category': 'Tecnologia',
-            'role': 'contractor',
         }
 
     def test_endpoint_limite_anuncios_reflete_plano_gold_com_seis_por_mes(self):
@@ -998,6 +1016,7 @@ class LimitesPlanoAPITests(TestCase):
         self.assertFalse(response.data['atingiu_limite'])
 
     def test_plano_gratuito_bloqueia_quarto_anuncio_no_mes(self):
+        self._definir_papel('contratante')
         self.client.force_authenticate(self.user)
         for i in range(3):
             response = self.client.post('/api/ads/', self._payload_anuncio(f'Anúncio {i}'), format='json')
@@ -1021,6 +1040,7 @@ class LimitesPlanoAPITests(TestCase):
 
     def test_plano_gratuito_bloqueia_sexta_candidatura_no_mes(self):
         ads = self._criar_ads_do_outro_anunciante(6)
+        self._definir_papel('freelancer')
         self.client.force_authenticate(self.user)
 
         for ad in ads[:5]:
@@ -1042,6 +1062,7 @@ class LimitesPlanoAPITests(TestCase):
 
     def test_plano_platinum_nao_tem_limite_de_candidaturas(self):
         ads = self._criar_ads_do_outro_anunciante(6)
+        self._definir_papel('freelancer')
         self.user.profile.subscription_plan = 'Platinum'
         self.user.profile.save(update_fields=['subscription_plan'])
         self.client.force_authenticate(self.user)
@@ -1057,6 +1078,582 @@ class LimitesPlanoAPITests(TestCase):
         status_limite = self.client.get('/api/candidaturas/limite/')
         self.assertIsNone(status_limite.data['limite'])
         self.assertFalse(status_limite.data['atingiu_limite'])
+
+
+class PapeisFixosAPITests(TestCase):
+    """Papel fixo por conta (freelancer, contratante ou administrador):
+    só o contratante publica anúncios e paga; só o freelancer se candidata."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.freelancer = _criar_usuario_com_papel('freela@example.com', 'freelancer', 'Fabi')
+        self.contratante = _criar_usuario_com_papel('contrata@example.com', 'contratante', 'Carlos')
+
+    def _payload_anuncio(self, **extra):
+        payload = {
+            'title': 'Site institucional',
+            'description': 'Site com 5 páginas.',
+            'price': '800.00',
+            'category': 'Tecnologia',
+        }
+        payload.update(extra)
+        return payload
+
+    def test_papel_nao_pode_ser_trocado_depois_de_escolhido(self):
+        self.client.force_authenticate(self.freelancer)
+        response = self.client.patch(
+            '/api/auth/profile/',
+            {'papel': 'contratante', 'tipo_empresa': 'pessoa', 'aceitou_termos_empresa': True},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('papel', response.data)
+        self.freelancer.profile.refresh_from_db()
+        self.assertEqual(self.freelancer.profile.papel, 'freelancer')
+
+    def test_papel_administrador_nao_pode_ser_escolhido(self):
+        novo = User.objects.create_user(username='novo@example.com', email='novo@example.com', password='secret123')
+        self.client.force_authenticate(novo)
+        response = self.client.patch('/api/auth/profile/', {'papel': 'administrador'}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_superusuario_nasce_com_papel_administrador(self):
+        admin = User.objects.create_superuser(username='root@example.com', email='root@example.com', password='secret123')
+        self.assertEqual(admin.profile.papel, 'administrador')
+
+    def test_so_contratante_publica_anuncio(self):
+        admin = User.objects.create_superuser(username='root@example.com', email='root@example.com', password='secret123')
+        sem_papel = User.objects.create_user(username='novo@example.com', email='novo@example.com', password='secret123')
+        for user in (self.freelancer, admin, sem_papel):
+            with self.subTest(user=user.username):
+                self.client.force_authenticate(user)
+                response = self.client.post('/api/ads/', self._payload_anuncio(), format='json')
+                self.assertEqual(response.status_code, 403)
+        self.assertFalse(Ad.objects.exists())
+
+    def test_anuncio_do_contratante_e_sempre_vaga(self):
+        self.client.force_authenticate(self.contratante)
+        response = self.client.post('/api/ads/', self._payload_anuncio(role='freelancer'), format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Ad.objects.get(pk=response.data['id']).role, 'contractor')
+
+    def test_so_freelancer_se_candidata(self):
+        outro_contratante = _criar_usuario_com_papel('outra@example.com', 'contratante', 'Olga')
+        vaga = Ad.objects.create(author=outro_contratante, title='Site', price='100.00', role='contractor')
+
+        self.client.force_authenticate(self.contratante)
+        bloqueado = self.client.post('/api/candidaturas/', {'ad': vaga.id}, format='json')
+        self.client.force_authenticate(self.freelancer)
+        aceito = self.client.post('/api/candidaturas/', {'ad': vaga.id}, format='json')
+
+        self.assertEqual(bloqueado.status_code, 403)
+        self.assertEqual(aceito.status_code, 201, aceito.data)
+        self.assertEqual(list(Candidatura.objects.values_list('user', flat=True)), [self.freelancer.id])
+
+    def test_anuncio_antigo_de_freelancer_fica_oculto_e_nao_recebe_candidatura(self):
+        outro_freelancer = _criar_usuario_com_papel('outro@example.com', 'freelancer', 'Otto')
+        legado = Ad.objects.create(author=outro_freelancer, title='Logo', price='100.00', role='freelancer')
+        vaga = Ad.objects.create(author=self.contratante, title='Site', price='100.00', role='contractor')
+
+        listagem = self.client.get('/api/ads/')
+        self.client.force_authenticate(self.freelancer)
+        candidatura = self.client.post('/api/candidaturas/', {'ad': legado.id}, format='json')
+
+        self.assertEqual([ad['id'] for ad in listagem.data], [vaga.id])
+        self.assertEqual(candidatura.status_code, 400)
+
+    def test_acordo_informa_as_partes_e_o_papel_de_quem_esta_vendo(self):
+        vaga = Ad.objects.create(author=self.contratante, title='Site', price='800.00', role='contractor')
+        candidatura = Candidatura.objects.create(user=self.freelancer, ad=vaga, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+        acordo = AcordoServico.objects.get(candidatura=candidatura)
+
+        self.client.force_authenticate(self.freelancer)
+        visto_pelo_freelancer = self.client.get(f'/api/acordos/{acordo.id}/')
+        self.client.force_authenticate(self.contratante)
+        visto_pelo_contratante = self.client.get(f'/api/acordos/{acordo.id}/')
+
+        self.assertEqual(acordo.partes(), (self.contratante, self.freelancer))
+        self.assertEqual(acordo.nome_contratante, 'Carlos')
+        self.assertEqual(acordo.nome_prestador, 'Fabi')
+        self.assertEqual(visto_pelo_freelancer.data['meu_papel'], 'freelancer')
+        self.assertEqual(visto_pelo_contratante.data['meu_papel'], 'contratante')
+        self.assertEqual(visto_pelo_contratante.data['contratante_id'], self.contratante.id)
+        self.assertEqual(visto_pelo_contratante.data['freelancer_id'], self.freelancer.id)
+
+
+class CicloAcordoAPITests(TestCase):
+    """Prazos do acordo (core/ciclo_acordo.py): pagamento, entrega do
+    freelancer, confirmação do contratante e relato de problema."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = _criar_usuario_com_papel('contrata@example.com', 'contratante', 'Carla')
+        self.freelancer = _criar_usuario_com_papel('freela@example.com', 'freelancer', 'Fred')
+        outro_freelancer = _criar_usuario_com_papel('outro@example.com', 'freelancer', 'Otto')
+        self.vaga = Ad.objects.create(
+            author=self.contratante, title='Site', price='500.00', role='contractor', deadline='2026-10-20',
+        )
+        self.candidatura = Candidatura.objects.create(user=self.freelancer, ad=self.vaga, status='pendente')
+        self.outra_candidatura = Candidatura.objects.create(user=outro_freelancer, ad=self.vaga, status='pendente')
+        self.candidatura.status = 'aprovada'
+        self.candidatura.save()
+        self.acordo = AcordoServico.objects.get(candidatura=self.candidatura)
+
+    def _voltar_no_tempo(self, **horas_atras):
+        """Move datas do acordo para o passado, ex.: _voltar_no_tempo(data_confirmacao=73)."""
+        agora = timezone.now()
+        AcordoServico.objects.filter(pk=self.acordo.pk).update(
+            **{campo: agora - timedelta(hours=horas) for campo, horas in horas_atras.items()}
+        )
+
+    def _ativar_com_pagamento(self, status_acordo='Ativo'):
+        AcordoServico.objects.filter(pk=self.acordo.pk).update(status_acordo=status_acordo)
+        Pagamento.objects.create(
+            usuario=self.contratante, tipo='acordo', status='pago', valor=Decimal('550.00'),
+            referencia_externa=f'acordo:ciclo:{self.acordo.pk}', acordo=self.acordo, mp_payment_id='pi_ciclo',
+        )
+
+    def _notificados(self, titulo):
+        return set(Notificacao.objects.filter(titulo=titulo).values_list('usuario', flat=True))
+
+    def test_prazo_de_pagamento_vencido_cancela_acordo_e_reabre_vaga(self):
+        pendente = Pagamento.objects.create(
+            usuario=self.contratante, tipo='acordo', status='pendente', valor=Decimal('550.00'),
+            referencia_externa='acordo:ciclo:pendente', acordo=self.acordo,
+        )
+        self._voltar_no_tempo(data_confirmacao=73)
+
+        self.client.force_authenticate(self.freelancer)
+        resposta = self.client.get('/api/acordos/')
+
+        self.assertEqual(resposta.status_code, 200)
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Cancelado')
+        self.assertEqual(self.acordo.motivo_cancelamento, 'prazo_pagamento')
+        self.assertEqual(Ad.objects.get(pk=self.vaga.pk).status_anuncio, 'Em aberto')
+        self.assertEqual(Candidatura.objects.get(pk=self.candidatura.pk).status, 'cancelada')
+        self.assertEqual(Candidatura.objects.get(pk=self.outra_candidatura.pk).status, 'pendente')
+        pendente.refresh_from_db()
+        self.assertEqual(pendente.status, 'cancelado')
+        self.assertEqual(
+            self._notificados('Acordo cancelado por falta de pagamento'),
+            {self.contratante.id, self.freelancer.id},
+        )
+
+    def test_prazo_de_pagamento_dentro_do_limite_nao_cancela(self):
+        self._voltar_no_tempo(data_confirmacao=71)
+
+        self.client.force_authenticate(self.contratante)
+        resposta = self.client.get(f'/api/acordos/{self.acordo.id}/')
+
+        self.assertEqual(resposta.data['status_acordo'], 'Pendente Pagamento')
+        self.assertIsNotNone(resposta.data['prazo_pagamento'])
+
+    @override_settings(PRAZO_PAGAMENTO_HORAS=0.05)
+    def test_prazo_de_pagamento_curto_para_demonstracao(self):
+        self._voltar_no_tempo(data_confirmacao=0.1)
+
+        self.client.force_authenticate(self.contratante)
+        self.client.get('/api/acordos/')
+
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Cancelado')
+
+    def test_so_freelancer_marca_entrega(self):
+        self._ativar_com_pagamento()
+        url = f'/api/acordos/{self.acordo.id}/entregar/'
+
+        self.client.force_authenticate(self.contratante)
+        bloqueado = self.client.post(url)
+        self.client.force_authenticate(self.freelancer)
+        resposta = self.client.post(url)
+
+        self.assertEqual(bloqueado.status_code, 403)
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.data['status_acordo'], 'Aguardando confirmação')
+        self.assertIsNotNone(resposta.data['prazo_confirmacao'])
+        self.acordo.refresh_from_db()
+        self.assertIsNotNone(self.acordo.entregue_em)
+        self.assertEqual(self._notificados('Serviço entregue'), {self.contratante.id})
+
+    def test_so_contratante_confirma_conclusao(self):
+        self._ativar_com_pagamento(status_acordo='Aguardando confirmação')
+        url = f'/api/acordos/{self.acordo.id}/concluir/'
+
+        self.client.force_authenticate(self.freelancer)
+        bloqueado = self.client.post(url)
+        self.client.force_authenticate(self.contratante)
+        resposta = self.client.post(url)
+
+        self.assertEqual(bloqueado.status_code, 403)
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Concluído')
+        self.assertEqual(self._notificados('Acordo concluído'), {self.freelancer.id})
+
+    def test_conclusao_automatica_apos_prazo_de_confirmacao(self):
+        self._ativar_com_pagamento(status_acordo='Aguardando confirmação')
+        self._voltar_no_tempo(entregue_em=73)
+
+        self.client.force_authenticate(self.contratante)
+        self.client.get('/api/notificacoes/nao-lidas/')
+
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Concluído')
+        self.assertIsNotNone(self.acordo.concluido_em)
+        self.assertEqual(self._notificados('Acordo concluído'), {self.contratante.id, self.freelancer.id})
+
+    def test_problema_relatado_bloqueia_conclusao_automatica(self):
+        self._ativar_com_pagamento(status_acordo='Aguardando confirmação')
+        SolicitacaoCancelamentoAcordo.objects.create(
+            acordo=self.acordo, solicitante=self.contratante, papel_solicitante='contratante',
+            motivo='nao_entregou', justificativa='O arquivo entregue está vazio.',
+        )
+        self._voltar_no_tempo(entregue_em=73)
+
+        self.client.force_authenticate(self.contratante)
+        self.client.get('/api/acordos/')
+
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Aguardando confirmação')
+
+    def test_relatar_problema_exige_motivo_valido(self):
+        self._ativar_com_pagamento()
+        url = f'/api/acordos/{self.acordo.id}/solicitar-cancelamento/'
+        justificativa = 'O freelancer não apareceu no horário combinado.'
+        self.client.force_authenticate(self.contratante)
+
+        sem_motivo = self.client.post(url, {'justificativa': justificativa}, format='json')
+        motivo_invalido = self.client.post(url, {'motivo': 'qualquer', 'justificativa': justificativa}, format='json')
+        valido = self.client.post(url, {'motivo': 'nao_compareceu', 'justificativa': justificativa}, format='json')
+
+        self.assertEqual(sem_motivo.status_code, 400)
+        self.assertEqual(motivo_invalido.status_code, 400)
+        self.assertEqual(valido.status_code, 201, valido.data)
+        self.assertEqual(SolicitacaoCancelamentoAcordo.objects.get(acordo=self.acordo).motivo, 'nao_compareceu')
+        self.assertEqual(self._notificados('Problema relatado no acordo'), {self.freelancer.id})
+
+    @patch.dict('os.environ', {'STRIPE_WEBHOOK_SECRET': 'whsec_teste'})
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create')
+    @patch('core.views.stripe.Webhook.construct_event')
+    def test_pagamento_aprovado_apos_cancelamento_e_estornado(self, construct_event, refund_create):
+        # O checkout foi concluído depois que o prazo de pagamento já tinha cancelado o acordo
+        pagamento = Pagamento.objects.create(
+            usuario=self.contratante, tipo='acordo', status='cancelado', valor=Decimal('550.00'),
+            referencia_externa='acordo:ciclo:tardio', acordo=self.acordo,
+            detalhe_status='prazo_pagamento_expirado',
+        )
+        AcordoServico.objects.filter(pk=self.acordo.pk).update(
+            status_acordo='Cancelado', motivo_cancelamento='prazo_pagamento',
+        )
+        construct_event.return_value = {
+            'type': 'checkout.session.completed',
+            'data': {'object': FakeStripeObject({
+                'client_reference_id': pagamento.referencia_externa,
+                'amount_total': 55000,
+                'currency': 'brl',
+                'payment_status': 'paid',
+                'payment_intent': 'pi_tardio',
+            })},
+        }
+
+        resposta = self.client.post('/api/pagamentos/webhook/', {}, format='json')
+
+        self.assertEqual(resposta.status_code, 200)
+        refund_create.assert_called_once_with(payment_intent='pi_tardio')
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.status, 'cancelado')
+        self.assertEqual(pagamento.detalhe_status, 'estornado_acordo_cancelado')
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Cancelado')
+        self.assertEqual(self._notificados('Pagamento estornado'), {self.contratante.id})
+
+    def test_acordo_recebe_prazo_da_vaga_e_indica_atraso(self):
+        self.assertEqual(self.acordo.conclusao_prevista, date(2026, 10, 20))
+        AcordoServico.objects.filter(pk=self.acordo.pk).update(
+            status_acordo='Ativo', conclusao_prevista=timezone.localdate() - timedelta(days=1),
+        )
+
+        self.client.force_authenticate(self.contratante)
+        resposta = self.client.get(f'/api/acordos/{self.acordo.id}/')
+
+        self.assertTrue(resposta.data['atrasado'])
+
+    def test_comando_processar_prazos_expira_acordo_vencido(self):
+        self._voltar_no_tempo(data_confirmacao=73)
+        saida = StringIO()
+
+        call_command('processar_prazos', stdout=saida)
+
+        self.acordo.refresh_from_db()
+        self.assertEqual(self.acordo.status_acordo, 'Cancelado')
+        self.assertIn('Pagamentos expirados: 1', saida.getvalue())
+
+
+class ModeracaoAPITests(TestCase):
+    """Moderação com consequência (core/moderacao.py): denúncias, pontos de
+    infração, banimento, soft ban de denúncias, disputas e destaque por plano."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser('root@example.com', 'root@example.com', 'secret123')
+        self.contratante = _criar_usuario_com_papel('contrata@example.com', 'contratante', 'Carla')
+        self.freelancer = _criar_usuario_com_papel('freela@example.com', 'freelancer', 'Fred')
+        self.vaga = Ad.objects.create(author=self.contratante, title='Site', price='500.00', role='contractor')
+
+    def _denunciar(self, autor, alvo_id, tipo='user'):
+        self.client.force_authenticate(autor)
+        return self.client.post('/api/reports/', {
+            'type': tipo, 'target_id': str(alvo_id), 'target_name': 'Alvo',
+            'category': 'fraude', 'comment': 'Detalhes da denúncia.',
+        }, format='json')
+
+    def _julgar(self, report_id, novo_status):
+        self.client.force_authenticate(self.admin)
+        return self.client.patch(f'/api/reports/{report_id}/', {'status': novo_status}, format='json')
+
+    def _denuncias_enviadas(self, autor, improcedentes, procedentes=0):
+        for status_denuncia, quantidade in (('improcedente', improcedentes), ('procedente', procedentes)):
+            for _ in range(quantidade):
+                Report.objects.create(
+                    type='user', target_id=str(self.contratante.id), reporter=autor, status=status_denuncia,
+                )
+
+    def _acordo_com_problema(self, status_acordo='Ativo'):
+        candidatura = Candidatura.objects.create(user=self.freelancer, ad=self.vaga, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+        acordo = AcordoServico.objects.get(candidatura=candidatura)
+        AcordoServico.objects.filter(pk=acordo.pk).update(status_acordo=status_acordo)
+        pagamento = Pagamento.objects.create(
+            usuario=self.contratante, tipo='acordo', status='pago', valor=Decimal('550.00'),
+            referencia_externa=f'acordo:moderacao:{acordo.pk}', acordo=acordo,
+            mp_payment_id='pi_disputa', aprovado_em=timezone.now(),
+        )
+        relato = SolicitacaoCancelamentoAcordo.objects.create(
+            acordo=acordo, solicitante=self.contratante, papel_solicitante='contratante',
+            motivo='nao_entregou', justificativa='O serviço não foi entregue.',
+        )
+        return acordo, pagamento, relato
+
+    def _decidir_disputa(self, relato, **dados):
+        self.client.force_authenticate(self.admin)
+        return self.client.patch(f'/api/admin/cancelamentos-acordo/{relato.id}/', dados, format='json')
+
+    def test_denuncia_exige_login(self):
+        resposta = self.client.post('/api/reports/', {
+            'type': 'user', 'target_id': str(self.freelancer.id), 'comment': 'Anônima.',
+        }, format='json')
+
+        self.assertIn(resposta.status_code, (401, 403))
+        self.assertFalse(Report.objects.exists())
+
+    def test_nao_pode_denunciar_a_si_mesmo_nem_o_proprio_anuncio(self):
+        self.assertEqual(self._denunciar(self.freelancer, self.freelancer.id).status_code, 400)
+        self.assertEqual(self._denunciar(self.contratante, self.vaga.id, tipo='ad').status_code, 400)
+
+    def test_denuncia_procedente_soma_ponto_ao_dono_do_anuncio_e_avisa_denunciante(self):
+        denuncia = self._denunciar(self.freelancer, self.vaga.id, tipo='ad')
+        self.assertEqual(denuncia.status_code, 201, denuncia.data)
+
+        julgamento = self._julgar(denuncia.data['id'], 'procedente')
+
+        self.assertEqual(julgamento.status_code, 200)
+        self.contratante.profile.refresh_from_db()
+        self.assertEqual(self.contratante.profile.pontos_infracao, 1)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.freelancer, titulo='Sua denúncia foi analisada').exists())
+        self.assertTrue(Notificacao.objects.filter(usuario=self.contratante, titulo='Você recebeu um ponto de infração').exists())
+
+    def test_denuncia_so_pode_ser_julgada_uma_vez(self):
+        denuncia = self._denunciar(self.freelancer, self.contratante.id)
+        self._julgar(denuncia.data['id'], 'procedente')
+
+        de_novo = self._julgar(denuncia.data['id'], 'procedente')
+
+        self.assertEqual(de_novo.status_code, 409)
+        self.contratante.profile.refresh_from_db()
+        self.assertEqual(self.contratante.profile.pontos_infracao, 1)
+
+    def test_tres_pontos_banem_a_conta_bloqueiam_login_e_ocultam_anuncios(self):
+        UserProfile.objects.filter(user=self.contratante).update(pontos_infracao=2)
+        Token.objects.create(user=self.contratante)
+        denuncia = self._denunciar(self.freelancer, self.contratante.id)
+
+        self._julgar(denuncia.data['id'], 'procedente')
+
+        self.contratante.profile.refresh_from_db()
+        self.assertTrue(self.contratante.profile.banido)
+        self.assertFalse(Token.objects.filter(user=self.contratante).exists())
+        self.client.force_authenticate(None)
+        login = self.client.post('/api/auth/login/', {'username': self.contratante.email, 'password': 'secret123'}, format='json')
+        self.assertEqual(login.status_code, 403)
+        self.assertIn('banida', login.data['error'])
+        self.assertEqual(self.client.get('/api/ads/').data, [])
+
+    def test_token_emitido_antes_do_banimento_deixa_de_funcionar(self):
+        token = Token.objects.create(user=self.freelancer)
+        UserProfile.objects.filter(user=self.freelancer).update(banido=True)
+
+        cliente = APIClient()
+        cliente.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        resposta = cliente.get('/api/auth/user/')
+
+        self.assertEqual(resposta.status_code, 401)
+
+    def test_soft_ban_bloqueia_quem_tem_muitas_denuncias_improcedentes(self):
+        self._denuncias_enviadas(self.freelancer, improcedentes=5, procedentes=1)
+
+        resposta = self._denunciar(self.freelancer, self.contratante.id)
+
+        self.assertEqual(resposta.status_code, 403)
+
+    def test_soft_ban_exige_metade_das_denuncias_improcedentes(self):
+        self._denuncias_enviadas(self.freelancer, improcedentes=5, procedentes=6)
+
+        self.assertEqual(self._denunciar(self.freelancer, self.contratante.id).status_code, 201)
+
+    def test_denuncias_antigas_nao_contam_para_o_soft_ban(self):
+        self._denuncias_enviadas(self.freelancer, improcedentes=5)
+        Report.objects.update(created_at=timezone.now() - timedelta(days=31))
+
+        self.assertEqual(self._denunciar(self.freelancer, self.contratante.id).status_code, 201)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create')
+    def test_disputa_aprovada_estorna_contratante_e_aplica_infracao(self, refund_create):
+        acordo, pagamento, relato = self._acordo_com_problema()
+
+        resposta = self._decidir_disputa(relato, decisao='aprovar', parte_infratora='freelancer')
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        refund_create.assert_called_once_with(payment_intent='pi_disputa')
+        acordo.refresh_from_db()
+        pagamento.refresh_from_db()
+        relato.refresh_from_db()
+        self.assertEqual(acordo.status_acordo, 'Cancelado')
+        self.assertEqual(acordo.motivo_cancelamento, 'moderacao')
+        self.assertEqual(pagamento.status, 'cancelado')
+        self.assertEqual(pagamento.detalhe_status, 'estornado_disputa')
+        self.assertTrue(relato.estornado)
+        self.assertEqual(relato.parte_infratora, 'freelancer')
+        self.freelancer.profile.refresh_from_db()
+        self.assertEqual(self.freelancer.profile.pontos_infracao, 1)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create', side_effect=stripe.error.StripeError('Stripe indisponível'))
+    def test_disputa_nao_muda_nada_se_o_estorno_falhar(self, refund_create):
+        acordo, pagamento, relato = self._acordo_com_problema()
+
+        resposta = self._decidir_disputa(relato, decisao='aprovar', parte_infratora='freelancer')
+
+        self.assertEqual(resposta.status_code, 502)
+        relato.refresh_from_db()
+        acordo.refresh_from_db()
+        self.assertEqual(relato.status, 'pendente')
+        self.assertEqual(acordo.status_acordo, 'Ativo')
+        self.freelancer.profile.refresh_from_db()
+        self.assertEqual(self.freelancer.profile.pontos_infracao, 0)
+
+    def test_disputa_recusada_com_servico_entregue_conclui_o_acordo(self):
+        acordo, _, relato = self._acordo_com_problema(status_acordo='Aguardando confirmação')
+
+        resposta = self._decidir_disputa(relato, decisao='recusar')
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        acordo.refresh_from_db()
+        self.assertEqual(acordo.status_acordo, 'Concluído')
+        self.assertEqual(
+            set(Notificacao.objects.filter(titulo='Acordo concluído').values_list('usuario', flat=True)),
+            {self.contratante.id, self.freelancer.id},
+        )
+
+    def test_parte_infratora_invalida(self):
+        _, _, relato = self._acordo_com_problema()
+
+        self.assertEqual(self._decidir_disputa(relato, decisao='recusar', parte_infratora='admin').status_code, 400)
+
+    def test_vagas_de_assinantes_aparecem_primeiro(self):
+        assinante = _criar_usuario_com_papel('platinum@example.com', 'contratante', 'Paula')
+        UserProfile.objects.filter(user=assinante).update(subscription_plan='Platinum')
+        vaga_destaque = Ad.objects.create(author=assinante, title='Loja virtual', price='900.00', role='contractor')
+        Ad.objects.filter(pk=vaga_destaque.pk).update(created_at=timezone.now() - timedelta(days=5))
+
+        listagem = self.client.get('/api/ads/').data
+
+        self.assertEqual([ad['id'] for ad in listagem], [vaga_destaque.id, self.vaga.id])
+        self.assertEqual(listagem[0]['author_plan'], 'Platinum')
+
+    def test_candidaturas_de_assinantes_aparecem_primeiro_para_o_contratante(self):
+        assinante = _criar_usuario_com_papel('gold@example.com', 'freelancer', 'Gabi')
+        UserProfile.objects.filter(user=assinante).update(subscription_plan='Gold')
+        destaque = Candidatura.objects.create(user=assinante, ad=self.vaga, status='pendente')
+        Candidatura.objects.create(user=self.freelancer, ad=self.vaga, status='pendente')
+
+        self.client.force_authenticate(self.contratante)
+        candidaturas = self.client.get(f'/api/candidaturas/?ad_id={self.vaga.id}').data
+
+        self.assertEqual(candidaturas[0]['id'], destaque.id)
+        self.assertEqual(candidaturas[0]['applicant_plan'], 'Gold')
+
+
+class ComandosDemonstracaoTests(TestCase):
+    """Comandos de preparação da apresentação: popular_demo e verificar_dados."""
+
+    def _contas_demo(self):
+        return User.objects.filter(email__endswith='@demo.freelas.com')
+
+    def test_popular_demo_cria_um_acordo_em_cada_etapa(self):
+        call_command('popular_demo', stdout=StringIO())
+
+        self.assertEqual(self._contas_demo().count(), 6)
+        self.assertEqual(
+            sorted(AcordoServico.objects.values_list('status_acordo', flat=True)),
+            sorted(['Concluído', 'Ativo', 'Aguardando confirmação', 'Pendente Pagamento', 'Ativo', 'Cancelado']),
+        )
+        self.assertEqual(Avaliacao.objects.count(), 2)
+        self.assertEqual(SolicitacaoCancelamentoAcordo.objects.filter(status='pendente').count(), 1)
+        self.assertEqual(Report.objects.filter(status='pending').count(), 1)
+        # O acordo expirado por falta de pagamento reabriu a vaga
+        self.assertEqual(Ad.objects.get(title='Fotos dos produtos para o cardápio').status_anuncio, 'Em aberto')
+
+    def test_popular_demo_pode_rodar_de_novo_e_nao_toca_em_outras_contas(self):
+        outra = User.objects.create_user('real@example.com', 'real@example.com', 'secret123')
+
+        call_command('popular_demo', stdout=StringIO())
+        call_command('popular_demo', stdout=StringIO())
+        self.assertEqual(self._contas_demo().count(), 6)
+        self.assertEqual(AcordoServico.objects.count(), 6)
+
+        call_command('popular_demo', '--remover', stdout=StringIO())
+        self.assertFalse(self._contas_demo().exists())
+        self.assertFalse(AcordoServico.objects.exists())
+        self.assertTrue(User.objects.filter(pk=outra.pk).exists())
+
+    def test_dados_de_demonstracao_seguem_as_regras(self):
+        call_command('popular_demo', stdout=StringIO())
+        saida = StringIO()
+
+        call_command('verificar_dados', stdout=saida)
+
+        self.assertIn('Nenhuma inconsistência encontrada', saida.getvalue())
+
+    def test_verificar_dados_aponta_dados_fora_das_regras_sem_alterar(self):
+        User.objects.create_user('sempapel@example.com', 'sempapel@example.com', 'secret123')
+        freelancer = _criar_usuario_com_papel('freela-antigo@example.com', 'freelancer', 'Fabi')
+        Ad.objects.create(author=freelancer, title='Serviço antigo', role='freelancer')
+        saida = StringIO()
+
+        call_command('verificar_dados', '--detalhes', stdout=saida)
+
+        texto = saida.getvalue()
+        self.assertIn('sempapel@example.com', texto)
+        self.assertIn('Serviço antigo', texto)
+        self.assertNotIn('Nenhuma inconsistência', texto)
+        self.assertTrue(Ad.objects.filter(title='Serviço antigo', deletado=False).exists())
 
 
 class ChatSegurancaAPITests(TestCase):
@@ -1176,7 +1773,11 @@ class DashboardAdminAPITests(TestCase):
     def test_agrega_estatisticas_do_site(self):
         self.client.force_authenticate(self.admin)
 
-        Ad.objects.create(author=self.common, title='Serviço', role='freelancer')
+        UserProfile.objects.filter(user=self.common).update(papel='contratante')
+        freelancer = User.objects.create_user(
+            username='freela-dash@example.com', email='freela-dash@example.com', password='secret123',
+        )
+        UserProfile.objects.filter(user=freelancer).update(papel='freelancer')
         Ad.objects.create(author=self.common, title='Vaga', role='contractor')
         Report.objects.create(
             type='user',
@@ -1190,17 +1791,17 @@ class DashboardAdminAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         data = response.data
-        self.assertEqual(data['geral']['usuarios']['total'], 2)
+        self.assertEqual(data['geral']['usuarios']['total'], 3)
         self.assertEqual(data['geral']['freelancers']['total'], 1)
         self.assertEqual(data['geral']['contratantes']['total'], 1)
-        self.assertEqual(data['geral']['freelas']['total'], 1)
+        self.assertEqual(data['geral']['freelas']['total'], 2)
         self.assertEqual(data['geral']['freelas']['fecharam_acordo_mes'], 0)
         self.assertEqual(data['denuncias']['pendentes'], 1)
         self.assertEqual(data['assinaturas_ativas'], 1)
 
         planos = {p['nome']: p['total'] for p in data['planos']}
         self.assertEqual(planos['Gold'], 1)
-        self.assertEqual(planos['Gratuito'], 1)
+        self.assertEqual(planos['Gratuito'], 2)
         self.assertEqual(planos['Platinum'], 0)
 
     def test_freelas_conta_quem_fechou_acordo_no_mes(self):
@@ -1704,8 +2305,8 @@ class CriteriosAvaliacaoAPITests(TestCase):
         profile.cidade = 'São Paulo'
         profile.telefone = '11999999999'
         profile.telefone_visivel = True
-        profile.categories = ['Desenvolvimento Web']
-        profile.skills = [{'name': 'Gestão de Projetos', 'level': 'avancado'}]
+        profile.servicos_contratados = ['Desenvolvimento Web']
+        profile.como_trabalha = 'Envio o briefing por escrito e dou retorno em até 2 dias úteis.'
         profile.save()
 
         response = self.client.get(f'/api/ads/{self.ad.id}/')
@@ -1727,7 +2328,7 @@ class CriteriosAvaliacaoAPITests(TestCase):
         profile.cidade = 'São Paulo'
         profile.telefone = '11999999999'
         profile.telefone_visivel = False
-        profile.categories = ['Desenvolvimento Web']
+        profile.servicos_contratados = ['Desenvolvimento Web']
         profile.save()
 
         response = self.client.get(f'/api/ads/{self.ad.id}/')
@@ -1742,9 +2343,10 @@ class CriteriosAvaliacaoAPITests(TestCase):
         self.assertEqual(por_chave['bio']['pontos'], 20)
         self.assertTrue(por_chave['cidade']['atendido'])
         self.assertFalse(por_chave['contato']['atendido'])
-        self.assertTrue(por_chave['categorias']['atendido'])
-        self.assertFalse(por_chave['portfolio']['atendido'])
-        self.assertEqual(por_chave['portfolio']['pontos'], 30)
+        self.assertTrue(por_chave['servicos']['atendido'])
+        self.assertFalse(por_chave['como_trabalha']['atendido'])
+        self.assertEqual(por_chave['como_trabalha']['pontos'], 30)
+        self.assertNotIn('portfolio', por_chave)
 
 
 class PerfilBioEReputacaoAPITests(TestCase):
@@ -1794,6 +2396,114 @@ class PerfilBioEReputacaoAPITests(TestCase):
         self.assertEqual(response.data['reputacao']['freelancer']['total_avaliacoes'], 0)
         self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)
 
+    def test_perfil_de_freelancer_mostra_so_a_reputacao_de_freelancer(self):
+        freelancer = _criar_usuario_com_papel('rep-freela@example.com', 'freelancer', 'Fabi')
+
+        dados = self.client.get(f'/api/users/{freelancer.id}/').data
+
+        self.assertEqual(list(dados['reputacao']), ['freelancer'])
+        self.assertEqual(list(dados['resumo_avaliacoes']), ['freelancer'])
+
+    def test_perfil_de_contratante_ignora_avaliacoes_antigas_como_freelancer(self):
+        contratante = _criar_usuario_com_papel('rep-contrata@example.com', 'contratante', 'Carla')
+        outro = _criar_usuario_com_papel('rep-outro@example.com', 'freelancer', 'Otto')
+        ad = Ad.objects.create(author=contratante, title='Vaga', role='contractor')
+        candidatura = Candidatura.objects.create(user=outro, ad=ad, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+        acordo = AcordoServico.objects.get(candidatura=candidatura)
+        # Avaliação de quando a conta ainda podia atuar nos dois papéis
+        Avaliacao.objects.create(
+            acordo=acordo, avaliador=outro.profile, avaliado=contratante.profile,
+            papel_avaliado='freelancer', nota_geral=Decimal('2.00'),
+        )
+        Avaliacao.objects.create(
+            acordo=acordo, avaliador=contratante.profile, avaliado=contratante.profile,
+            papel_avaliado='contratante', nota_geral=Decimal('5.00'),
+        )
+
+        dados = self.client.get(f'/api/users/{contratante.id}/').data
+
+        self.assertEqual(list(dados['reputacao']), ['contratante'])
+        self.assertEqual(dados['resumo_avaliacoes'], {'contratante': {'nota': 5.0, 'total': 1}})
+        self.assertEqual([a['papel_avaliado'] for a in dados['avaliacoes_recebidas']], ['contratante'])
+
+    def test_contratante_preenche_campos_do_perfil_de_contratante(self):
+        contratante = _criar_usuario_com_papel('perfil-empresa@example.com', 'contratante', 'Carla')
+        self.client.force_authenticate(contratante)
+
+        resposta = self.client.patch('/api/auth/profile/', {
+            'servicos_contratados': ['Design Gráfico', 'Desenvolvimento Web'],
+            'como_trabalha': '  Envio o briefing por escrito e dou retorno em até 2 dias úteis.  ',
+            'ano_fundacao': 2015,
+            'responsavel_nome': 'Carla Souza',
+            'responsavel_cargo': 'Gerente de marketing',
+        }, format='json')
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        contratante.profile.refresh_from_db()
+        self.assertEqual(contratante.profile.servicos_contratados, ['Design Gráfico', 'Desenvolvimento Web'])
+        self.assertEqual(contratante.profile.como_trabalha, 'Envio o briefing por escrito e dou retorno em até 2 dias úteis.')
+        self.assertEqual(contratante.profile.ano_fundacao, 2015)
+        publico = self.client.get(f'/api/users/{contratante.id}/').data['profile']
+        self.assertEqual(publico['responsavel_cargo'], 'Gerente de marketing')
+
+    def test_servicos_contratados_chegam_como_json_no_multipart(self):
+        contratante = _criar_usuario_com_papel('perfil-multipart@example.com', 'contratante', 'Carla')
+        self.client.force_authenticate(contratante)
+
+        resposta = self.client.patch(
+            '/api/auth/profile/', {'servicos_contratados': '["Design Gráfico"]', 'ano_fundacao': ''},
+            format='multipart',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        contratante.profile.refresh_from_db()
+        self.assertEqual(contratante.profile.servicos_contratados, ['Design Gráfico'])
+        self.assertIsNone(contratante.profile.ano_fundacao)
+
+    def test_campos_de_contratante_invalidos_sao_recusados(self):
+        contratante = _criar_usuario_com_papel('perfil-invalido@example.com', 'contratante', 'Carla')
+        self.client.force_authenticate(contratante)
+        casos = [
+            {'servicos_contratados': ['A', 'B', 'C', 'D', 'E', 'F']},
+            {'servicos_contratados': ['Design Gráfico', 'Design Gráfico']},
+            {'ano_fundacao': 1700},
+            {'ano_fundacao': timezone.localdate().year + 1},
+            {'como_trabalha': 'x' * 1001},
+        ]
+        for dados in casos:
+            with self.subTest(dados=list(dados)):
+                resposta = self.client.patch('/api/auth/profile/', dados, format='json')
+                self.assertEqual(resposta.status_code, 400)
+                self.assertIn(list(dados)[0], resposta.data)
+
+    def test_perfil_publico_esconde_dados_privados_de_quem_visita(self):
+        contratante = _criar_usuario_com_papel('privado@example.com', 'contratante', 'Carla')
+        UserProfile.objects.filter(user=contratante).update(
+            cnpj='12.345.678/0001-90', telefone='18999999999', telefone_visivel=False, email_visivel=False,
+            pontos_infracao=1,
+        )
+
+        visitante = self.client.get(f'/api/users/{contratante.id}/').data
+        self.client.force_authenticate(contratante)
+        dono = self.client.get(f'/api/users/{contratante.id}/').data
+
+        self.assertIsNone(visitante['email'])
+        self.assertIsNone(visitante['profile']['telefone'])
+        self.assertNotIn('cnpj', visitante['profile'])
+        self.assertNotIn('pontos_infracao', visitante['profile'])
+        self.assertEqual(dono['email'], 'privado@example.com')
+        self.assertEqual(dono['profile']['cnpj'], '12.345.678/0001-90')
+
+    def test_administrador_nao_tem_reputacao(self):
+        admin = User.objects.create_superuser('rep-admin@example.com', 'rep-admin@example.com', 'secret123')
+
+        dados = self.client.get(f'/api/users/{admin.id}/').data
+
+        self.assertEqual(dados['reputacao'], {})
+        self.assertEqual(dados['resumo_avaliacoes'], {})
+
 
 class RamosAtuacaoEmpresaAPITests(TestCase):
     """
@@ -1813,7 +2523,7 @@ class RamosAtuacaoEmpresaAPITests(TestCase):
 
     def _payload_empresa(self, **extra):
         payload = {
-            'papel': 'empresa',
+            'papel': 'contratante',
             'tipo_empresa': 'cnpj',
             'aceitou_termos_empresa': True,
             'nome_empresa': 'Clínica Pet Feliz',
@@ -1913,6 +2623,8 @@ class NotificacaoAPITests(TestCase):
             email='freelancer@example.com',
             password='secret123',
         )
+        self.freelancer.profile.papel = 'freelancer'
+        self.freelancer.profile.save(update_fields=['papel'])
         self.ad = Ad.objects.create(
             author=self.contratante,
             title='Criação de site',
@@ -1997,7 +2709,7 @@ class ExcluirContaAPITests(TestCase):
             title='Projeto de teste',
             description='Descrição',
             price='500.00',
-            role='freelancer',
+            role='contractor',
         )
         self.candidatura = Candidatura.objects.create(
             user=self.user,
@@ -2109,3 +2821,95 @@ class ExcluirContaAPITests(TestCase):
         self.assertEqual(resp_sem_senha.status_code, 200)
         social.refresh_from_db()
         self.assertFalse(social.is_active)
+
+
+@skipUnless(connection.vendor == 'postgresql', 'A cascata é implementada no PostgreSQL.')
+class ExclusaoFisicaUsuarioTests(TestCase):
+    """DELETE direto na tabela usuarios (fora do Django) apaga em cascata
+    tudo o que pertence ao usuário, inclusive o login em auth_user."""
+
+    def setUp(self):
+        self.freelancer = User.objects.create_user(
+            username='freela-fisico@example.com', email='freela-fisico@example.com', password='x',
+        )
+        self.contratante = User.objects.create_user(
+            username='contratante-fisico@example.com', email='contratante-fisico@example.com', password='x',
+        )
+        self.terceiro = User.objects.create_user(
+            username='terceiro-fisico@example.com', email='terceiro-fisico@example.com', password='x',
+        )
+        self.perfil_freelancer = UserProfile.objects.get(user=self.freelancer)
+        self.perfil_contratante = UserProfile.objects.get(user=self.contratante)
+
+        self.ad = Ad.objects.create(author=self.contratante, title='Site', price='300.00', role='contractor')
+        self.ad_terceiro = Ad.objects.create(author=self.terceiro, title='Logo', price='100.00', role='freelancer')
+        self.candidatura = Candidatura.objects.create(user=self.freelancer, ad=self.ad, status='pendente')
+        self.acordo = AcordoServico.objects.create(
+            candidatura=self.candidatura, valor_acordado=300.0, titulo_anuncio='Site',
+        )
+        MensagemChat.objects.create(acordo=self.acordo, remetente=self.freelancer, texto='Oi')
+        MensagemChat.objects.create(acordo=self.acordo, remetente=self.contratante, texto='Olá')
+        self.pagamento = Pagamento.objects.create(
+            usuario=self.contratante, tipo='acordo', status='pago', valor=Decimal('330.00'),
+            referencia_externa='acordo:fisico:1', acordo=self.acordo,
+        )
+        Avaliacao.objects.create(
+            acordo=self.acordo, avaliador=self.perfil_contratante, avaliado=self.perfil_freelancer,
+            papel_avaliado='freelancer', nota_geral=Decimal('4.50'),
+        )
+        SolicitacaoCancelamentoAcordo.objects.create(
+            acordo=self.acordo, solicitante=self.freelancer,
+            papel_solicitante='freelancer', justificativa='Imprevisto',
+        )
+        self.denuncia = Report.objects.create(
+            type='user', target_id=str(self.contratante.id), reporter=self.freelancer, category='spam',
+        )
+        Notificacao.objects.create(usuario=self.freelancer, tipo='sistema', titulo='Boas-vindas')
+        VerificacaoEmail.objects.create(usuario=self.freelancer, codigo='123456')
+        Token.objects.create(user=self.freelancer)
+        SocialAccount.objects.create(user=self.freelancer, provider='google', uid='fisico-123')
+
+    def _executar_no_banco(self, sql, params):
+        with connection.cursor() as cursor:
+            # Checa as FKs deferidas já no DELETE, como aconteceria no COMMIT.
+            cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+            cursor.execute(sql, params)
+
+    def test_delete_de_freelancer_apaga_login_candidaturas_e_acordos(self):
+        self._executar_no_banco('DELETE FROM usuarios WHERE id = %s', [self.perfil_freelancer.id])
+
+        self.assertFalse(User.objects.filter(pk=self.freelancer.pk).exists())
+        self.assertFalse(Candidatura.objects.filter(pk=self.candidatura.pk).exists())
+        self.assertFalse(AcordoServico.objects.filter(pk=self.acordo.pk).exists())
+        self.assertFalse(MensagemChat.objects.exists())
+        self.assertFalse(Avaliacao.objects.exists())
+        self.assertFalse(SolicitacaoCancelamentoAcordo.objects.exists())
+        self.assertFalse(Notificacao.objects.filter(usuario_id=self.freelancer.pk).exists())
+        self.assertFalse(VerificacaoEmail.objects.filter(usuario_id=self.freelancer.pk).exists())
+        self.assertFalse(Token.objects.filter(user_id=self.freelancer.pk).exists())
+        self.assertFalse(SocialAccount.objects.filter(user_id=self.freelancer.pk).exists())
+
+        # O que é do outro usuário permanece, só perde o vínculo com o que foi apagado
+        self.assertTrue(Ad.objects.filter(pk=self.ad.pk).exists())
+        self.pagamento.refresh_from_db()
+        self.assertIsNone(self.pagamento.acordo_id)
+        self.denuncia.refresh_from_db()
+        self.assertIsNone(self.denuncia.reporter_id)
+
+    def test_delete_de_contratante_apaga_anuncios_e_candidaturas_recebidas(self):
+        self._executar_no_banco('DELETE FROM usuarios WHERE id = %s', [self.perfil_contratante.id])
+
+        self.assertFalse(User.objects.filter(pk=self.contratante.pk).exists())
+        self.assertFalse(Ad.objects.filter(pk=self.ad.pk).exists())
+        self.assertFalse(Candidatura.objects.filter(pk=self.candidatura.pk).exists())
+        self.assertFalse(AcordoServico.objects.filter(pk=self.acordo.pk).exists())
+        self.assertFalse(Pagamento.objects.filter(pk=self.pagamento.pk).exists())
+
+        self.assertTrue(User.objects.filter(pk=self.freelancer.pk).exists())
+        self.assertTrue(Ad.objects.filter(pk=self.ad_terceiro.pk).exists())
+
+    def test_delete_em_auth_user_tambem_apaga_o_perfil(self):
+        self._executar_no_banco('DELETE FROM auth_user WHERE id = %s', [self.freelancer.id])
+
+        self.assertFalse(UserProfile.objects.filter(pk=self.perfil_freelancer.pk).exists())
+        self.assertFalse(Candidatura.objects.filter(pk=self.candidatura.pk).exists())

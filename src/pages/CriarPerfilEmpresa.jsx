@@ -6,6 +6,7 @@ import Opcional from '../components/Opcional';
 import SeletorRamos from '../components/SeletorRamos';
 import SeletorUnico from '../components/SeletorUnico';
 import { MAX_RAMOS_EMPRESA, PORTES_EMPRESA } from '../constants/options';
+import { PAPEL_CONTRATANTE } from '../constants/papeis';
 
 const API_URL = 'http://localhost:8000';
 
@@ -28,7 +29,7 @@ export default function CriarPerfilEmpresa() {
   const [salvando, setSalvando] = useState(false);
 
   // Quem já tem perfil de empresa configurado não precisa recriar
-  const jaEmpresaConfigurada = user?.profile?.papel === 'empresa' && user?.profile?.tipo_empresa;
+  const jaEmpresaConfigurada = user?.profile?.papel === PAPEL_CONTRATANTE && user?.profile?.tipo_empresa;
   useEffect(() => {
     if (jaEmpresaConfigurada) navigate('/', { replace: true });
   }, [jaEmpresaConfigurada, navigate]);
@@ -54,7 +55,7 @@ export default function CriarPerfilEmpresa() {
     setSalvando(true);
     try {
       const payload = {
-        papel: 'empresa',
+        papel: PAPEL_CONTRATANTE,
         tipo_empresa: tipo,
         aceitou_termos_empresa: true,
         ...(tipo === 'cnpj' ? {
@@ -76,7 +77,7 @@ export default function CriarPerfilEmpresa() {
         const msg = data.nome_empresa || data.ramos_atuacao || data.ramo_empresa || data.bio_empresa || data.tipo_empresa || data.aceitou_termos_empresa || 'Não foi possível criar o perfil de empresa.';
         throw new Error(Array.isArray(msg) ? msg[0] : msg);
       }
-      ajustarPapel('empresa');
+      ajustarPapel(PAPEL_CONTRATANTE);
       const primeiraVez = sessionStorage.getItem('freelas_primeira_vez');
       sessionStorage.removeItem('freelas_primeira_vez');
       navigate(primeiraVez ? '/subscription-setup' : '/', { replace: true });
@@ -111,7 +112,7 @@ export default function CriarPerfilEmpresa() {
           Criar perfil de empresa/contratante
         </h1>
         <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-          Passo {passo} de 3 — ao confirmar, sua conta passa a atuar como empresa.
+          Passo {passo} de 3 — ao confirmar, sua conta será de contratante. Esse tipo de conta não pode ser alterado depois.
         </p>
       </div>
 
@@ -235,16 +236,15 @@ export default function CriarPerfilEmpresa() {
                 Termos de Uso — Perfil de empresa/contratante
               </strong>
               <p style={{ fontSize: '0.85rem', lineHeight: '1.6', margin: 0 }}>
-                Declaro que estou criando um perfil de <strong>empresa/contratante</strong> no Freelas. Ao atuar como
-                Empresa, minha conta passa a ser uma <strong>Contratante</strong>: posso publicar anúncios em busca de
-                um serviço, receber propostas de freelancers e contratar profissionais — tanto como <strong>pessoa
-                física</strong> (sem CNPJ, usando meu perfil pessoal) quanto como <strong>empresa com CNPJ</strong> (usando
-                o perfil da organização). As informações prestadas identificam a organização representada e passam a
-                compor o perfil exibido publicamente enquanto a conta atuar como empresa. Tenho autoridade para
-                representar esta organização e me responsabilizo pela veracidade dos dados informados. Ao contratar
-                serviços, este perfil firma acordos como contratante, com as obrigações legais, fiscais e de
-                responsabilidade previstas nos Termos de Uso gerais da plataforma. Entendo que posso voltar a atuar
-                como freelancer a qualquer momento usando o mesmo perfil pessoal.
+                Declaro que estou criando um perfil de <strong>contratante</strong> no Freelas: posso publicar
+                anúncios de vagas, receber candidaturas de freelancers, contratar profissionais e pagar pelos serviços
+                contratados — tanto como <strong>pessoa física</strong> (sem CNPJ, usando meu perfil pessoal) quanto
+                como <strong>empresa com CNPJ</strong> (usando o perfil da organização). As informações prestadas
+                identificam a organização representada e passam a compor o perfil exibido publicamente. Tenho
+                autoridade para representar esta organização e me responsabilizo pela veracidade dos dados informados.
+                Ao contratar serviços, este perfil firma acordos como contratante, com as obrigações legais, fiscais e
+                de responsabilidade previstas nos Termos de Uso gerais da plataforma. Entendo que o tipo de conta não
+                pode ser alterado depois: para atuar como freelancer é preciso criar outra conta, com outro e-mail.
               </p>
             </div>
 
@@ -263,7 +263,7 @@ export default function CriarPerfilEmpresa() {
               </button>
               <button type="button" className="btn" disabled={salvando} onClick={confirmar} style={{ opacity: salvando ? 0.6 : 1 }}>
                 <ShieldCheck size={17} />
-                {salvando ? 'Criando perfil...' : 'Confirmar e virar empresa'}
+                {salvando ? 'Criando perfil...' : 'Confirmar e criar perfil de contratante'}
               </button>
             </div>
           </>

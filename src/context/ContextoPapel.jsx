@@ -1,5 +1,6 @@
 import { createContext, useEffect, useMemo, useContext } from 'react';
 import { useAuth } from './ContextoAutenticacao';
+import { PAPEL_CONTRATANTE, PAPEL_FREELANCER } from '../constants/papeis';
 
 const RoleContext = createContext();
 
@@ -11,10 +12,10 @@ function aplicarFavicon(role) {
 export const RoleProvider = ({ children }) => {
   const { user } = useAuth();
 
-  // Fonte única do papel: user.profile.papel (backend). 'empresa' -> 'contractor'
+  // Fonte única do papel: user.profile.papel (backend). 'contratante' -> 'contractor'
   const papel = user?.profile?.papel || null;
   const role = useMemo(
-    () => (papel === 'empresa' ? 'contractor' : papel === 'freelancer' ? 'freelancer' : null),
+    () => (papel === PAPEL_CONTRATANTE ? 'contractor' : papel === PAPEL_FREELANCER ? 'freelancer' : null),
     [papel],
   );
 

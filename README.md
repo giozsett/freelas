@@ -115,6 +115,11 @@ STRIPE_WEBHOOK_SECRET=        # muda a cada `stripe listen` (veja STRIPE_TESTING
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+
+# Opcionais: prazos do acordo em horas (padrão 72). Use valores curtos para demonstrar,
+# ex.: 0.05 = 3 minutos.
+PRAZO_PAGAMENTO_HORAS=
+PRAZO_CONFIRMACAO_HORAS=
 ```
 
 > Se `DATABASE_URL` ficar vazio, o Django usa um SQLite local (`db.sqlite3`). Para trabalhar no mesmo banco do grupo, use a URL do Supabase.
@@ -196,6 +201,32 @@ stripe listen --forward-to localhost:8000/api/pagamentos/webhook/
 ```
 
 O passo a passo completo dos pagamentos (variáveis, cartões de teste e problemas comuns) está em [`STRIPE_TESTING.md`](STRIPE_TESTING.md).
+
+### Prazos dos acordos
+
+Não há tarefa agendada: os prazos são aplicados sempre que alguém abre as telas de acordos, notificações ou o painel. Para aplicar na hora (por exemplo, durante a apresentação):
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py processar_prazos
+```
+
+- **Pagamento:** o contratante tem `PRAZO_PAGAMENTO_HORAS` para pagar depois da aprovação da candidatura. Se não pagar, o acordo é cancelado e a vaga volta a receber candidaturas.
+- **Confirmação:** depois que o freelancer marca o serviço como entregue, o contratante tem `PRAZO_CONFIRMACAO_HORAS` para confirmar ou relatar um problema. Sem resposta, o acordo é concluído automaticamente.
+
+### Dados de demonstração e verificação do banco
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py popular_demo            # recria as contas @demo.freelas.com (senha Freelas@2026)
+python manage.py popular_demo --remover  # remove só os dados de demonstração
+python manage.py verificar_dados         # lista dados fora das regras atuais, sem alterar nada
+```
+
+- `popular_demo` cria contratantes, freelancers, vagas e um acordo em cada etapa do ciclo. Só mexe nas contas `@demo.freelas.com`, então pode rodar no banco compartilhado; rode no dia da apresentação, porque os prazos contam a partir da criação.
+- O roteiro da apresentação está em [`docs/roteiro-apresentacao.md`](docs/roteiro-apresentacao.md) e os textos e diagramas do relatório técnico em [`docs/rt-v06-secoes.md`](docs/rt-v06-secoes.md) e [`docs/rt-v06-diagramas.md`](docs/rt-v06-diagramas.md).
 
 ### Testes e lint
 

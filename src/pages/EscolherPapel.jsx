@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Briefcase, Building2, Check, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
+import { PAPEL_CONTRATANTE, PAPEL_FREELANCER } from '../constants/papeis';
 
 const API_URL = 'http://localhost:8000';
 
@@ -17,9 +18,9 @@ export default function EscolherPapel() {
 
   const opcoes = [
     {
-      valor: 'freelancer',
+      valor: PAPEL_FREELANCER,
       titulo: 'Sou freelancer',
-      descricao: 'Ofereço meus serviços: crio trabalhos, me candidato a anúncios e recebo propostas.',
+      descricao: 'Ofereço meus serviços: me candidato às vagas publicadas por contratantes e recebo pelos trabalhos.',
       icone: Briefcase,
       cor: {
         primary: '#FF826E',
@@ -30,9 +31,9 @@ export default function EscolherPapel() {
       },
     },
     {
-      valor: 'empresa',
-      titulo: 'Sou empresa',
-      descricao: 'Busco profissionais: publico anúncios, recebo propostas e contrato freelancers.',
+      valor: PAPEL_CONTRATANTE,
+      titulo: 'Sou contratante',
+      descricao: 'Busco profissionais: publico vagas, recebo candidaturas, contrato e pago freelancers. Para pessoas e empresas.',
       icone: Building2,
       cor: {
         primary: '#7C3AED',
@@ -46,8 +47,8 @@ export default function EscolherPapel() {
 
   const escolher = async (valor) => {
     if (saving) return;
-    // Empresa exige o onboarding de contratante (pessoa física ou empresa com CNPJ)
-    if (valor === 'empresa') {
+    // Contratante exige o onboarding de contratante (pessoa física ou empresa com CNPJ)
+    if (valor === PAPEL_CONTRATANTE) {
       navigate('/criar-perfil-empresa', { replace: true });
       return;
     }
@@ -73,10 +74,10 @@ export default function EscolherPapel() {
           'Content-Type': 'application/json',
           'Authorization': `Token ${token}`,
         },
-        body: JSON.stringify({ papel: 'freelancer', aceitou_termos_freelancer: true }),
+        body: JSON.stringify({ papel: PAPEL_FREELANCER, aceitou_termos_freelancer: true }),
       });
       if (!res.ok) throw new Error('Não foi possível salvar sua escolha. Tente novamente.');
-      ajustarPapel('freelancer');
+      ajustarPapel(PAPEL_FREELANCER);
       const primeiraVez = sessionStorage.getItem('freelas_primeira_vez');
       sessionStorage.removeItem('freelas_primeira_vez');
       navigate(primeiraVez ? '/subscription-setup' : '/', { replace: true });
@@ -87,15 +88,15 @@ export default function EscolherPapel() {
   };
 
   if (user?.profile?.papel) {
-    const jaEscolhido = user.profile.papel === 'empresa' ? 'Empresa' : 'Freelancer';
-    const Icone = user.profile.papel === 'empresa' ? Building2 : Briefcase;
+    const jaEscolhido = user.profile.papel === PAPEL_CONTRATANTE ? 'Contratante' : 'Freelancer';
+    const Icone = user.profile.papel === PAPEL_CONTRATANTE ? Building2 : Briefcase;
     return (
       <div className="card" style={styles.cardEstado}>
         <div style={styles.circulo}>
           <Icone size={28} />
         </div>
         <h2 style={styles.titulo}>Você já é {jaEscolhido}</h2>
-        <p style={styles.subtitulo}>Seu tipo de conta já está definido e pode ser alterado em Configurações.</p>
+        <p style={styles.subtitulo}>Seu tipo de conta já está definido e não pode ser alterado.</p>
         <button className="btn" onClick={() => navigate('/', { replace: true })} style={{ marginTop: '1rem' }}>
           Ir para o início
         </button>
@@ -108,14 +109,14 @@ export default function EscolherPapel() {
       <div style={styles.cabecalho}>
         <h1 style={styles.h1}>Como você quer usar o Freelas?</h1>
         <p style={styles.subtitulo}>
-          Escolha seu tipo de conta. Você pode alterar depois em Configurações.
+          Escolha seu tipo de conta com atenção: ele não poderá ser alterado depois.
         </p>
       </div>
 
       <div style={styles.grade}>
         {opcoes.map((opcao) => {
           const Icone = opcao.icone;
-          const ativo = role === (opcao.valor === 'empresa' ? 'contractor' : 'freelancer');
+          const ativo = role === (opcao.valor === PAPEL_CONTRATANTE ? 'contractor' : 'freelancer');
           const carregando = saving === opcao.valor;
           return (
             <button
@@ -129,7 +130,7 @@ export default function EscolherPapel() {
                 <Icone size={30} />
               </div>
               <span style={{ ...styles.badge, background: opcao.cor.soft, color: opcao.cor.primary }}>
-                Área {opcao.valor === 'empresa' ? 'empresa' : 'freelancer'}
+                Área {opcao.valor === PAPEL_CONTRATANTE ? 'contratante' : 'freelancer'}
               </span>
               <h3 style={styles.h3}>{opcao.titulo}</h3>
               <p style={styles.descricao}>{opcao.descricao}</p>
@@ -156,7 +157,7 @@ export default function EscolherPapel() {
           <div className="card" style={styles.modal}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
               <Briefcase size={24} color="var(--primary)" />
-              <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Mudar para Freelancer</h2>
+              <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Criar conta de Freelancer</h2>
             </div>
 
             <div style={styles.termo}>
@@ -165,7 +166,7 @@ export default function EscolherPapel() {
               </strong>
               <ol style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', lineHeight: '1.5' }}>
                 <li>
-                  Ao atuar como <strong>Freelancer</strong>, você oferece seus serviços na plataforma: publica anúncios oferecendo seu trabalho, se candidata aos anúncios dos contratantes, recebe propostas e firma acordos de serviço com quem contratar.
+                  Como <strong>Freelancer</strong>, você oferece seus serviços na plataforma: se candidata às vagas publicadas pelos contratantes e firma acordos de serviço com quem aprovar sua candidatura. O pagamento é feito pelo contratante.
                 </li>
                 <li>
                   A aba <strong>&ldquo;Minhas candidaturas&rdquo;</strong> fica disponível para você acompanhar e gerenciar suas candidaturas.
@@ -174,7 +175,7 @@ export default function EscolherPapel() {
                   Ao prestar um serviço, este perfil firma acordos como freelancer, com as obrigações legais, fiscais e de responsabilidade previstas nos Termos de Uso gerais da plataforma.
                 </li>
                 <li>
-                  Você pode mudar para <strong>Empresa/Contratante</strong> a qualquer momento, quando quiser.
+                  O tipo de conta <strong>não pode ser alterado depois</strong>. Para contratar serviços, é preciso criar outra conta de contratante, com outro e-mail.
                 </li>
               </ol>
             </div>
@@ -200,7 +201,7 @@ export default function EscolherPapel() {
                 style={{ opacity: aceitouTermoFreelancer && !saving ? 1 : 0.5, cursor: aceitouTermoFreelancer && !saving ? 'pointer' : 'not-allowed' }}
                 onClick={confirmarFreelancer}
               >
-                {saving ? 'Salvando...' : <><ShieldCheck size={17} /> Confirmar e virar Freelancer</>}
+                {saving ? 'Salvando...' : <><ShieldCheck size={17} /> Confirmar e criar conta de Freelancer</>}
               </button>
             </div>
           </div>

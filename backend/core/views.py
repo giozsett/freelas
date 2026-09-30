@@ -28,6 +28,20 @@ from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.models import SocialAccount
 from .validacao_senha import validar_forca_senha
+from .ciclo_acordo import concluir_acordo, processar_prazos
+from .moderacao import (
+    MENSAGEM_CONTA_BANIDA,
+    aplicar_infracao,
+    em_soft_ban_de_denuncias,
+    usuario_denunciado,
+)
+from .papeis import (
+    ANUNCIO_LEGADO_FREELANCER,
+    ANUNCIO_VAGA,
+    PAPEL_CONTRATANTE,
+    PAPEL_FREELANCER,
+    papel_do_usuario,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +58,14 @@ def _conta_foi_removida(user):
     """True quando o usuário já excluiu a conta (soft delete)."""
     perfil = UserProfile.objects.filter(user=user).first()
     return bool(perfil and perfil.deletado)
+
+
+def _conta_banida_response(user):
+    """Resposta 403 quando a conta foi banida pela moderação; None caso contrário."""
+    perfil = UserProfile.objects.filter(user=user).first()
+    if perfil and perfil.banido:
+        return Response({'error': MENSAGEM_CONTA_BANIDA}, status=status.HTTP_403_FORBIDDEN)
+    return None
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -103,6 +125,9 @@ class LoginAPI(APIView):
 
         user = authenticate(username=candidato.username, password=password)
         if user:
+            banida = _conta_banida_response(user)
+            if banida:
+                return banida
             if VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists():
                 return Response(
                     {'error': 'Confirme seu email para poder entrar.'},
@@ -354,7 +379,8 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.AllowAny()]
+            # Denúncia anônima não é aceita: o soft ban depende de quem denunciou
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
@@ -376,10 +402,23 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
+        reporter = self.request.user
+        if em_soft_ban_de_denuncias(reporter):
+            raise PermissionDenied(
+                'Você está temporariamente impedido de enviar denúncias porque muitas '
+                'das suas denúncias recentes foram consideradas improcedentes.'
+            )
+        denunciado = usuario_denunciado(
+            serializer.validated_data.get('type'),
+            serializer.validated_data.get('target_id'),
+        )
+        if denunciado == reporter:
+            raise ValidationError('Você não pode denunciar a si mesmo ou o seu próprio anúncio.')
         # Uma denúncia nova nunca pode chegar do cliente já julgada, e quem
         # denunciou é sempre o usuário autenticado (nunca o que o cliente
         # mandar no corpo) — reporter já é read-only no serializer.
-        reporter = self.request.user if self.request.user.is_authenticated else None
         serializer.save(status='pending', reporter=reporter)
 
 class ReportUpdateAPIView(generics.UpdateAPIView):
@@ -396,8 +435,29 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
                 {'error': 'Escolha procedente ou improcedente.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Julgar de novo somaria outro ponto de infração ao denunciado
+        if report.status != 'pending':
+            return Response(
+                {'error': 'Esta denúncia já foi julgada.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         report.status = new_status
         report.save(update_fields=['status'])
+
+        if new_status == 'procedente':
+            aplicar_infracao(
+                usuario_denunciado(report.type, report.target_id),
+                'Uma denúncia contra você foi considerada procedente pela moderação.',
+            )
+        criar_notificacao(
+            usuario=report.reporter,
+            tipo='sistema',
+            titulo='Sua denúncia foi analisada',
+            mensagem=(
+                f'A denúncia sobre "{report.target_name or report.target_id}" foi considerada '
+                f'{"procedente" if new_status == "procedente" else "improcedente"} pela moderação.'
+            ),
+        )
         return Response(self.get_serializer(report).data)
 
 
@@ -423,6 +483,18 @@ MENSAGEM_LIMITE_CANDIDATURAS_ATINGIDO = (
     'Você já atingiu seu limite de candidaturas enviadas esse mês, '
     'atualize seu plano para se candidatar a mais anúncios.'
 )
+
+
+def _prioridade_por_plano(campo_plano):
+    """Expressão de ordenação: Platinum (0), Gold (1), demais planos (2)."""
+    from django.db.models import Case, IntegerField, Value, When
+
+    return Case(
+        When(**{campo_plano: 'Platinum'}, then=Value(0)),
+        When(**{campo_plano: 'Gold'}, then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
 
 
 def _plano_usuario(user):
@@ -488,18 +560,18 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         Ad.atualizar_vencidos()
         queryset = (
             Ad.objects.exclude(deletado=True)
+            .exclude(role=ANUNCIO_LEGADO_FREELANCER)
+            .exclude(author__profile__banido=True)
             .select_related('author', 'author__profile')
             .annotate(
-                _media_freelancer=Avg(
-                    'author__profile__avaliacoes_recebidas__nota_geral',
-                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='freelancer'),
-                ),
                 _media_contratante=Avg(
                     'author__profile__avaliacoes_recebidas__nota_geral',
                     filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
                 ),
+                # Benefício dos planos: vagas de assinantes aparecem primeiro
+                _prioridade_plano=_prioridade_por_plano('author__profile__subscription_plan'),
             )
-            .order_by('-created_at')
+            .order_by('_prioridade_plano', '-created_at')
         )
         all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
         if not all_ads:
@@ -508,13 +580,15 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        from rest_framework.exceptions import ValidationError
+        from rest_framework.exceptions import PermissionDenied, ValidationError
 
         user = self.request.user
+        if papel_do_usuario(user) != PAPEL_CONTRATANTE:
+            raise PermissionDenied('Apenas contratantes podem publicar anúncios.')
         if _status_limite_anuncios(user)['atingiu_limite']:
             raise ValidationError(MENSAGEM_LIMITE_ANUNCIOS_ATINGIDO)
 
-        serializer.save(author=user)
+        serializer.save(author=user, role=ANUNCIO_VAGA)
 
 class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdSerializer
@@ -527,10 +601,6 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
             Ad.objects
             .select_related('author', 'author__profile')
             .annotate(
-                _media_freelancer=Avg(
-                    'author__profile__avaliacoes_recebidas__nota_geral',
-                    filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='freelancer'),
-                ),
                 _media_contratante=Avg(
                     'author__profile__avaliacoes_recebidas__nota_geral',
                     filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
@@ -546,7 +616,7 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
         # Um anúncio vencido ou excluído (soft delete) deixa de ser "público":
         # só quem publicou ou quem já se candidatou a ele pode continuar
         # visualizando os detalhes. Para todo mundo, ele deixa de existir.
-        indisponivel = Q(deletado=True) | Q(status_anuncio='Vencido')
+        indisponivel = Q(deletado=True) | Q(status_anuncio='Vencido') | Q(author__profile__banido=True)
         user = self.request.user
         if not user or not user.is_authenticated:
             return queryset.exclude(indisponivel)
@@ -593,6 +663,21 @@ class PublicProfileAPIView(generics.RetrieveAPIView):
             raise Http404("Usuário não encontrado.")
         return perfil
 
+    def retrieve(self, request, *args, **kwargs):
+        perfil = self.get_object()
+        dados = self.get_serializer(perfil).data
+        if request.user != perfil:
+            # Para os outros, respeita a visibilidade escolhida pelo usuário e
+            # não expõe o CNPJ nem os pontos de infração.
+            profile = dados.get('profile') or {}
+            if not profile.get('email_visivel', True):
+                dados['email'] = None
+            if not profile.get('telefone_visivel', True):
+                profile['telefone'] = None
+            profile.pop('cnpj', None)
+            profile.pop('pontos_infracao', None)
+        return Response(dados)
+
 class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CandidaturaSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -612,21 +697,28 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
         if user_id:
             queryset = queryset.filter(user=self.request.user)
         if ad_id:
+            # Benefício dos planos: candidaturas de assinantes aparecem primeiro
             queryset = queryset.filter(
                 anuncio_id=ad_id,
                 ad__author=self.request.user,
-            )
+            ).annotate(
+                _prioridade_plano=_prioridade_por_plano('user__profile__subscription_plan'),
+            ).order_by('_prioridade_plano', '-enviado_em')
 
         return queryset
 
     def perform_create(self, serializer):
-        from rest_framework.exceptions import ValidationError
+        from rest_framework.exceptions import PermissionDenied, ValidationError
 
         ad = serializer.validated_data.get('ad')
         if not ad:
             raise ValidationError('O anúncio é obrigatório.')
         if ad.author_id == self.request.user.id:
             raise ValidationError('Você não pode se candidatar ao próprio anúncio.')
+        if papel_do_usuario(self.request.user) != PAPEL_FREELANCER:
+            raise PermissionDenied('Apenas freelancers podem se candidatar a vagas.')
+        if ad.role == ANUNCIO_LEGADO_FREELANCER:
+            raise ValidationError('Este anúncio não aceita mais candidaturas.')
         Ad.atualizar_vencidos()
         ad.refresh_from_db(fields=['status_anuncio'])
         if ad.status_anuncio == 'Vencido':
@@ -768,6 +860,9 @@ class NotificacaoNaoLidasAPIView(APIView):
     def get(self, request):
         from django.db.models import Count
 
+        # Consultado a cada carregamento do app: bom momento para aplicar os
+        # prazos dos acordos e gerar as notificações correspondentes.
+        processar_prazos()
         nao_lidas = Notificacao.objects.filter(
             usuario=request.user,
             lida=False,
@@ -914,6 +1009,9 @@ class GoogleSocialLoginAPI(APIView):
         # Conta removida (excluída pelo usuário) não volta a entrar por login social
         if _conta_foi_removida(user):
             return _conta_inexistente_response()
+        banida = _conta_banida_response(user)
+        if banida:
+            return banida
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -1057,6 +1155,9 @@ class LinkedInSocialLoginAPI(APIView):
         # Conta removida (excluída pelo usuário) não volta a entrar por login social
         if _conta_foi_removida(user):
             return _conta_inexistente_response()
+        banida = _conta_banida_response(user)
+        if banida:
+            return banida
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -1229,6 +1330,7 @@ class AcordoServicoListCreateAPIView(generics.ListCreateAPIView):
         from django.db.models import Prefetch
         from .models import SolicitacaoCancelamentoAcordo
 
+        processar_prazos()
         if user.is_staff or user.is_superuser:
             queryset = AcordoServico.objects.all().order_by('-data_confirmacao')
         else:
@@ -1266,6 +1368,7 @@ class AcordoServicoRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
     def get_queryset(self):
         from django.db.models import Q
         user = self.request.user
+        processar_prazos()
         if user.is_staff or user.is_superuser:
             return AcordoServico.objects.all()
         return AcordoServico.objects.filter(
@@ -1292,6 +1395,13 @@ class SolicitarCancelamentoAcordoAPI(APIView):
     def post(self, request, pk):
         from django.shortcuts import get_object_or_404
 
+        # Na tela esta solicitação se chama "Relatar problema"
+        motivo = str(request.data.get('motivo') or '').strip()
+        if motivo not in dict(SolicitacaoCancelamentoAcordo.MOTIVOS):
+            return Response(
+                {'error': 'Escolha o motivo do problema.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         justificativa = str(request.data.get('justificativa') or '').strip()
         if len(justificativa) < 10:
             return Response(
@@ -1304,13 +1414,13 @@ class SolicitarCancelamentoAcordoAPI(APIView):
                 AcordoServico.objects.select_for_update(),
                 pk=pk,
             )
-            contratante, freelancer = _partes_do_acordo(acordo)
+            contratante, freelancer = acordo.partes()
             if request.user not in {contratante, freelancer}:
                 return Response(
                     {'error': 'Você não participa deste acordo.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            if acordo.status_acordo not in {'Ativo', 'Pendente Pagamento'}:
+            if acordo.status_acordo not in {'Ativo', 'Pendente Pagamento', 'Aguardando confirmação'}:
                 return Response(
                     {'error': 'Este acordo não pode mais receber solicitação de cancelamento.'},
                     status=status.HTTP_409_CONFLICT,
@@ -1332,7 +1442,16 @@ class SolicitarCancelamentoAcordoAPI(APIView):
                 papel_solicitante=(
                     'freelancer' if request.user == freelancer else 'contratante'
                 ),
+                motivo=motivo,
                 justificativa=justificativa,
+            )
+
+            criar_notificacao(
+                usuario=freelancer if request.user == contratante else contratante,
+                tipo='acordo',
+                titulo='Problema relatado no acordo',
+                mensagem=f'A outra parte relatou um problema no acordo "{acordo.titulo_anuncio}". A moderação vai analisar o caso.',
+                link='/my-freelas',
             )
 
         return Response(
@@ -1352,6 +1471,7 @@ class SolicitacaoCancelamentoAdminListAPIView(generics.ListAPIView):
     def get_queryset(self):
         from django.db.models import Case, IntegerField, Value, When
 
+        processar_prazos()
         queryset = SolicitacaoCancelamentoAcordo.objects.select_related(
             'acordo',
             'solicitante',
@@ -1372,6 +1492,13 @@ class SolicitacaoCancelamentoAdminListAPIView(generics.ListAPIView):
 
 
 class DecidirCancelamentoAcordoAPI(APIView):
+    """Decisão da moderação sobre um problema relatado no acordo (disputa).
+
+    - aprovar: cancela o acordo e, se ele já foi pago, estorna o contratante.
+    - recusar: mantém o acordo; se o serviço já tinha sido entregue, conclui.
+    Em qualquer caso, o admin pode indicar a parte infratora, que recebe um
+    ponto de infração (core/moderacao.py).
+    """
     permission_classes = [permissions.IsAdminUser]
 
     def patch(self, request, pk):
@@ -1381,6 +1508,12 @@ class DecidirCancelamentoAcordoAPI(APIView):
         if decisao not in {'aprovar', 'recusar'}:
             return Response(
                 {'error': 'Informe a decisão como "aprovar" ou "recusar".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        parte_infratora = str(request.data.get('parte_infratora') or '').strip() or None
+        if parte_infratora not in {None, 'freelancer', 'contratante'}:
+            return Response(
+                {'error': 'A parte infratora deve ser "freelancer", "contratante" ou vazia.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1398,28 +1531,66 @@ class DecidirCancelamentoAcordoAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
 
+            acordo = solicitacao.acordo
+            contratante, freelancer = acordo.partes()
+
+            # O estorno vem antes de qualquer gravação: se o Stripe recusar,
+            # nada muda e o admin pode tentar de novo.
+            estornado = False
+            if decisao == 'aprovar':
+                pago = acordo.pagamentos.filter(tipo='acordo', status='pago').order_by('-aprovado_em').first()
+                if pago:
+                    try:
+                        estornado = _estornar_no_stripe(pago, 'estornado_disputa')
+                    except stripe.error.StripeError as exc:
+                        return Response(
+                            {'error': getattr(exc, 'user_message', None) or 'O Stripe não conseguiu estornar o pagamento. Tente novamente.'},
+                            status=status.HTTP_502_BAD_GATEWAY,
+                        )
+
             solicitacao.status = 'aprovada' if decisao == 'aprovar' else 'recusada'
             solicitacao.analisado_por = request.user
             solicitacao.resposta_admin = str(request.data.get('resposta_admin') or '').strip() or None
             solicitacao.analisado_em = timezone.now()
+            solicitacao.parte_infratora = parte_infratora
+            solicitacao.estornado = estornado
             solicitacao.save(update_fields=[
                 'status', 'analisado_por', 'resposta_admin', 'analisado_em',
+                'parte_infratora', 'estornado',
             ])
 
             if decisao == 'aprovar':
-                acordo = solicitacao.acordo
                 acordo.status_acordo = 'Cancelado'
                 acordo.cancelado_em = timezone.now()
-                acordo.save(update_fields=['status_acordo', 'cancelado_em'])
+                acordo.motivo_cancelamento = 'moderacao'
+                acordo.save(update_fields=['status_acordo', 'cancelado_em', 'motivo_cancelamento'])
                 acordo.pagamentos.filter(status='pendente').update(
                     status='cancelado',
                     detalhe_status='cancelamento_acordo_aprovado',
                 )
+                mensagem = f'A moderação cancelou o acordo "{acordo.titulo_anuncio}".'
+                if estornado:
+                    mensagem += ' O pagamento foi estornado ao contratante.'
+                titulo = 'Acordo cancelado'
+            elif acordo.status_acordo == 'Aguardando confirmação':
+                concluir_acordo(acordo, origem='moderacao')
+                mensagem = None
+            else:
+                mensagem = (
+                    f'A moderação analisou o problema relatado no acordo "{acordo.titulo_anuncio}" '
+                    'e manteve o acordo em andamento.'
+                )
+                titulo = 'Problema relatado analisado'
 
-                contratante, freelancer = _partes_do_acordo(acordo)
-                mensagem = f'O acordo "{acordo.titulo_anuncio}" foi cancelado.'
-                criar_notificacao(contratante, 'acordo', 'Acordo cancelado', mensagem, '/my-freelas')
-                criar_notificacao(freelancer, 'acordo', 'Acordo cancelado', mensagem, '/my-freelas')
+            if mensagem:
+                criar_notificacao(contratante, 'acordo', titulo, mensagem, '/my-freelas')
+                criar_notificacao(freelancer, 'acordo', titulo, mensagem, '/my-freelas')
+
+            if parte_infratora:
+                aplicar_infracao(
+                    freelancer if parte_infratora == 'freelancer' else contratante,
+                    f'A moderação decidiu contra você o problema relatado no acordo "{acordo.titulo_anuncio}".',
+                )
 
         return Response(
             SolicitacaoCancelamentoAcordoSerializer(
@@ -1460,13 +1631,6 @@ from .models import Avaliacao
 from .serializers import AvaliacaoSerializer, CRITERIOS_AVALIACAO, obter_criterios_definicao
 
 
-def _partes_do_acordo(acordo):
-    candidatura = acordo.candidatura
-    freelancer = candidatura.user if candidatura else None
-    contratante = candidatura.ad.author if candidatura and candidatura.ad else None
-    return contratante, freelancer
-
-
 class ConcluirAcordoAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1479,20 +1643,21 @@ class ConcluirAcordoAPI(APIView):
                 AcordoServico.objects.select_for_update(),
                 pk=pk,
             )
-            contratante, freelancer = _partes_do_acordo(acordo)
-            if request.user not in {contratante, freelancer}:
+            contratante, freelancer = acordo.partes()
+            # Quem confirma a conclusão é o contratante; o freelancer marca a entrega
+            if request.user != contratante:
                 return Response(
-                    {'error': 'Você não participa deste acordo.'},
+                    {'error': 'Somente o contratante pode confirmar a conclusão do acordo.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            if acordo.status_acordo != 'Ativo':
+            if acordo.status_acordo not in {'Ativo', 'Aguardando confirmação'}:
                 return Response(
                     {'error': 'Somente acordos em andamento podem ser concluídos.'},
                     status=status.HTTP_409_CONFLICT,
                 )
             if acordo.solicitacoes_cancelamento.filter(status='pendente').exists():
                 return Response(
-                    {'error': 'Existe uma solicitação de cancelamento aguardando análise.'},
+                    {'error': 'Existe um problema relatado aguardando análise da moderação.'},
                     status=status.HTTP_409_CONFLICT,
                 )
             if not acordo.pagamentos.filter(status='pago').exists():
@@ -1523,23 +1688,63 @@ class ConcluirAcordoAPI(APIView):
                     aprovado_em=timezone.now(),
                 )
 
-            acordo.status_acordo = 'Concluído'
-            acordo.concluido_em = timezone.now()
-            acordo.save(update_fields=['status_acordo', 'concluido_em'])
-
-            outra_parte = freelancer if request.user == contratante else contratante
-            criar_notificacao(
-                usuario=outra_parte,
-                tipo='acordo',
-                titulo='Acordo concluído',
-                mensagem=f'O acordo "{acordo.titulo_anuncio}" foi concluído. Deixe sua avaliação.',
-                link='/my-freelas',
-            )
+            concluir_acordo(acordo)
 
         return Response({
             'message': 'Acordo concluído. As avaliações das duas partes estão disponíveis.',
             'acordo_id': acordo.id,
         })
+
+
+class EntregarAcordoAPI(APIView):
+    """O freelancer marca o serviço como entregue/realizado. O contratante
+    confirma a conclusão; sem resposta no prazo, ela é automática
+    (ver core/ciclo_acordo.py)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+
+        with transaction.atomic():
+            acordo = get_object_or_404(
+                AcordoServico.objects.select_for_update(),
+                pk=pk,
+            )
+            contratante, freelancer = acordo.partes()
+            if request.user != freelancer:
+                return Response(
+                    {'error': 'Somente o freelancer do acordo pode marcar a entrega.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if acordo.status_acordo != 'Ativo':
+                return Response(
+                    {'error': 'Somente acordos em andamento podem ser marcados como entregues.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if acordo.solicitacoes_cancelamento.filter(status='pendente').exists():
+                return Response(
+                    {'error': 'Existe um problema relatado aguardando análise da moderação.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            acordo.status_acordo = 'Aguardando confirmação'
+            acordo.entregue_em = timezone.now()
+            acordo.save(update_fields=['status_acordo', 'entregue_em'])
+
+            prazo = timezone.localtime(acordo.prazo_confirmacao).strftime('%d/%m/%Y às %H:%M')
+            criar_notificacao(
+                usuario=contratante,
+                tipo='acordo',
+                titulo='Serviço entregue',
+                mensagem=(
+                    f'O freelancer marcou o acordo "{acordo.titulo_anuncio}" como entregue. '
+                    f'Confirme a conclusão ou relate um problema até {prazo}; depois disso '
+                    'o acordo é concluído automaticamente.'
+                ),
+                link='/my-freelas',
+            )
+
+        return Response(AcordoServicoSerializer(acordo, context={'request': request}).data)
 
 
 class AvaliacaoListCreateAPIView(generics.ListCreateAPIView):
@@ -1592,7 +1797,7 @@ class AvaliacoesPendentesAPIView(APIView):
 
         pendentes = []
         for acordo in acordos:
-            contratante, freelancer = _partes_do_acordo(acordo)
+            contratante, freelancer = acordo.partes()
             user_is_contratante = request.user == contratante
             avaliado = freelancer if user_is_contratante else contratante
             papel_avaliado = 'freelancer' if user_is_contratante else 'contratante'
@@ -1683,7 +1888,7 @@ def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=Non
             pagamento.acordo.status_acordo = 'Ativo'
             pagamento.acordo.save(update_fields=['status_acordo'])
 
-            _, freelancer = _partes_do_acordo(pagamento.acordo)
+            _, freelancer = pagamento.acordo.partes()
             criar_notificacao(
                 usuario=freelancer,
                 tipo='pagamento',
@@ -1692,11 +1897,54 @@ def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=Non
                 link='/my-freelas',
             )
         else:
-            logger.warning(
-                'Pagamento aprovado após cancelamento do acordo %s; '
-                'o acordo permaneceu cancelado e exige análise financeira.',
-                pagamento.acordo_id,
-            )
+            _estornar_pagamento_de_acordo_cancelado(pagamento)
+
+
+def _estornar_no_stripe(pagamento, detalhe_status):
+    """Estorna um pagamento de acordo no Stripe e marca o registro como cancelado.
+
+    Retorna False quando o pagamento não tem um payment_intent do Stripe (por
+    exemplo, registros legados locais). Deixa passar `stripe.error.StripeError`
+    para quem chamou decidir o que fazer.
+    """
+    payment_intent = str(pagamento.mp_payment_id or '')
+    if not _stripe_configurado() or not payment_intent.startswith('pi_'):
+        return False
+    stripe.Refund.create(payment_intent=payment_intent)
+    pagamento.status = 'cancelado'
+    pagamento.detalhe_status = detalhe_status
+    pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
+    return True
+
+
+def _estornar_pagamento_de_acordo_cancelado(pagamento):
+    """Pagamento aprovado depois que o acordo já foi cancelado (por exemplo,
+    o checkout foi concluído após o prazo de pagamento): estorna no Stripe."""
+    try:
+        estornado = _estornar_no_stripe(pagamento, 'estornado_acordo_cancelado')
+    except stripe.error.StripeError:
+        estornado = False
+
+    if not estornado:
+        logger.warning(
+            'Pagamento aprovado após cancelamento do acordo %s não pôde ser estornado; '
+            'exige análise financeira.',
+            pagamento.acordo_id,
+        )
+        pagamento.detalhe_status = 'estorno_pendente'
+        pagamento.save(update_fields=['detalhe_status', 'atualizado_em'])
+        return
+
+    criar_notificacao(
+        usuario=pagamento.usuario,
+        tipo='pagamento',
+        titulo='Pagamento estornado',
+        mensagem=(
+            f'O pagamento do acordo "{pagamento.acordo.titulo_anuncio}" foi aprovado depois do '
+            'cancelamento do acordo e por isso foi estornado.'
+        ),
+        link='/my-payments',
+    )
 
 
 def _confirmar_pagamento_stripe(session):
@@ -1931,6 +2179,8 @@ class CriarPreferenciaAcordoAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Um acordo com prazo de pagamento vencido não pode mais abrir checkout
+        processar_prazos()
         try:
             acordo = AcordoServico.objects.select_related('candidatura__ad').get(id=acordo_id)
         except AcordoServico.DoesNotExist:
@@ -1939,8 +2189,8 @@ class CriarPreferenciaAcordoAPI(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        contratante_id = getattr(getattr(acordo.candidatura, 'ad', None), 'author_id', None)
-        if contratante_id != request.user.id:
+        contratante, _ = acordo.partes()
+        if contratante is None or contratante.id != request.user.id:
             return Response(
                 {'error': 'Somente o contratante deste serviço pode realizar o pagamento.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2260,6 +2510,7 @@ class DashboardAdminAPIView(APIView):
     def get(self, request, *args, **kwargs):
         from django.db.models import Count, Sum
 
+        processar_prazos()
         periodo, inicio_atual, fim_atual, inicio_anterior = _resolver_periodo(request)
 
         def serie_usuarios(qs):
@@ -2272,21 +2523,14 @@ class DashboardAdminAPIView(APIView):
             User.objects.filter(date_joined__gte=corte),
         )
 
-        autores_freelancer = User.objects.filter(
-            ads__role='freelancer',
-            ads__deletado=False,
-            date_joined__gte=corte,
-        ).distinct()
-        autores_contratante = User.objects.filter(
-            ads__role__in=['contractor', 'contratante'],
-            ads__deletado=False,
-            date_joined__gte=corte,
-        ).distinct()
+        # Cada conta tem um papel fixo: conta freelancers e contratantes pelo papel
+        freelancers = User.objects.filter(profile__papel=PAPEL_FREELANCER, date_joined__gte=corte)
+        contratantes = User.objects.filter(profile__papel=PAPEL_CONTRATANTE, date_joined__gte=corte)
 
-        freelancer_atual, freelancer_anterior = serie_usuarios(autores_freelancer)
-        contratante_atual, contratante_anterior = serie_usuarios(autores_contratante)
+        freelancer_atual, freelancer_anterior = serie_usuarios(freelancers)
+        contratante_atual, contratante_anterior = serie_usuarios(contratantes)
         freelas_atual, freelas_anterior = serie_usuarios(
-            (autores_freelancer | autores_contratante).distinct(),
+            (freelancers | contratantes).distinct(),
         )
 
         acordos_do_periodo = AcordoServico.objects.filter(
@@ -2414,7 +2658,9 @@ class DashboardAdminAPIView(APIView):
             },
             'acordos': {
                 'total': AcordoServico.objects.count(),
-                'ativos': AcordoServico.objects.filter(status_acordo='Ativo').count(),
+                'ativos': AcordoServico.objects.filter(
+                    status_acordo__in=['Ativo', 'Aguardando confirmação'],
+                ).count(),
                 'concluidos': AcordoServico.objects.filter(status_acordo='Concluído').count(),
                 'cancelados': AcordoServico.objects.filter(status_acordo='Cancelado').count(),
                 'pendentes_pagamento': AcordoServico.objects.filter(

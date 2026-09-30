@@ -15,6 +15,7 @@ const WS_BASE = API.replace(/^http/, 'ws');
 const STATUS_CHIP = {
   'Pendente Pagamento': { label: 'Aguardando pagamento', tone: 'warning' },
   'Ativo': { label: 'Em andamento', tone: 'ativo' },
+  'Aguardando confirmação': { label: 'Aguardando confirmação', tone: 'warning' },
   'Concluído': { label: 'Concluído', tone: 'done' },
   'Cancelado': { label: 'Cancelado', tone: 'cancelled' },
 };

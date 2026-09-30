@@ -1,15 +1,33 @@
+from datetime import date, timedelta
 from decimal import Decimal
+from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 import random
 import string
 from django.utils import timezone
 
+from .papeis import PAPEIS_USUARIO
+
+
+def data_iso_ou_none(valor):
+    """Converte 'AAAA-MM-DD' (como o `deadline` do anúncio) em date; None se inválido."""
+    try:
+        return date.fromisoformat(str(valor)[:10]) if valor else None
+    except ValueError:
+        return None
+
+
+def _nome_exibicao(user):
+    if not user:
+        return 'Desconhecido'
+    if hasattr(user, 'profile'):
+        return user.profile.nome_completo or user.username
+    return user.first_name or user.username
+
+
 class UserProfile(models.Model):
-    PAPEIS_USUARIO = (
-        ('freelancer', 'Freelancer'),
-        ('empresa', 'Empresa'),
-    )
+    PAPEIS_USUARIO = PAPEIS_USUARIO
     TIPOS_EMPRESA = (
         ('pessoa', 'Pessoa física contratante'),
         ('cnpj', 'Empresa com CNPJ'),
@@ -38,9 +56,18 @@ class UserProfile(models.Model):
     porte_empresa = models.CharField(max_length=20, choices=PORTES_EMPRESA, null=True, blank=True)
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     site_empresa = models.URLField(max_length=255, null=True, blank=True)
+    ano_fundacao = models.PositiveSmallIntegerField(null=True, blank=True)
+    responsavel_nome = models.CharField(max_length=120, null=True, blank=True)
+    responsavel_cargo = models.CharField(max_length=80, null=True, blank=True)
+    # Perfil de contratante (pessoa física ou empresa): o que contrata e como trabalha
+    servicos_contratados = models.JSONField(blank=True, default=list)
+    como_trabalha = models.TextField(blank=True, default='')
     aceitou_termos_empresa = models.BooleanField(default=False)
     aceitou_termos_freelancer = models.BooleanField(default=False)
     banido = models.BooleanField(default=False, null=True, blank=True)
+    # Denúncia procedente ou disputa perdida soma 1 ponto; 3 pontos banem a conta
+    # (ver core/moderacao.py).
+    pontos_infracao = models.PositiveSmallIntegerField(default=0)
     deletado = models.BooleanField(default=False, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     atualizado_em = models.DateTimeField(auto_now=True, null=True, blank=True)
@@ -200,6 +227,16 @@ class Candidatura(models.Model):
     class Meta:
         db_table = 'candidaturas'
 
+    def partes(self, ad=None):
+        """Retorna (contratante, freelancer) desta candidatura.
+
+        Só contratantes publicam anúncios e só freelancers se candidatam:
+        o autor do anúncio é o contratante e quem se candidatou é o
+        freelancer. Use este método em vez de repetir a regra.
+        """
+        ad = ad or self.ad
+        return (ad.author if ad else None), self.user
+
     def save(self, *args, **kwargs):
         if self.user and not self.usuario_id:
             try:
@@ -222,19 +259,11 @@ class Candidatura(models.Model):
                 from django.utils import timezone
                 ad_obj.atualizado_em = timezone.now()
                 ad_obj.save()
-                
-                nome_contratante = 'Desconhecido'
-                if ad_obj.author and hasattr(ad_obj.author, 'profile'):
-                    nome_contratante = ad_obj.author.profile.nome_completo or ad_obj.author.username
-                elif ad_obj.author:
-                    nome_contratante = ad_obj.author.first_name or ad_obj.author.username
-                    
-                nome_prestador = 'Desconhecido'
-                if self.user and hasattr(self.user, 'profile'):
-                    nome_prestador = self.user.profile.nome_completo or self.user.username
-                elif self.user:
-                    nome_prestador = self.user.first_name or self.user.username
-                
+
+                contratante, prestador = self.partes(ad_obj)
+                nome_contratante = _nome_exibicao(contratante)
+                nome_prestador = _nome_exibicao(prestador)
+
                 AcordoServico.objects.get_or_create(
                     candidatura=self,
                     defaults={
@@ -246,7 +275,8 @@ class Candidatura(models.Model):
                         'proposta_aceita': self.mensagem,
                         'nome_contratante': nome_contratante,
                         'nome_prestador': nome_prestador,
-                        'data_confirmacao': timezone.now()
+                        'data_confirmacao': timezone.now(),
+                        'conclusao_prevista': data_iso_ou_none(ad_obj.deadline),
                     }
                 )
                 
@@ -287,8 +317,13 @@ class AcordoServico(models.Model):
     STATUS_CHOICES = (
         ('Pendente Pagamento', 'Pagamento pendente'),
         ('Ativo', 'Em andamento'),
+        ('Aguardando confirmação', 'Aguardando confirmação'),
         ('Concluído', 'Concluído'),
         ('Cancelado', 'Cancelado'),
+    )
+    MOTIVOS_CANCELAMENTO = (
+        ('prazo_pagamento', 'Prazo de pagamento expirado'),
+        ('moderacao', 'Cancelado pela moderação'),
     )
 
     TAXA_PLATAFORMA_PERCENTUAL = Decimal('0.10')
@@ -311,8 +346,10 @@ class AcordoServico(models.Model):
     nome_contratante = models.CharField(max_length=255, null=True, blank=True)
     nome_prestador = models.CharField(max_length=255, null=True, blank=True)
     data_confirmacao = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    entregue_em = models.DateTimeField(null=True, blank=True)
     concluido_em = models.DateTimeField(null=True, blank=True)
     cancelado_em = models.DateTimeField(null=True, blank=True)
+    motivo_cancelamento = models.CharField(max_length=30, choices=MOTIVOS_CANCELAMENTO, null=True, blank=True)
 
     # Campos de solicitação de alteração (adicionados na mesma tabela acordo_servico)
     tem_solicitacao = models.BooleanField(default=False)
@@ -327,6 +364,35 @@ class AcordoServico(models.Model):
 
     def __str__(self):
         return f"Acordo - {self.titulo_anuncio} ({self.status_acordo})"
+
+    def partes(self):
+        """Retorna (contratante, freelancer) do acordo. Veja Candidatura.partes."""
+        if not self.candidatura:
+            return None, None
+        return self.candidatura.partes()
+
+    @property
+    def prazo_pagamento(self):
+        """Até quando o contratante pode pagar antes do cancelamento automático."""
+        if self.status_acordo != 'Pendente Pagamento' or not self.data_confirmacao:
+            return None
+        return self.data_confirmacao + timedelta(hours=settings.PRAZO_PAGAMENTO_HORAS)
+
+    @property
+    def prazo_confirmacao(self):
+        """Até quando o contratante pode confirmar (ou relatar problema) antes da conclusão automática."""
+        if self.status_acordo != 'Aguardando confirmação' or not self.entregue_em:
+            return None
+        return self.entregue_em + timedelta(hours=settings.PRAZO_CONFIRMACAO_HORAS)
+
+    @property
+    def atrasado(self):
+        """Em andamento e com a previsão de conclusão já vencida (sem entrega)."""
+        return (
+            self.status_acordo == 'Ativo'
+            and self.conclusao_prevista is not None
+            and self.conclusao_prevista < timezone.localdate()
+        )
 
     @property
     def taxa_plataforma(self):
@@ -355,6 +421,14 @@ class SolicitacaoCancelamentoAcordo(models.Model):
         ('freelancer', 'Freelancer'),
         ('contratante', 'Contratante'),
     )
+    # Motivo do relato de problema (a tela chama esta solicitação de "Relatar problema")
+    MOTIVOS = (
+        ('nao_compareceu', 'O freelancer não compareceu'),
+        ('nao_entregou', 'O serviço não foi entregue'),
+        ('fora_do_combinado', 'O serviço foi entregue fora do combinado'),
+        ('desistencia', 'Desistência de uma das partes'),
+        ('outro', 'Outro motivo'),
+    )
 
     acordo = models.ForeignKey(
         AcordoServico,
@@ -367,6 +441,7 @@ class SolicitacaoCancelamentoAcordo(models.Model):
         related_name='cancelamentos_acordo_solicitados',
     )
     papel_solicitante = models.CharField(max_length=20, choices=PAPEIS)
+    motivo = models.CharField(max_length=30, choices=MOTIVOS, default='outro')
     justificativa = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
     analisado_por = models.ForeignKey(
@@ -377,6 +452,9 @@ class SolicitacaoCancelamentoAcordo(models.Model):
         related_name='cancelamentos_acordo_analisados',
     )
     resposta_admin = models.TextField(null=True, blank=True)
+    # Resultado da disputa decidida pela moderação
+    parte_infratora = models.CharField(max_length=20, choices=PAPEIS, null=True, blank=True)
+    estornado = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
     analisado_em = models.DateTimeField(null=True, blank=True)
 

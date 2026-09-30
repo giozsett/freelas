@@ -7,6 +7,8 @@ import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
 import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
+import SobreContratante from '../components/SobreContratante';
+import { PAPEL_CONTRATANTE, PAPEIS_REPUTACAO } from '../constants/papeis';
 
 const API = 'http://localhost:8000';
 
@@ -42,7 +44,8 @@ export default function PublicProfile() {
     roles: [],
     reviews: [],
   });
-  const [reputacao, setReputacao] = useState({ freelancer: null, contratante: null });
+  // A API devolve só a reputação do papel da conta (freelancer ou contratante)
+  const [reputacao, setReputacao] = useState({});
 
   useEffect(() => {
     setIsLoading(true);
@@ -79,21 +82,21 @@ export default function PublicProfile() {
             bio_empresa: data.profile?.bio_empresa || '',
             ramo_empresa: data.profile?.ramo_empresa || '',
             porte_empresa: data.profile?.porte_empresa || '',
-            cnpj: data.profile?.cnpj || '',
             site_empresa: data.profile?.site_empresa || '',
+            ano_fundacao: data.profile?.ano_fundacao || null,
+            responsavel_nome: data.profile?.responsavel_nome || '',
+            responsavel_cargo: data.profile?.responsavel_cargo || '',
+            servicos_contratados: data.profile?.servicos_contratados || [],
+            como_trabalha: data.profile?.como_trabalha || '',
           },
-          roles: [
-            {
-              type: 'Freelancer',
-              rating: data.resumo_avaliacoes?.freelancer?.nota,
-              reviews: data.resumo_avaliacoes?.freelancer?.total || 0,
-            },
-            {
-              type: 'Contratante',
-              rating: data.resumo_avaliacoes?.contratante?.nota,
-              reviews: data.resumo_avaliacoes?.contratante?.total || 0,
-            },
-          ],
+          roles: PAPEIS_REPUTACAO
+            .filter(item => data.resumo_avaliacoes?.[item.key])
+            .map(item => ({
+              type: item.label,
+              className: item.className,
+              rating: data.resumo_avaliacoes[item.key].nota,
+              reviews: data.resumo_avaliacoes[item.key].total || 0,
+            })),
           reviews: Array.isArray(data.avaliacoes_recebidas) ? data.avaliacoes_recebidas : [],
         }));
         if (data.reputacao) setReputacao(data.reputacao);
@@ -123,7 +126,21 @@ export default function PublicProfile() {
     );
   }
 
-  const ehEmpresaCnpj = user.profile?.papel === 'empresa' && user.profile?.tipo_empresa === 'cnpj';
+  const ehContratante = user.profile?.papel === PAPEL_CONTRATANTE;
+  const ehEmpresaCnpj = ehContratante && user.profile?.tipo_empresa === 'cnpj';
+  // Contratante não tem as abas de freelancer (habilidades, experiência e formação)
+  const abas = ehContratante
+    ? [
+      { key: 'sobre', label: ehEmpresaCnpj ? 'Sobre a empresa' : 'Sobre' },
+      { key: 'reviews', label: 'Avaliações e Comentários' },
+    ]
+    : [
+      { key: 'skills', label: 'Habilidades e Especialidades' },
+      { key: 'experiencia', label: `Experiência${user.profile?.experiencias?.length > 0 ? ` (${user.profile.experiencias.length})` : ''}` },
+      { key: 'certificados', label: `Formação Acadêmica${user.profile?.certificados?.length > 0 ? ` (${user.profile.certificados.length})` : ''}` },
+      { key: 'reviews', label: 'Avaliações e Comentários' },
+    ];
+  const abaAtiva = abas.some(aba => aba.key === activeTab) ? activeTab : abas[0].key;
   const nomeExibido = ehEmpresaCnpj && user.profile?.nome_empresa ? user.profile.nome_empresa : user.name;
   const bioExibida = ehEmpresaCnpj && user.profile?.bio_empresa
     ? user.profile.bio_empresa
@@ -168,21 +185,23 @@ export default function PublicProfile() {
                   Empresa com CNPJ
                 </span>
               )}
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.3rem 0.8rem',
-                borderRadius: '20px',
-                fontSize: '0.85rem',
-                fontWeight: '600',
-                background: user.profile?.disponivel ? 'var(--success-soft)' : 'var(--danger-soft)',
-                color: user.profile?.disponivel ? 'var(--success-color)' : 'var(--danger-color)',
-                border: `1px solid ${user.profile?.disponivel ? 'var(--success-color)' : 'var(--danger-color)'}`
-              }}>
-                {user.profile?.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                {user.profile?.disponivel ? 'Disponível' : 'Indisponível'}
-              </span>
+              {!ehContratante && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  padding: '0.3rem 0.8rem',
+                  borderRadius: '20px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  background: user.profile?.disponivel ? 'var(--success-soft)' : 'var(--danger-soft)',
+                  color: user.profile?.disponivel ? 'var(--success-color)' : 'var(--danger-color)',
+                  border: `1px solid ${user.profile?.disponivel ? 'var(--success-color)' : 'var(--danger-color)'}`
+                }}>
+                  {user.profile?.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                  {user.profile?.disponivel ? 'Disponível' : 'Indisponível'}
+                </span>
+              )}
               <button
                 onClick={() => exigirAutenticacao(() => setIsReportModalOpen(true))}
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--danger-color)', cursor: 'pointer' }}
@@ -195,7 +214,7 @@ export default function PublicProfile() {
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
               {user.roles.map(role => (
                 <div key={role.type} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className={role.type === 'Freelancer' ? "badge salmon" : "badge purple"} style={{ color: 'white' }}>{role.type}</span>
+                  <span className={`badge ${role.className}`} style={{ color: 'white' }}>{role.type}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
                       <Star fill={role.rating ? 'currentColor' : 'transparent'} size={22} color="var(--warning-color)" /> {role.rating ?? '—'} ({role.reviews})
                   </span>
@@ -209,15 +228,6 @@ export default function PublicProfile() {
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Briefcase size={18} /> {user.profile.ramo_empresa}
                   </span>
-                )}
-                {user.profile?.porte_empresa && (
-                  <span>{user.profile.porte_empresa}</span>
-                )}
-                {user.profile?.cnpj && (
-                  <span>CNPJ {user.profile.cnpj}</span>
-                )}
-                {user.profile?.site_empresa && (
-                  <a href={user.profile.site_empresa} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline', wordBreak: 'break-all' }}>{user.profile.site_empresa}</a>
                 )}
               </div>
             )}
@@ -246,7 +256,7 @@ export default function PublicProfile() {
                   </a>
                 </span>
               ))}
-              {user.profile?.curriculo && (
+              {!ehContratante && user.profile?.curriculo && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Upload size={18} />
                   <a href={user.profile.curriculo} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-color)', textDecoration: 'underline' }}>
@@ -279,33 +289,33 @@ export default function PublicProfile() {
         <section className="profile-section">
           <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Reputação</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-            <TermometroReputacao titulo="Reputação como Freelancer" reputacao={reputacao.freelancer} />
-            <TermometroReputacao titulo="Reputação como Contratante" reputacao={reputacao.contratante} />
+            {PAPEIS_REPUTACAO.filter(item => reputacao[item.key]).map(item => (
+              <TermometroReputacao key={item.key} titulo={`Reputação como ${item.label}`} reputacao={reputacao[item.key]} />
+            ))}
           </div>
         </section>
 
         {/* Tabs */}
         <div className="profile-tabs scroll-fade scroll-fade--bg" role="tablist" aria-label="Informações do perfil" ref={tabsScrollRef}>
-          {[
-            { key: 'skills', label: 'Habilidades e Especialidades' },
-            { key: 'experiencia', label: `Experiência${user.profile?.experiencias?.length > 0 ? ` (${user.profile.experiencias.length})` : ''}` },
-            { key: 'certificados', label: `Formação Acadêmica${user.profile?.certificados?.length > 0 ? ` (${user.profile.certificados.length})` : ''}` },
-            { key: 'reviews', label: 'Avaliações e Comentários' }
-          ].map(tab => (
+          {abas.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`profile-tab-option ${activeTab === tab.key ? 'selected' : ''}`}
+              className={`profile-tab-option ${abaAtiva === tab.key ? 'selected' : ''}`}
               role="tab"
-              aria-selected={activeTab === tab.key}>
+              aria-selected={abaAtiva === tab.key}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        <div key={activeTab} className="profile-tab-content tab-content-animation">
+        <div key={abaAtiva} className="profile-tab-content tab-content-animation">
+        {abaAtiva === 'sobre' && (
+          <SobreContratante perfil={user.profile} ehEmpresa={ehEmpresaCnpj} />
+        )}
 
-        {activeTab === 'skills' && (
+
+        {abaAtiva === 'skills' && (
           <div>
             <div style={{ marginBottom: '2.5rem' }}>
               <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>Categorias de Atuação</h2>
@@ -336,7 +346,7 @@ export default function PublicProfile() {
           </div>
         )}
 
-        {activeTab === 'experiencia' && (
+        {abaAtiva === 'experiencia' && (
           <div>
             {user.profile?.experiencias?.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -377,7 +387,7 @@ export default function PublicProfile() {
           </div>
         )}
 
-        {activeTab === 'certificados' && (
+        {abaAtiva === 'certificados' && (
           <div>
             {user.profile?.certificados?.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -425,7 +435,7 @@ export default function PublicProfile() {
           </div>
         )}
 
-        {activeTab === 'reviews' && (
+        {abaAtiva === 'reviews' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {user.reviews.map((review) => {
               const starsColor = review.role_received === 'freelancer' ? 'var(--holo-salmon)' : 'var(--holo-purple-real)';
