@@ -2305,8 +2305,8 @@ class CriteriosAvaliacaoAPITests(TestCase):
         profile.cidade = 'São Paulo'
         profile.telefone = '11999999999'
         profile.telefone_visivel = True
-        profile.categories = ['Desenvolvimento Web']
-        profile.skills = [{'name': 'Gestão de Projetos', 'level': 'avancado'}]
+        profile.servicos_contratados = ['Desenvolvimento Web']
+        profile.como_trabalha = 'Envio o briefing por escrito e dou retorno em até 2 dias úteis.'
         profile.save()
 
         response = self.client.get(f'/api/ads/{self.ad.id}/')
@@ -2328,7 +2328,7 @@ class CriteriosAvaliacaoAPITests(TestCase):
         profile.cidade = 'São Paulo'
         profile.telefone = '11999999999'
         profile.telefone_visivel = False
-        profile.categories = ['Desenvolvimento Web']
+        profile.servicos_contratados = ['Desenvolvimento Web']
         profile.save()
 
         response = self.client.get(f'/api/ads/{self.ad.id}/')
@@ -2343,9 +2343,10 @@ class CriteriosAvaliacaoAPITests(TestCase):
         self.assertEqual(por_chave['bio']['pontos'], 20)
         self.assertTrue(por_chave['cidade']['atendido'])
         self.assertFalse(por_chave['contato']['atendido'])
-        self.assertTrue(por_chave['categorias']['atendido'])
-        self.assertFalse(por_chave['portfolio']['atendido'])
-        self.assertEqual(por_chave['portfolio']['pontos'], 30)
+        self.assertTrue(por_chave['servicos']['atendido'])
+        self.assertFalse(por_chave['como_trabalha']['atendido'])
+        self.assertEqual(por_chave['como_trabalha']['pontos'], 30)
+        self.assertNotIn('portfolio', por_chave)
 
 
 class PerfilBioEReputacaoAPITests(TestCase):
@@ -2426,6 +2427,74 @@ class PerfilBioEReputacaoAPITests(TestCase):
         self.assertEqual(list(dados['reputacao']), ['contratante'])
         self.assertEqual(dados['resumo_avaliacoes'], {'contratante': {'nota': 5.0, 'total': 1}})
         self.assertEqual([a['papel_avaliado'] for a in dados['avaliacoes_recebidas']], ['contratante'])
+
+    def test_contratante_preenche_campos_do_perfil_de_contratante(self):
+        contratante = _criar_usuario_com_papel('perfil-empresa@example.com', 'contratante', 'Carla')
+        self.client.force_authenticate(contratante)
+
+        resposta = self.client.patch('/api/auth/profile/', {
+            'servicos_contratados': ['Design Gráfico', 'Desenvolvimento Web'],
+            'como_trabalha': '  Envio o briefing por escrito e dou retorno em até 2 dias úteis.  ',
+            'ano_fundacao': 2015,
+            'responsavel_nome': 'Carla Souza',
+            'responsavel_cargo': 'Gerente de marketing',
+        }, format='json')
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        contratante.profile.refresh_from_db()
+        self.assertEqual(contratante.profile.servicos_contratados, ['Design Gráfico', 'Desenvolvimento Web'])
+        self.assertEqual(contratante.profile.como_trabalha, 'Envio o briefing por escrito e dou retorno em até 2 dias úteis.')
+        self.assertEqual(contratante.profile.ano_fundacao, 2015)
+        publico = self.client.get(f'/api/users/{contratante.id}/').data['profile']
+        self.assertEqual(publico['responsavel_cargo'], 'Gerente de marketing')
+
+    def test_servicos_contratados_chegam_como_json_no_multipart(self):
+        contratante = _criar_usuario_com_papel('perfil-multipart@example.com', 'contratante', 'Carla')
+        self.client.force_authenticate(contratante)
+
+        resposta = self.client.patch(
+            '/api/auth/profile/', {'servicos_contratados': '["Design Gráfico"]', 'ano_fundacao': ''},
+            format='multipart',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        contratante.profile.refresh_from_db()
+        self.assertEqual(contratante.profile.servicos_contratados, ['Design Gráfico'])
+        self.assertIsNone(contratante.profile.ano_fundacao)
+
+    def test_campos_de_contratante_invalidos_sao_recusados(self):
+        contratante = _criar_usuario_com_papel('perfil-invalido@example.com', 'contratante', 'Carla')
+        self.client.force_authenticate(contratante)
+        casos = [
+            {'servicos_contratados': ['A', 'B', 'C', 'D', 'E', 'F']},
+            {'servicos_contratados': ['Design Gráfico', 'Design Gráfico']},
+            {'ano_fundacao': 1700},
+            {'ano_fundacao': timezone.localdate().year + 1},
+            {'como_trabalha': 'x' * 1001},
+        ]
+        for dados in casos:
+            with self.subTest(dados=list(dados)):
+                resposta = self.client.patch('/api/auth/profile/', dados, format='json')
+                self.assertEqual(resposta.status_code, 400)
+                self.assertIn(list(dados)[0], resposta.data)
+
+    def test_perfil_publico_esconde_dados_privados_de_quem_visita(self):
+        contratante = _criar_usuario_com_papel('privado@example.com', 'contratante', 'Carla')
+        UserProfile.objects.filter(user=contratante).update(
+            cnpj='12.345.678/0001-90', telefone='18999999999', telefone_visivel=False, email_visivel=False,
+            pontos_infracao=1,
+        )
+
+        visitante = self.client.get(f'/api/users/{contratante.id}/').data
+        self.client.force_authenticate(contratante)
+        dono = self.client.get(f'/api/users/{contratante.id}/').data
+
+        self.assertIsNone(visitante['email'])
+        self.assertIsNone(visitante['profile']['telefone'])
+        self.assertNotIn('cnpj', visitante['profile'])
+        self.assertNotIn('pontos_infracao', visitante['profile'])
+        self.assertEqual(dono['email'], 'privado@example.com')
+        self.assertEqual(dono['profile']['cnpj'], '12.345.678/0001-90')
 
     def test_administrador_nao_tem_reputacao(self):
         admin = User.objects.create_superuser('rep-admin@example.com', 'rep-admin@example.com', 'secret123')

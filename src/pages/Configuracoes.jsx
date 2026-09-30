@@ -1,12 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, AlertTriangle, Briefcase, Building2 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
 import { useDialogo } from '../context/ContextoDialogo';
-import SeletorRamos from '../components/SeletorRamos';
-import SeletorUnico from '../components/SeletorUnico';
-import { MAX_RAMOS_EMPRESA, PORTES_EMPRESA } from '../constants/options';
 
 export default function Configuracoes() {
   const { token, logout, user } = useAuth();
@@ -18,47 +15,6 @@ export default function Configuracoes() {
   const [confirmacao, setConfirmacao] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [excluindo, setExcluindo] = useState(false);
-  const [dadosEmpresa, setDadosEmpresa] = useState(() => ({
-    nome_empresa: user?.profile?.nome_empresa || '',
-    ramos_atuacao: user?.profile?.ramos_atuacao || [],
-    porte_empresa: user?.profile?.porte_empresa || '',
-    cnpj: user?.profile?.cnpj || '',
-    site_empresa: user?.profile?.site_empresa || '',
-    bio_empresa: user?.profile?.bio_empresa || '',
-  }));
-  const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
-  const [erroEmpresa, setErroEmpresa] = useState('');
-  const [sucessoEmpresa, setSucessoEmpresa] = useState(false);
-
-  const atualizarEmpresa = (campo) => (e) => {
-    setDadosEmpresa(prev => ({ ...prev, [campo]: e.target.value }));
-    setSucessoEmpresa(false);
-  };
-
-  const salvarDadosEmpresa = async () => {
-    setErroEmpresa('');
-    setSucessoEmpresa(false);
-    if (dadosEmpresa.ramos_atuacao.length === 0) {
-      setErroEmpresa('Escolha ao menos um ramo de atuação da empresa.');
-      return;
-    }
-    setSalvandoEmpresa(true);
-    try {
-      const response = await fetch('http://localhost:8000/api/auth/profile/', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-        body: JSON.stringify(dadosEmpresa)
-      });
-      if (!response.ok) throw new Error('Não foi possível salvar os dados da empresa.');
-      await alerta('Dados da empresa atualizados com sucesso.', { titulo: 'Empresa atualizada', variante: 'sucesso' });
-      setSucessoEmpresa(true);
-    } catch (err) {
-      setErroEmpresa(err.message || 'Erro ao salvar os dados da empresa.');
-    } finally {
-      setSalvandoEmpresa(false);
-    }
-  };
-
   const temSenha = !!user?.tem_senha;
 
   const podeExcluir = (temSenha ? senha.trim() !== '' : true) && confirmacao === 'EXCLUIR';
@@ -125,63 +81,17 @@ export default function Configuracoes() {
             : 'Você se candidata às vagas publicadas por contratantes e recebe pelos serviços prestados.'}
           {' '}O tipo de conta é definido no cadastro e não pode ser alterado.
         </p>
+        {role === 'contractor' && (
+          <p style={{ fontSize: '0.9rem', margin: '0.75rem 0 0', lineHeight: '1.5' }}>
+            Os dados da empresa, os serviços que você contrata e como trabalha com freelancers ficam em{' '}
+            <Link to="/profile/edit" style={{ color: 'var(--primary)', fontWeight: 600 }}>Editar perfil</Link>.
+          </p>
+        )}
         <p style={{ fontSize: '0.9rem', margin: '0.75rem 0 0', lineHeight: '1.5' }}>
           <strong>Situação da conta:</strong> {user?.profile?.pontos_infracao || 0} de 3 pontos de infração.
           <span style={{ opacity: 0.7 }}> Denúncias procedentes e disputas decididas contra você somam pontos; com 3 pontos a conta é banida.</span>
         </p>
       </div>
-
-      {role === 'contractor' && user?.profile?.tipo_empresa === 'cnpj' && (
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Dados da empresa</h2>
-          <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '1.5rem', lineHeight: '1.5' }}>
-            Estes dados compõem o perfil de contratante exibido quando sua conta atua como Empresa.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Nome da empresa *</label>
-              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.nome_empresa} onChange={atualizarEmpresa('nome_empresa')} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Ramo de atuação (até {MAX_RAMOS_EMPRESA}) *</label>
-              <SeletorRamos
-                valor={dadosEmpresa.ramos_atuacao}
-                onChange={(ramos) => setDadosEmpresa(prev => ({ ...prev, ramos_atuacao: ramos }))}
-              />
-              {dadosEmpresa.ramos_atuacao.length === 0 && user?.profile?.ramo_empresa && (
-                <p className="combo__hint">Ramo cadastrado anteriormente: {user.profile.ramo_empresa}. Escolha na lista para atualizar.</p>
-              )}
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Porte</label>
-              <SeletorUnico
-                valor={dadosEmpresa.porte_empresa}
-                opcoes={PORTES_EMPRESA}
-                ariaLabel="Porte da empresa"
-                onChange={(porte) => setDadosEmpresa(prev => ({ ...prev, porte_empresa: porte }))}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>CNPJ (opcional)</label>
-              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.cnpj} onChange={atualizarEmpresa('cnpj')} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Site (opcional)</label>
-              <input className="input" style={{ width: '100%' }} value={dadosEmpresa.site_empresa} onChange={atualizarEmpresa('site_empresa')} />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.4rem', fontSize: '0.9rem' }}>O que a empresa faz *</label>
-              <textarea className="input" rows={4} style={{ width: '100%', resize: 'vertical' }} value={dadosEmpresa.bio_empresa} onChange={atualizarEmpresa('bio_empresa')} />
-            </div>
-          </div>
-          {sucessoEmpresa && <p style={{ color: 'var(--success-color)', fontSize: '0.9rem', marginTop: '1rem' }}>Dados salvos.</p>}
-          {erroEmpresa && <p style={{ color: 'var(--danger-color)', fontSize: '0.9rem', marginTop: '1rem' }}>{erroEmpresa}</p>}
-          <button type="button" className="btn" style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }} disabled={salvandoEmpresa} onClick={salvarDadosEmpresa}>
-            <Building2 size={16} />
-            {salvandoEmpresa ? 'Salvando...' : 'Salvar dados da empresa'}
-          </button>
-        </div>
-      )}
 
       <div className="card">
         <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Privacidade e Dados</h2>

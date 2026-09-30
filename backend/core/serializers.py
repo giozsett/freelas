@@ -51,34 +51,60 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'ramos_atuacao', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer', 'pontos_infracao')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'ramos_atuacao', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer', 'pontos_infracao', 'ano_fundacao', 'responsavel_nome', 'responsavel_cargo', 'servicos_contratados', 'como_trabalha')
         read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at', 'pontos_infracao')
 
     MAX_RAMOS_ATUACAO = 3
-    MAX_TAMANHO_RAMO = 60
+    MAX_SERVICOS_CONTRATADOS = 5
+    MAX_TAMANHO_OPCAO = 60
+    MAX_COMO_TRABALHA = 1000
+    ANO_FUNDACAO_MINIMO = 1800
 
-    def validate_ramos_atuacao(self, value):
+    def _validar_lista_de_opcoes(self, value, maximo, singular, plural):
+        """Lista de textos escolhidos numa lista fixa do frontend (sem repetição)."""
         # Em multipart a lista chega como string JSON
         if isinstance(value, str):
             try:
                 value = json.loads(value)
             except (json.JSONDecodeError, TypeError):
-                raise serializers.ValidationError('Envie os ramos de atuação como uma lista.')
+                raise serializers.ValidationError(f'Envie os {plural} como uma lista.')
         if not isinstance(value, list):
-            raise serializers.ValidationError('Envie os ramos de atuação como uma lista.')
-        if len(value) > self.MAX_RAMOS_ATUACAO:
-            raise serializers.ValidationError(f'Escolha no máximo {self.MAX_RAMOS_ATUACAO} ramos de atuação.')
-        ramos = []
-        for ramo in value:
-            if not isinstance(ramo, str) or not ramo.strip():
-                raise serializers.ValidationError('Cada ramo de atuação deve ser um texto não vazio.')
-            ramo = ramo.strip()
-            if len(ramo) > self.MAX_TAMANHO_RAMO:
-                raise serializers.ValidationError(f'Cada ramo pode ter no máximo {self.MAX_TAMANHO_RAMO} caracteres.')
-            if ramo in ramos:
-                raise serializers.ValidationError('Não repita o mesmo ramo de atuação.')
-            ramos.append(ramo)
-        return ramos
+            raise serializers.ValidationError(f'Envie os {plural} como uma lista.')
+        if len(value) > maximo:
+            raise serializers.ValidationError(f'Escolha no máximo {maximo} {plural}.')
+        opcoes = []
+        for opcao in value:
+            if not isinstance(opcao, str) or not opcao.strip():
+                raise serializers.ValidationError(f'Cada {singular} deve ser um texto não vazio.')
+            opcao = opcao.strip()
+            if len(opcao) > self.MAX_TAMANHO_OPCAO:
+                raise serializers.ValidationError(f'Cada {singular} pode ter no máximo {self.MAX_TAMANHO_OPCAO} caracteres.')
+            if opcao in opcoes:
+                raise serializers.ValidationError(f'Não repita o mesmo {singular}.')
+            opcoes.append(opcao)
+        return opcoes
+
+    def validate_ramos_atuacao(self, value):
+        return self._validar_lista_de_opcoes(value, self.MAX_RAMOS_ATUACAO, 'ramo de atuação', 'ramos de atuação')
+
+    def validate_servicos_contratados(self, value):
+        return self._validar_lista_de_opcoes(
+            value, self.MAX_SERVICOS_CONTRATADOS, 'serviço contratado', 'serviços contratados',
+        )
+
+    def validate_como_trabalha(self, value):
+        value = (value or '').strip()
+        if len(value) > self.MAX_COMO_TRABALHA:
+            raise serializers.ValidationError(f'Use no máximo {self.MAX_COMO_TRABALHA} caracteres.')
+        return value
+
+    def validate_ano_fundacao(self, value):
+        if value is None:
+            return value
+        ano_atual = timezone.localdate().year
+        if not self.ANO_FUNDACAO_MINIMO <= value <= ano_atual:
+            raise serializers.ValidationError(f'Informe um ano entre {self.ANO_FUNDACAO_MINIMO} e {ano_atual}.')
+        return value
 
     def validate(self, attrs):
         dados = attrs
@@ -440,16 +466,21 @@ def obter_criterios_definicao(papel_avaliado, modalidade='remoto'):
     return CRITERIOS_DETALHADOS.get(papel, {}).get(mod, [])
 
 
-def _completude_perfil_itens(profile):
+def _completude_perfil_itens(profile, papel='freelancer'):
     """
     Lista, item a item, o que soma pontos na completude do perfil (0-100),
     nos moldes de apps como Tinder — cada seção preenchida soma pontos e o
-    total vira um bônus na reputação (ver calcular_reputacao_usuario). Os
-    mesmos itens valem tanto para freelancers quanto para contratantes, já
-    que são campos comuns do UserProfile. Exposto (via completude_perfil_detalhe)
-    para o usuário ver exatamente o que falta, não só o número final.
+    total vira um bônus na reputação (ver calcular_reputacao_usuario).
+    Foto, bio, cidade e contato valem para os dois papéis; os 45 pontos
+    restantes vêm do que cada papel mostra no perfil (categorias e portfólio
+    para o freelancer, serviços que contrata e "como trabalha" para o
+    contratante). Exposto (via completude_perfil_detalhe) para o usuário ver
+    exatamente o que falta, não só o número final.
     """
-    return [
+    # Empresa com CNPJ exibe "Sobre a empresa" no lugar da bio pessoal
+    empresa = papel == 'contratante' and profile.tipo_empresa == 'cnpj'
+    texto_sobre = profile.bio_empresa if empresa else profile.bio
+    comuns = [
         {
             'chave': 'foto',
             'label': 'Foto de perfil',
@@ -458,9 +489,9 @@ def _completude_perfil_itens(profile):
         },
         {
             'chave': 'bio',
-            'label': 'Bio (mínimo 20 caracteres)',
+            'label': 'Sobre a empresa (mínimo 20 caracteres)' if empresa else 'Bio (mínimo 20 caracteres)',
             'pontos': 20,
-            'atendido': len((profile.bio or '').strip()) >= 20,
+            'atendido': len((texto_sobre or '').strip()) >= 20,
         },
         {
             'chave': 'cidade',
@@ -474,6 +505,23 @@ def _completude_perfil_itens(profile):
             'pontos': 10,
             'atendido': bool((profile.telefone and profile.telefone_visivel) or profile.redes_sociais),
         },
+    ]
+    if papel == 'contratante':
+        return comuns + [
+            {
+                'chave': 'servicos',
+                'label': 'Serviços que contrata',
+                'pontos': 15,
+                'atendido': bool(profile.servicos_contratados),
+            },
+            {
+                'chave': 'como_trabalha',
+                'label': 'Como trabalha com freelancers (mínimo 20 caracteres)',
+                'pontos': 30,
+                'atendido': len((profile.como_trabalha or '').strip()) >= 20,
+            },
+        ]
+    return comuns + [
         {
             'chave': 'categorias',
             'label': 'Categorias de atuação',
@@ -489,9 +537,9 @@ def _completude_perfil_itens(profile):
     ]
 
 
-def _completude_perfil(profile):
+def _completude_perfil(profile, papel='freelancer'):
     """Soma os pontos dos itens atendidos em _completude_perfil_itens (0-100)."""
-    pontos = sum(item['pontos'] for item in _completude_perfil_itens(profile) if item['atendido'])
+    pontos = sum(item['pontos'] for item in _completude_perfil_itens(profile, papel) if item['atendido'])
     return min(100, pontos)
 
 
@@ -515,7 +563,7 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
     total_avaliacoes = profile.avaliacoes_recebidas.filter(
         papel_avaliado=papel, deletado=False,
     ).count()
-    completude_itens = _completude_perfil_itens(profile)
+    completude_itens = _completude_perfil_itens(profile, papel)
     completude = min(100, sum(item['pontos'] for item in completude_itens if item['atendido']))
     bonus_completude = round(completude * 0.30)
 

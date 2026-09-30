@@ -21,7 +21,7 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RF04** Redefinição de senha por e-mail. [ok]
 - **RF05** No primeiro acesso, o usuário escolhe o papel Freelancer ou Contratante, que não pode ser alterado depois. O contratante informa se é pessoa física ou empresa com CNPJ. [ok]
 - **RF06** Contas de Administrador existem apenas como superusuário do Django e entram por um login de moderação próprio. [ok]
-- **RF07** Edição de perfil: dados pessoais, foto, banner, categorias, habilidades, experiências, certificados, currículo em PDF, redes sociais, visibilidade de contato e dados da empresa. [ok]
+- **RF07** Edição de perfil conforme o papel. Freelancer: dados pessoais, foto, banner, categorias, habilidades, experiências, certificados, currículo em PDF e disponibilidade. Contratante: serviços que costuma contratar e como trabalha com freelancers; se for empresa com CNPJ, também nome, o que a empresa faz, ramos de atuação, porte, ano de fundação, responsável pelas contratações, CNPJ (não exibido publicamente) e site. Os dois: redes sociais, localização e visibilidade de e-mail e telefone. [ok]
 - **RF08** Exclusão da própria conta (exclusão lógica). [ok]
 
 **Visitante**
@@ -69,7 +69,7 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RNF04** Toda regra de papel e de permissão é validada no backend. O frontend apenas reflete essas regras.
 - **RNF05** Chaves e segredos ficam só nos arquivos `.env`, fora do Git. O webhook do Stripe é validado por assinatura e é idempotente.
 - **RNF06** Stripe em modo de teste, com Checkout hospedado: nenhum dado de cartão passa pelo servidor da aplicação.
-- **RNF07** LGPD: exclusão lógica (soft delete), controle de visibilidade de e-mail e telefone e exclusão de conta pelo próprio usuário.
+- **RNF07** LGPD: exclusão lógica (soft delete), controle de visibilidade de e-mail e telefone (respeitado também pela API pública de perfil) e exclusão de conta pelo próprio usuário.
 - **RNF08** Mensagens do chat entregues em cerca de 1 s na rede local (Django Channels + Redis Pub/Sub), com histórico gravado no PostgreSQL.
 - **RNF09** Operações críticas (aprovação de candidatura, pagamento, decisões de moderação) rodam em transação atômica com bloqueio de linha.
 - **RNF10** Execução local em Windows 10/11 com um único comando (`npm run dev:checkout`), usando o PostgreSQL do Supabase compartilhado pelo grupo.

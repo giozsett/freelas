@@ -6,6 +6,7 @@ import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
+import SobreContratante from '../components/SobreContratante';
 import { PAPEL_CONTRATANTE, PAPEIS_REPUTACAO } from '../constants/papeis';
 
 const API = 'http://localhost:8000';
@@ -68,6 +69,11 @@ export default function Profile() {
           porte_empresa: data.porte_empresa || '',
           cnpj: data.cnpj || '',
           site_empresa: data.site_empresa || '',
+          ano_fundacao: data.ano_fundacao || null,
+          responsavel_nome: data.responsavel_nome || '',
+          responsavel_cargo: data.responsavel_cargo || '',
+          servicos_contratados: data.servicos_contratados || [],
+          como_trabalha: data.como_trabalha || '',
         });
       })
       .catch(err => console.error(err));
@@ -111,7 +117,21 @@ export default function Profile() {
     plan: profile.subscription_plan
   };
 
-  const ehEmpresaCnpj = authUser?.profile?.papel === PAPEL_CONTRATANTE && profile.tipo_empresa === 'cnpj';
+  const ehContratante = authUser?.profile?.papel === PAPEL_CONTRATANTE;
+  const ehEmpresaCnpj = ehContratante && profile.tipo_empresa === 'cnpj';
+  // Contratante não tem as abas de freelancer (habilidades, experiência e formação)
+  const abas = ehContratante
+    ? [
+      { key: 'sobre', label: ehEmpresaCnpj ? 'Sobre a empresa' : 'Sobre' },
+      { key: 'reviews', label: 'Avaliações e Comentários' },
+    ]
+    : [
+      { key: 'skills', label: 'Habilidades e Especialidades' },
+      { key: 'experiencia', label: `Experiência${experiencias.length > 0 ? ` (${experiencias.length})` : ''}` },
+      { key: 'certificados', label: `Formação Acadêmica${certificados.length > 0 ? ` (${certificados.length})` : ''}` },
+      { key: 'reviews', label: 'Avaliações e Comentários' },
+    ];
+  const abaAtiva = abas.some(aba => aba.key === activeTab) ? activeTab : abas[0].key;
   // A completude do perfil é a mesma em qualquer papel
   const completudePerfil = Object.values(reputacao).find(Boolean)?.completude_perfil_detalhe;
   const nomeExibido = ehEmpresaCnpj && profile.nome_empresa ? profile.nome_empresa : userContext.name;
@@ -150,21 +170,23 @@ export default function Profile() {
                   Empresa com CNPJ
                 </span>
               )}
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.3rem 0.8rem',
-                borderRadius: '20px',
-                fontSize: '0.85rem',
-                fontWeight: '600',
-                background: profile.disponivel ? 'var(--success-soft)' : 'var(--danger-soft)',
-                color: profile.disponivel ? 'var(--success-color)' : 'var(--danger-color)',
-                border: `1px solid ${profile.disponivel ? 'var(--success-color)' : 'var(--danger-color)'}`
-              }}>
-                {profile.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                {profile.disponivel ? 'Disponível' : 'Indisponível'}
-              </span>
+              {!ehContratante && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  padding: '0.3rem 0.8rem',
+                  borderRadius: '20px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  background: profile.disponivel ? 'var(--success-soft)' : 'var(--danger-soft)',
+                  color: profile.disponivel ? 'var(--success-color)' : 'var(--danger-color)',
+                  border: `1px solid ${profile.disponivel ? 'var(--success-color)' : 'var(--danger-color)'}`
+                }}>
+                  {profile.disponivel ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                  {profile.disponivel ? 'Disponível' : 'Indisponível'}
+                </span>
+              )}
               <Link to="/profile/edit" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', cursor: 'pointer' }}>
                 <Edit3 size={18} />
               </Link>
@@ -213,7 +235,7 @@ export default function Profile() {
                   </a>
                 </span>
               ))}
-              {profile.curriculo && (
+              {!ehContratante && profile.curriculo && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Upload size={18} />
                   <a href={profile.curriculo} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-color)', textDecoration: 'underline' }}>
@@ -269,23 +291,22 @@ export default function Profile() {
 
         {/* Tabs */}
         <div className="profile-tabs scroll-fade scroll-fade--bg" role="tablist" ref={tabsScrollRef}>
-          {[
-            { key: 'skills', label: 'Habilidades e Especialidades' },
-            { key: 'experiencia', label: `Experiência${experiencias.length > 0 ? ` (${experiencias.length})` : ''}` },
-            { key: 'certificados', label: `Formação Acadêmica${certificados.length > 0 ? ` (${certificados.length})` : ''}` },
-            { key: 'reviews', label: 'Avaliações e Comentários' }
-          ].map(tab => (
+          {abas.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`profile-tab-option${activeTab === tab.key ? ' selected' : ''}`}>
+              className={`profile-tab-option${abaAtiva === tab.key ? ' selected' : ''}`}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        <div key={activeTab} className="tab-content-animation profile-tab-content">
-        {activeTab === 'skills' && (
+        <div key={abaAtiva} className="tab-content-animation profile-tab-content">
+        {abaAtiva === 'sobre' && (
+          <SobreContratante perfil={profile} ehEmpresa={ehEmpresaCnpj} proprio />
+        )}
+
+        {abaAtiva === 'skills' && (
           <div>
             <div style={{ marginBottom: '2.5rem' }}>
               <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>Categorias de Atuação</h2>
@@ -315,7 +336,7 @@ export default function Profile() {
           </div>
         )}
 
-        {activeTab === 'experiencia' && (
+        {abaAtiva === 'experiencia' && (
           <div>
             {experiencias.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -356,7 +377,7 @@ export default function Profile() {
           </div>
         )}
 
-        {activeTab === 'certificados' && (
+        {abaAtiva === 'certificados' && (
           <div>
             {certificados.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -404,7 +425,7 @@ export default function Profile() {
           </div>
         )}
 
-        {activeTab === 'reviews' && (
+        {abaAtiva === 'reviews' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '1.4rem', marginBottom: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>

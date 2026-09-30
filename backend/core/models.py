@@ -56,6 +56,12 @@ class UserProfile(models.Model):
     porte_empresa = models.CharField(max_length=20, choices=PORTES_EMPRESA, null=True, blank=True)
     cnpj = models.CharField(max_length=18, null=True, blank=True)
     site_empresa = models.URLField(max_length=255, null=True, blank=True)
+    ano_fundacao = models.PositiveSmallIntegerField(null=True, blank=True)
+    responsavel_nome = models.CharField(max_length=120, null=True, blank=True)
+    responsavel_cargo = models.CharField(max_length=80, null=True, blank=True)
+    # Perfil de contratante (pessoa física ou empresa): o que contrata e como trabalha
+    servicos_contratados = models.JSONField(blank=True, default=list)
+    como_trabalha = models.TextField(blank=True, default='')
     aceitou_termos_empresa = models.BooleanField(default=False)
     aceitou_termos_freelancer = models.BooleanField(default=False)
     banido = models.BooleanField(default=False, null=True, blank=True)

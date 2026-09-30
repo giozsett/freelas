@@ -63,6 +63,8 @@ classDiagram
         papel: PapelUsuario
         nome_completo
         plano_assinatura
+        servicos_contratados
+        como_trabalha
         pontos_infracao
         banido
         deletado
@@ -252,6 +254,11 @@ erDiagram
         varchar tipo_empresa "pessoa | cnpj"
         varchar nome_empresa
         json ramos_atuacao
+        smallint ano_fundacao
+        varchar responsavel_nome
+        varchar responsavel_cargo
+        json servicos_contratados "contratante"
+        text como_trabalha "contratante"
         json categories
         json skills
         varchar subscription_plan

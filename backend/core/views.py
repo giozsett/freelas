@@ -663,6 +663,21 @@ class PublicProfileAPIView(generics.RetrieveAPIView):
             raise Http404("Usuário não encontrado.")
         return perfil
 
+    def retrieve(self, request, *args, **kwargs):
+        perfil = self.get_object()
+        dados = self.get_serializer(perfil).data
+        if request.user != perfil:
+            # Para os outros, respeita a visibilidade escolhida pelo usuário e
+            # não expõe o CNPJ nem os pontos de infração.
+            profile = dados.get('profile') or {}
+            if not profile.get('email_visivel', True):
+                dados['email'] = None
+            if not profile.get('telefone_visivel', True):
+                profile['telefone'] = None
+            profile.pop('cnpj', None)
+            profile.pop('pontos_infracao', None)
+        return Response(dados)
+
 class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CandidaturaSerializer
     permission_classes = [permissions.IsAuthenticated]

@@ -44,6 +44,14 @@ CONTRATANTES = [
             'ramos_atuacao': ['Pet e Veterinário', 'Saúde e Bem-estar'],
             'porte_empresa': 'pequena',
             'bio_empresa': 'Clínica veterinária com atendimento clínico, vacinação e banho e tosa.',
+            'ano_fundacao': 2016,
+            'responsavel_nome': 'Renata Alves',
+            'responsavel_cargo': 'Sócia e gerente de marketing',
+            'servicos_contratados': ['Design Gráfico', 'Desenvolvimento Web', 'Vídeo, Áudio e Fotografia'],
+            'como_trabalha': (
+                'Enviamos o briefing por escrito com referências, fazemos uma reunião de alinhamento '
+                'no início e damos retorno sobre cada entrega em até 2 dias úteis.'
+            ),
         },
     },
     {
@@ -54,11 +62,21 @@ CONTRATANTES = [
             'ramos_atuacao': ['Alimentação e Restaurantes'],
             'porte_empresa': 'micro',
             'bio_empresa': 'Padaria artesanal com pães, bolos e entregas no bairro.',
+            'ano_fundacao': 2009,
+            'responsavel_nome': 'Paulo Martins',
+            'responsavel_cargo': 'Proprietário',
+            'servicos_contratados': ['Desenvolvimento Web', 'Vídeo, Áudio e Fotografia', 'Marketing Digital'],
+            'como_trabalha': 'Combinamos tudo pelo chat da plataforma e fotografamos os produtos na própria padaria.',
         },
     },
     {
         'chave': 'marcos', 'nome': 'Marcos Oliveira', 'plano': 'Gratuito',
-        'perfil': {'tipo_empresa': 'pessoa'},
+        'perfil': {
+            'tipo_empresa': 'pessoa',
+            'bio': 'Vendo bolos caseiros pelo Instagram e estou montando a minha loja virtual.',
+            'servicos_contratados': ['Design Gráfico', 'Dados e Inteligência Artificial'],
+            'como_trabalha': 'Prefiro conversas objetivas pelo chat e entregas parciais para acompanhar o andamento.',
+        },
     },
 ]
 
