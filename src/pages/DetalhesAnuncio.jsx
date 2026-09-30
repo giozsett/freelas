@@ -2,15 +2,15 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   MapPin, Wifi, Tag, Tags, Star, ShieldCheck, X, AlertTriangle,
-  Flag, Calendar, CalendarClock, CalendarDays, Clock, Inbox, CheckCircle2,
-  Briefcase, HandCoins, FileText, LineChart,
+  Flag, Calendar, CalendarClock, Clock, Inbox, CheckCircle2,
+  HandCoins, FileText, LineChart,
 } from 'lucide-react';
 import ReportModal from '../components/ModalDenuncia';
 import LimitePlano from '../components/LimitePlano';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import { useRole } from '../context/ContextoPapel';
 import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
-import { DIAS_SEMANA, PERIODOS, normalizarDisponibilidade } from '../components/DisponibilidadeSemanal';
 
 // Reputação padrão exibida quando a API não retorna author_reputation
 // (ex.: autor sem perfil associado). Espelha o fallback "sem avaliações"
@@ -29,6 +29,7 @@ const REPUTACAO_PADRAO = {
 export default function AdDetails() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { role } = useRole();
   const { alerta } = useDialogo();
   const navigate = useNavigate();
   const exigirAutenticacao = useExigirAutenticacao();
@@ -85,7 +86,6 @@ export default function AdDetails() {
       .then(data => {
         setAd({
           id: data.id,
-          type: data.role,
           title: data.title,
           status_anuncio: data.status_anuncio || 'Em aberto',
           author_id: data.author,
@@ -103,7 +103,6 @@ export default function AdDetails() {
           description: data.description,
           createdAt: data.created_at,
           deadline: data.deadline || null,
-          availability: normalizarDisponibilidade(data.availability),
           reputation: data.author_reputation || null,
         });
         setIsLoading(false);
@@ -210,7 +209,8 @@ export default function AdDetails() {
   }
 
   const isExpired = ad.status_anuncio === 'Vencido';
-  const isFreelancerAd = ad.type === 'freelancer';
+  // Visitante vê o botão (o login é pedido ao clicar); logado, só freelancer se candidata
+  const podeSeCandidatar = !user || role === 'freelancer';
   const isAuthor = user && user.id === ad.author_id;
   const initial = (ad.author || '?').charAt(0).toUpperCase();
   const rep = ad.reputation || REPUTACAO_PADRAO;
@@ -235,9 +235,9 @@ export default function AdDetails() {
 
       <div className="ad-hero fade-in">
         <div className="ad-hero__chips">
-          <span className={`ad-chip ad-type-chip ${ad.type}`}>
-            {isFreelancerAd ? <Briefcase size={14} /> : <HandCoins size={14} />}
-            {isFreelancerAd ? 'Anúncio de Freelancer' : 'Anúncio de Contratante'}
+          <span className="ad-chip ad-type-chip contractor">
+            <HandCoins size={14} />
+            Vaga de contratante
           </span>
           <span className="ad-chip">
             {ad.locationType === 'remoto' ? <Wifi size={14} /> : <MapPin size={14} />}
@@ -257,11 +257,11 @@ export default function AdDetails() {
               {ad.rating !== null ? (
                 <span className="ad-meta-item rating">
                   <Star size={15} fill="currentColor" /> {ad.rating}
-                  <span className="muted">como {isFreelancerAd ? 'freelancer' : 'contratante'}</span>
+                  <span className="muted">como contratante</span>
                 </span>
               ) : (
                 <span className="ad-meta-item">
-                  <Star size={15} /> Sem avaliações como {isFreelancerAd ? 'freelancer' : 'contratante'} ainda
+                  <Star size={15} /> Sem avaliações como contratante ainda
                 </span>
               )}
               <span className="ad-meta-item">
@@ -302,40 +302,20 @@ export default function AdDetails() {
             </div>
           </div>
 
-          {!isFreelancerAd ? (
-            <div className="ad-panel">
-              <h2 className="ad-panel__heading"><span className="icon-badge warning"><CalendarClock size={18} /></span>Prazo</h2>
-              {ad.deadline ? (
-                <span className="deadline-chip">
-                  <Clock size={16} />
-                  Até {new Date(`${ad.deadline}T00:00:00`).toLocaleDateString()}
-                  <span style={{ opacity: 0.8, fontWeight: 500 }}>
-                    ({diasRestantesPrazo >= 0 ? `${diasRestantesPrazo} dias restantes` : 'prazo encerrado'})
-                  </span>
+          <div className="ad-panel">
+            <h2 className="ad-panel__heading"><span className="icon-badge warning"><CalendarClock size={18} /></span>Prazo</h2>
+            {ad.deadline ? (
+              <span className="deadline-chip">
+                <Clock size={16} />
+                Até {new Date(`${ad.deadline}T00:00:00`).toLocaleDateString()}
+                <span style={{ opacity: 0.8, fontWeight: 500 }}>
+                  ({diasRestantesPrazo >= 0 ? `${diasRestantesPrazo} dias restantes` : 'prazo encerrado'})
                 </span>
-              ) : (
-                <p style={{ opacity: 0.7, margin: 0 }}>Nenhum prazo informado.</p>
-              )}
-            </div>
-          ) : (
-            <div className="ad-panel">
-              <h2 className="ad-panel__heading"><span className="icon-badge"><CalendarDays size={18} /></span>Disponibilidade do freelancer</h2>
-              <div className="availability-view availability-grid">
-                {DIAS_SEMANA.map(([dia, label]) => (
-                  <div key={dia} className="availability-day">
-                    <strong>{label}</strong>
-                    <div className="availability-periods">
-                      {PERIODOS.map(([periodo, periodoLabel]) => (
-                        <span key={periodo} className={`availability-option${ad.availability[dia]?.includes(periodo) ? ' selected' : ''}`}>
-                          {periodoLabel}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+              </span>
+            ) : (
+              <p style={{ opacity: 0.7, margin: 0 }}>Nenhum prazo informado.</p>
+            )}
+          </div>
 
         </div>
 
@@ -392,27 +372,33 @@ export default function AdDetails() {
           ) : (
             <div className="ad-sidebar-card ad-sidebar-card--accent">
               <div className="ad-price">
-                <div className="ad-price__label">{isFreelancerAd ? 'A partir de' : 'Orçamento'}</div>
+                <div className="ad-price__label">Orçamento</div>
                 <div className="ad-price__value">
                   R$ {ad.price}
                   {ad.price_unit && ad.price_unit !== 'total' && <small>{ad.price_unit}</small>}
                 </div>
               </div>
-              <button
-                className="ad-cta"
-                onClick={() => !hasApplied && !isExpired && !candidaturaLimiteAtingido && exigirAutenticacao(() => setIsModalOpen(true))}
-                disabled={hasApplied || isExpired || candidaturaLimiteAtingido}
-              >
-                <Star size={18} fill="currentColor" />
-                {isExpired
-                  ? 'Anúncio expirado'
-                  : hasApplied
-                  ? 'Candidatura Pendente'
-                  : candidaturaLimiteAtingido
-                  ? 'Limite de candidaturas atingido'
-                  : 'Candidatar-se'}
-              </button>
-              {candidaturaLimiteAtingido && !hasApplied && !isExpired && (
+              {podeSeCandidatar ? (
+                <button
+                  className="ad-cta"
+                  onClick={() => !hasApplied && !isExpired && !candidaturaLimiteAtingido && exigirAutenticacao(() => setIsModalOpen(true))}
+                  disabled={hasApplied || isExpired || candidaturaLimiteAtingido}
+                >
+                  <Star size={18} fill="currentColor" />
+                  {isExpired
+                    ? 'Anúncio expirado'
+                    : hasApplied
+                    ? 'Candidatura Pendente'
+                    : candidaturaLimiteAtingido
+                    ? 'Limite de candidaturas atingido'
+                    : 'Candidatar-se'}
+                </button>
+              ) : (
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.75rem 0 0', lineHeight: 1.5 }}>
+                  Apenas freelancers podem se candidatar a vagas.
+                </p>
+              )}
+              {podeSeCandidatar && candidaturaLimiteAtingido && !hasApplied && !isExpired && (
                 <p style={{ fontSize: '0.8rem', color: 'var(--danger-color)', marginTop: '0.6rem', marginBottom: 0 }}>
                   Você atingiu o limite de candidaturas do seu plano este mês. <Link to="/plans" style={{ color: 'inherit', fontWeight: 600 }}>Ver planos</Link>
                 </p>

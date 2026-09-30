@@ -2,11 +2,18 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useRole } from '../context/ContextoPapel';
 import { useDialogo } from '../context/ContextoDialogo';
 import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 
 export default function Plans() {
   const { token } = useAuth();
+  const { role } = useRole();
+  // Contratante usa o limite de vagas; freelancer, o de candidaturas.
+  // Visitante (sem papel) vê os dois, identificando a quem cada um se aplica.
+  const visitante = !role;
+  const mostrarAnuncios = role !== 'freelancer';
+  const mostrarCandidaturas = role !== 'contractor';
   const navigate = useNavigate();
   const exigirAutenticacao = useExigirAutenticacao();
   const [loadingPlan, setLoadingPlan] = useState(null);
@@ -117,14 +124,18 @@ export default function Plans() {
             </div>
 
             <ul style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, textAlign: 'left', width: '100%' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span style={{ fontWeight: '500' }}>{plan.ads} anúncios por mês</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês</span>
-              </li>
+              {mostrarAnuncios && (
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                  <CheckCircle size={20} />
+                  <span style={{ fontWeight: '500' }}>{plan.ads} vagas publicadas por mês{visitante && ' (contratantes)'}</span>
+                </li>
+              )}
+              {mostrarCandidaturas && (
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                  <CheckCircle size={20} />
+                  <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês{visitante && ' (freelancers)'}</span>
+                </li>
+              )}
             </ul>
 
             <button

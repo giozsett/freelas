@@ -163,7 +163,7 @@ export default function ManageAdApplications() {
 
                {app.status !== 'pendente' && (
                   <span className="badge" style={{ background: app.status === 'aprovada' ? 'var(--success-color)' : app.status === 'encerrada' ? 'var(--text-secondary)' : 'var(--danger-color)', color: 'white', borderColor: 'transparent' }}>
-                    {app.status === 'aprovada' ? 'Aprovada' : app.status === 'encerrada' ? 'Indisponível' : 'Recusada'}
+                    {app.status === 'aprovada' ? 'Aprovada' : app.status === 'encerrada' ? 'Indisponível' : app.status === 'cancelada' ? 'Acordo cancelado' : 'Recusada'}
                   </span>
                )}
             </div>

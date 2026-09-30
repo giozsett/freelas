@@ -33,11 +33,24 @@ const NOTIF_ICON = {
   pagamento: CreditCard,
 };
 
-// Pendências de candidatura aparecem em "Meus Anúncios" quando o papel ativo é
-// contratante (quem recebe candidaturas) e em "Meus freelas" quando é freelancer
-// (quem se candidatou — a aba de candidaturas fica dentro de Meus freelas).
+// Só o contratante publica anúncios: as pendências de candidatura dele aparecem
+// em "Meus anúncios" (candidaturas recebidas). As do freelancer aparecem em
+// "Meus freelas" (a aba de candidaturas enviadas fica lá dentro).
 function montarSecoesMenu(porTipo, role) {
-  const nomeFreelas = role === 'freelancer' ? 'Meus freelas' : 'Minhas contratações';
+  const ehContratante = role === 'contractor';
+  const itensAtividade = [
+    ...(ehContratante
+      ? [{ icon: FileText, to: '/my-ads', label: 'Meus anúncios', tipos: ['candidatura'], count: porTipo.candidatura || 0 }]
+      : []),
+    {
+      icon: HandCoins,
+      to: '/my-freelas',
+      label: ehContratante ? 'Minhas contratações' : 'Meus freelas',
+      tipos: ehContratante ? ['acordo'] : ['acordo', 'candidatura'],
+      count: (porTipo.acordo || 0) + (ehContratante ? 0 : porTipo.candidatura || 0),
+    },
+    { icon: Star, to: '/my-reviews', label: 'Minhas avaliações', tipos: ['avaliacao'], count: porTipo.avaliacao || 0 },
+  ];
   return [
     {
       titulo: 'Conta',
@@ -49,17 +62,7 @@ function montarSecoesMenu(porTipo, role) {
     },
     {
       titulo: 'Atividade',
-      itens: [
-        { icon: FileText, to: '/my-ads', label: 'Meus anúncios', tipos: ['candidatura'], count: role === 'contractor' ? porTipo.candidatura || 0 : 0 },
-        {
-          icon: HandCoins,
-          to: '/my-freelas',
-          label: nomeFreelas,
-          tipos: role === 'freelancer' ? ['acordo', 'candidatura'] : ['acordo'],
-          count: (porTipo.acordo || 0) + (role === 'freelancer' ? porTipo.candidatura || 0 : 0),
-        },
-        { icon: Star, to: '/my-reviews', label: 'Minhas avaliações', tipos: ['avaliacao'], count: porTipo.avaliacao || 0 },
-      ],
+      itens: itensAtividade,
     },
     {
       titulo: 'Financeiro',
@@ -197,7 +200,7 @@ export default function BarraNavegacao() {
         </div>
         <span className="fn-role-chip">
           {role === 'freelancer' ? <Briefcase size={12} /> : <HandCoins size={12} />}
-          {role === 'freelancer' ? 'Freelancer' : 'Empresa'}
+          {role === 'freelancer' ? 'Freelancer' : 'Contratante'}
         </span>
       </div>
 
@@ -291,10 +294,12 @@ export default function BarraNavegacao() {
 
         {/* ── Ações à direita — ocultas em telas estreitas em favor do ☰ ── */}
         <div className="fn-actions">
-          <Link to="/create-ad" className="fn-cta">
-            <Plus size={15} />
-            Postar anúncio
-          </Link>
+          {role === 'contractor' && (
+            <Link to="/create-ad" className="fn-cta">
+              <Plus size={15} />
+              Postar anúncio
+            </Link>
+          )}
 
           <Link to="/chat" className="fn-icon-btn" title="Mensagens" aria-label="Mensagens">
             <MessageSquare size={19} />

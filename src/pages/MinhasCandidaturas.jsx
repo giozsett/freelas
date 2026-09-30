@@ -42,6 +42,14 @@ const STATUS_CONFIG = {
     sideColor: 'var(--danger-color)',
     description: 'O anunciante escolheu outra proposta.',
   },
+  cancelada: {
+    badgeBg: 'var(--danger-soft)',
+    badgeColor: 'var(--danger-color)',
+    label: 'Acordo cancelado',
+    icon: XCircle,
+    sideColor: 'var(--danger-color)',
+    description: 'Sua candidatura foi aprovada, mas o acordo foi cancelado (por exemplo, o contratante não pagou no prazo). Veja os detalhes em Meus freelas.',
+  },
 };
 
 // Mesma mensagem usada no backend (serializers.CandidaturaSerializer) tanto para
@@ -65,6 +73,7 @@ function getStatusInfo(app) {
       description: ANUNCIO_INDISPONIVEL_MOTIVO,
     };
   }
+  if (app.status === 'cancelada') return STATUS_CONFIG.cancelada;
   if (app.indisponivel || app.status === 'encerrada') {
     return {
       badgeBg: 'var(--pending-card)',
@@ -78,13 +87,14 @@ function getStatusInfo(app) {
   return STATUS_CONFIG[app.status] || STATUS_CONFIG.pendente;
 }
 
-// Candidaturas finalizadas: recusadas, aprovadas, encerradas e com anúncio
-// indisponível (excluído pelo anunciante ou vencido).
+// Candidaturas finalizadas: recusadas, aprovadas, encerradas, com acordo
+// cancelado e com anúncio indisponível (excluído pelo anunciante ou vencido).
 function isFinalizada(app) {
   return (
     app.status === 'aprovada' ||
     app.status === 'recusada' ||
     app.status === 'encerrada' ||
+    app.status === 'cancelada' ||
     isAnuncioIndisponivel(app)
   );
 }
@@ -267,7 +277,7 @@ export function CandidaturasView({ showHeader = true }) {
         <div className="mc-list" key={activeTab}>
           {visibleApplications.map((app, index) => {
             const status = getStatusInfo(app);
-            const isUnavailable = app.indisponivel || app.status === 'encerrada';
+            const isUnavailable = (app.indisponivel || app.status === 'encerrada') && app.status !== 'cancelada';
 
             return (
               <div

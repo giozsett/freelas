@@ -27,6 +27,7 @@ import Configuracoes from './pages/Configuracoes';
 import EscolherPapel from './pages/EscolherPapel';
 import CriarPerfilEmpresa from './pages/CriarPerfilEmpresa';
 import { ProvedorDialogo } from './context/ContextoDialogo';
+import { PAPEL_CONTRATANTE, PAPEL_FREELANCER } from './constants/papeis';
 
 function ConteudoApp() {
   const location = useLocation();
@@ -43,15 +44,15 @@ function ConteudoApp() {
           <Route path="/register" element={<Cadastro />} />
           <Route path="/profile" element={<RotaPrivada><Perfil /></RotaPrivada>} />
           <Route path="/profile/edit" element={<RotaPrivada><EditarPerfil /></RotaPrivada>} />
-          <Route path="/create-ad" element={<RotaPrivada><CriarAnuncio /></RotaPrivada>} />
-          <Route path="/edit-ad/:id" element={<RotaPrivada><EditarAnuncio /></RotaPrivada>} />
+          <Route path="/create-ad" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><CriarAnuncio /></RotaPrivada>} />
+          <Route path="/edit-ad/:id" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><EditarAnuncio /></RotaPrivada>} />
           <Route path="/ad/:id" element={<DetalhesAnuncio />} />
           <Route path="/chat" element={<RotaPrivada><Conversa /></RotaPrivada>} />
           <Route path="/chat/:acordoId" element={<RotaPrivada><Conversa /></RotaPrivada>} />
           <Route path="/plans" element={<Planos />} />
-          <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
-          <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
-          <Route path="/my-applications" element={<RotaPrivada><Navigate to="/my-freelas?tab=candidaturas" replace /></RotaPrivada>} />
+          <Route path="/my-ads" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><MeusAnuncios /></RotaPrivada>} />
+          <Route path="/my-ads/manage/:id" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><GerenciarCandidaturas /></RotaPrivada>} />
+          <Route path="/my-applications" element={<RotaPrivada papel={PAPEL_FREELANCER}><Navigate to="/my-freelas?tab=candidaturas" replace /></RotaPrivada>} />
           <Route path="/user/:id" element={<RotaPrivada><PerfilPublico /></RotaPrivada>} />
           <Route path="/moderator-login" element={<LoginModerador />} />
           <Route path="/moderation-panel" element={<PainelModeracao />} />

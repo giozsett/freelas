@@ -7,6 +7,7 @@ import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
 import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
+import { PAPEL_CONTRATANTE, PAPEL_FREELANCER } from '../constants/papeis';
 
 const API = 'http://localhost:8000';
 
@@ -85,15 +86,18 @@ export default function PublicProfile() {
           roles: [
             {
               type: 'Freelancer',
+              papel: PAPEL_FREELANCER,
               rating: data.resumo_avaliacoes?.freelancer?.nota,
               reviews: data.resumo_avaliacoes?.freelancer?.total || 0,
             },
             {
               type: 'Contratante',
+              papel: PAPEL_CONTRATANTE,
               rating: data.resumo_avaliacoes?.contratante?.nota,
               reviews: data.resumo_avaliacoes?.contratante?.total || 0,
             },
-          ],
+          // Papel fixo: mostra só a nota do papel da conta (contas antigas sem papel mostram as duas)
+          ].filter(r => !data.profile?.papel || r.papel === data.profile.papel),
           reviews: Array.isArray(data.avaliacoes_recebidas) ? data.avaliacoes_recebidas : [],
         }));
         if (data.reputacao) setReputacao(data.reputacao);
@@ -123,7 +127,7 @@ export default function PublicProfile() {
     );
   }
 
-  const ehEmpresaCnpj = user.profile?.papel === 'empresa' && user.profile?.tipo_empresa === 'cnpj';
+  const ehEmpresaCnpj = user.profile?.papel === PAPEL_CONTRATANTE && user.profile?.tipo_empresa === 'cnpj';
   const nomeExibido = ehEmpresaCnpj && user.profile?.nome_empresa ? user.profile.nome_empresa : user.name;
   const bioExibida = ehEmpresaCnpj && user.profile?.bio_empresa
     ? user.profile.bio_empresa

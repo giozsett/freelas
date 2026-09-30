@@ -5,13 +5,11 @@ import {
   CircleDot, CircleX, Eye, Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
-import { useRole } from '../context/ContextoPapel';
 import { useNotificacoes } from '../context/ContextoNotificacao';
 import LimitePlano from '../components/LimitePlano';
 
 export default function MyAds() {
   const { user } = useAuth();
-  const { role } = useRole();
   const { marcarLidas } = useNotificacoes();
   const [myAds, setMyAds] = useState([]);
   const [statusFilter, setStatusFilter] = useState('ativos');
@@ -30,8 +28,8 @@ export default function MyAds() {
     fetch('http://localhost:8000/api/ads/?all=true')
       .then(res => res.json())
       .then(data => {
-        // Separação estrita por papel: só anúncios postados no papel atual
-        const userAds = data.filter(ad => ad.author === user.id && ad.role === role);
+        // Só contratantes publicam: todos os anúncios do usuário são vagas
+        const userAds = data.filter(ad => ad.author === user.id);
         setMyAds(userAds);
         setIsLoading(false);
       })
@@ -39,7 +37,7 @@ export default function MyAds() {
         console.error('Error fetching ads', err);
         setIsLoading(false);
       });
-  }, [user, role]);
+  }, [user]);
 
   const isFinalized = (ad) => String(ad.status_anuncio || '').toLowerCase() === 'finalizado';
   const isExpired = (ad) => String(ad.status_anuncio || '').toLowerCase() === 'vencido';

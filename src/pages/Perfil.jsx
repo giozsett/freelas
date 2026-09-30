@@ -6,6 +6,7 @@ import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
+import { PAPEL_CONTRATANTE } from '../constants/papeis';
 
 const API = 'http://localhost:8000';
 
@@ -112,7 +113,7 @@ export default function Profile() {
     plan: profile.subscription_plan
   };
 
-  const ehEmpresaCnpj = authUser?.profile?.papel === 'empresa' && profile.tipo_empresa === 'cnpj';
+  const ehEmpresaCnpj = authUser?.profile?.papel === PAPEL_CONTRATANTE && profile.tipo_empresa === 'cnpj';
   const nomeExibido = ehEmpresaCnpj && profile.nome_empresa ? profile.nome_empresa : userContext.name;
   const bioExibida = ehEmpresaCnpj && profile.bio_empresa
     ? profile.bio_empresa

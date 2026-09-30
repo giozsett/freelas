@@ -15,6 +15,7 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import DashboardModeracao from './DashboardModeracao';
 import { useDialogo } from '../context/ContextoDialogo';
 import useScrollEdges from '../hooks/useScrollEdges';
+import { ROTULO_MOTIVO_PROBLEMA } from '../constants/acordos';
 
 const API = 'http://localhost:8000';
 const PAGE_SIZE = 10;
@@ -276,6 +277,7 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
                 <div><strong>Freelancer:</strong><br />{item.nome_prestador || '—'}</div>
                 <div><strong>Status do acordo:</strong><br />{item.status_acordo || '—'}</div>
                 {isCancellation && <div><strong>Valor:</strong><br />{formatMoney(item.valor_acordado)}</div>}
+                {isCancellation && <div><strong>Motivo relatado:</strong><br />{ROTULO_MOTIVO_PROBLEMA[item.motivo] || '—'}</div>}
               </div>
 
               <div style={{ marginTop: '1rem' }}>

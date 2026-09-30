@@ -11,6 +11,14 @@ import {
 
 const PAGE_SIZE = 9;
 
+// Só contratantes publicam anúncios: a página lista vagas para todo mundo,
+// muda apenas a chamada conforme quem está vendo.
+const SUBTITULO_POR_PAPEL = {
+  freelancer: 'Encontre vagas publicadas por contratantes e envie sua candidatura.',
+  contractor: 'Vagas publicadas por pessoas e empresas contratantes. Publique a sua em "Criar anúncio".',
+};
+const SUBTITULO_VISITANTE = 'Vagas publicadas por pessoas e empresas contratantes. Crie sua conta para se candidatar ou contratar.';
+
 function ComboFiltro({ label, placeholder, valor, opcoes, onSelecionar, hint }) {
   const [query, setQuery] = useState(valor);
   const [aberto, setAberto] = useState(false);
@@ -124,7 +132,6 @@ export default function Home() {
           // Normalize backend data to match frontend expectations
           const normalizedAds = data.map(ad => ({
             id: ad.id,
-            type: ad.role, // 'freelancer' or 'contractor'
             title: ad.title || ad.titulo || '',
             author_id: ad.author,
             author: ad.author_name || 'Usuário Desconhecido',
@@ -171,13 +178,9 @@ export default function Home() {
 
   useEffect(() => {
     setPagina(1);
-  }, [role, categoryFilter, skillFilter, locationTypeFilter, estadoFilter, cidadeFilter, searchQuery, minPriceFilter, maxPriceFilter]);
+  }, [categoryFilter, skillFilter, locationTypeFilter, estadoFilter, cidadeFilter, searchQuery, minPriceFilter, maxPriceFilter]);
 
   const filteredAds = ads.filter((ad) => {
-    // Show opposite ads: if I am freelancer, I want to see contractor ads
-    const targetAdType = role === 'freelancer' ? 'contractor' : 'freelancer';
-    if (ad.type !== targetAdType) return false;
-
     // Hide approved/finalized ads from the main page
     if (ad.status && ad.status !== 'Em aberto' && ad.status !== 'Ativo' && ad.status !== '') return false;
 
@@ -274,7 +277,10 @@ export default function Home() {
       {/* Main Content */}
       <main className="fade-in">
         <div className="ads-toolbar">
-          <h2>{role === 'freelancer' ? 'Vagas de freelancer' : 'Vagas de contratante'}</h2>
+          <div>
+            <h2>Vagas</h2>
+            <p className="ads-toolbar__subtitulo">{SUBTITULO_POR_PAPEL[role] || SUBTITULO_VISITANTE}</p>
+          </div>
           {!adsLoading && filteredAds.length > 0 && (
             <span className="ads-toolbar__count">
               Mostrando {inicioPagina + 1}–{Math.min(inicioPagina + PAGE_SIZE, filteredAds.length)} de {filteredAds.length} anúncios
@@ -300,7 +306,7 @@ export default function Home() {
               {filteredAds.length === 0 && (
                 <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
                   <h3>Ops! Nenhum anúncio encontrado.</h3>
-                  <p>Tente ajustar seus filtros ou mude de aba.</p>
+                  <p>Tente ajustar seus filtros.</p>
                 </div>
               )}
             </div>

@@ -62,7 +62,7 @@ export default function AdCard({ ad }) {
 
       <div className="ad-list-card__zone ad-list-card__zone--footer">
         <div className="ad-list-card__price">
-          <span className="label">{ad.type === 'freelancer' ? 'A partir de' : 'Orçamento'}</span>
+          <span className="label">Orçamento</span>
           <strong>
             R$ {ad.price}
             {ad.priceUnit && ad.priceUnit !== 'total' && <small>{ad.priceUnit}</small>}

@@ -1,13 +1,16 @@
 # Freelas
 - Projeto de plataforma para freelancers que buscam oportunidades de emprego e contratantes que desejam contratar os serviços de um profissional freelancer.
-- Usuários devem ter a possibilidade de postar anúncios de trabalho remotos e presenciais como freelancer ou contratante; editar e excluir anúncios que postaram; candidatar-se nos anúncios postados por outros usuários; aprovar solicitações de candidatura nos anúncios que postaram; solicitar alterações ou cancelamentos dos acordos de serviço (gerados após a aprovação da candidatura); trocar mensagens sobre o freela (acordo de serviço) em um chat; avaliar-se mutuamente após a conclusão de um serviço; denunciar um usuário cuja conduta julguem imprópria;
+- Cada conta tem um papel fixo, escolhido no primeiro acesso: freelancer ou contratante (pessoa física ou empresa). Contas de administração são superusuários do Django.
+- Contratantes publicam anúncios de vaga remotos e presenciais, editam e excluem as vagas que postaram e aprovam candidaturas; freelancers se candidatam às vagas; solicitar alterações ou cancelamentos dos acordos de serviço (gerados após a aprovação da candidatura); trocar mensagens sobre o freela (acordo de serviço) em um chat; avaliar-se mutuamente após a conclusão de um serviço; denunciar um usuário cuja conduta julguem imprópria;
 
 
 ## REGRAS DE NEGÓCIO
+- O papel da conta (freelancer, contratante ou administrador) é definido no primeiro acesso e não pode ser alterado. Quem quiser atuar nos dois papéis precisa de duas contas.
+- Somente contratantes publicam anúncios (vagas) e somente freelancers se candidatam. Em todo acordo, o autor da vaga é o contratante e é ele quem paga.
 - A plataforma deve permitir que usuários não autenticados possam navegar na plataforma, visualizar assinaturas, etc.
 - A plataforma não gera contratos de validade jurídica para cada candidatura aprovada.
-- O limite de anúncios que cada usuário pode postar por mês é definido por seu plano de assinatura (Gratuito: 3, Gold: 6, Platinum: ilimitado);
-- O limite de candidaturas que cada usuário pode enviar por mês também é definido por seu plano de assinatura (Gratuito: 5, Gold: 20, Platinum: ilimitado);
+- O limite de anúncios que cada contratante pode postar por mês é definido por seu plano de assinatura (Gratuito: 3, Gold: 6, Platinum: ilimitado);
+- O limite de candidaturas que cada freelancer pode enviar por mês também é definido por seu plano de assinatura (Gratuito: 5, Gold: 20, Platinum: ilimitado);
 - A plataforma cobra uma taxa de 10% sobre o valor total de cada acordo fechado.
 - Cada anúncio possui um prazo de 30 dias, após isso ele é considerado como vencido, para preservar o sistema de planos de assinatura.
 - Usuários que fizerem muitas denúncias em um curto período de tempo deve tomar um soft ban, suas denúncias não serão mais consideradas por um tempo.
@@ -20,10 +23,10 @@
 - Login: usuários efetuam login com email e senha (possibilidade de fazer login com conta do google)
 - Cadastro: usuários podem criar uma conta com nome, email e senha (possibilidade de cadastro com conta do google)
 
-- Lista de anúncios: usuários podem ver os anúncios ativos de forma resumida, filtrando pelo papel de freelancer ou contratante, e utilizando os filtros de valor, local, e categoria deserviço e habilidades na barra lateral.
-- Criar Anuncio: através desta página os usuários poderão criar anúncios como freelancer ou como contratante
+- Lista de anúncios: visitantes e usuários veem as vagas ativas de forma resumida, utilizando os filtros de valor, local, categoria de serviço e habilidades na barra lateral.
+- Criar Anuncio: através desta página os contratantes criam anúncios de vaga
 - Editar anúncio: o usuário pode editar o anúncio que ele postou
-- Visualização do anúncio: visualização das informações detalhadas do anúncio. Visualização da reputação do autor do anúncio, descrição, disponibilidade (se for freelancer), prazo, se for contratante, etc
+- Visualização do anúncio: visualização das informações detalhadas da vaga. Visualização da reputação do contratante, descrição, prazo, etc
     - Área do anunciante: aba dentro da visualização do anúncio onde o autor visualiza as solicitações recebidas no anúncio, etc
     - Candidatura: modal de envio de solicitação de candidatura em um anúncio (presente na página de visualização do anúncio)
 

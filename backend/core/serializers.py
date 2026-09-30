@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from .models import UserProfile
 from .notificacoes import criar_notificacao
+from .papeis import PAPEIS_ESCOLHIVEIS, PAPEL_CONTRATANTE, PAPEL_FREELANCER
 from .validacao_senha import validar_forca_senha
 
 def _destruir_imagem_cloudinary(url):
@@ -30,7 +31,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     experiencias = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
     papel = serializers.ChoiceField(
-        choices=[('freelancer', 'Freelancer'), ('empresa', 'Empresa')],
+        choices=PAPEIS_ESCOLHIVEIS,
         required=False,
         allow_null=True,
         allow_blank=True,
@@ -85,8 +86,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
         # não apaga o texto que já existia (empresas cadastradas antes dos ramos).
         if dados.get('ramos_atuacao'):
             dados['ramo_empresa'] = ', '.join(dados['ramos_atuacao'])
-        # Quando o pedido está alterando para empresa, exige o perfil de contratante
-        if 'papel' in dados and dados['papel'] == 'empresa':
+        # O papel é escolhido uma única vez, logo após o cadastro
+        papel_atual = self.instance.papel if self.instance else None
+        if 'papel' in dados and papel_atual and dados['papel'] != papel_atual:
+            raise serializers.ValidationError({'papel': 'O papel da conta não pode ser alterado depois do cadastro.'})
+        # Ao escolher contratante, exige o perfil de contratante
+        if 'papel' in dados and dados['papel'] == PAPEL_CONTRATANTE:
             tipo = dados.get('tipo_empresa', self.instance.tipo_empresa if self.instance else None)
             termos = dados.get('aceitou_termos_empresa', self.instance.aceitou_termos_empresa if self.instance else False)
             if not tipo:
@@ -100,8 +105,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({'ramo_empresa': 'Informe o ramo/segmento da empresa.'})
                 if not (dados.get('bio_empresa') or (self.instance and self.instance.bio_empresa)):
                     raise serializers.ValidationError({'bio_empresa': 'Conte o que a empresa faz.'})
-        # Quando o pedido está alterando para freelancer, exige os termos do freelancer
-        if 'papel' in dados and dados['papel'] == 'freelancer':
+        # Ao escolher freelancer, exige os termos do freelancer
+        if 'papel' in dados and dados['papel'] == PAPEL_FREELANCER:
             termos_freelancer = dados.get('aceitou_termos_freelancer', self.instance.aceitou_termos_freelancer if self.instance else False)
             if not termos_freelancer:
                 raise serializers.ValidationError({'aceitou_termos_freelancer': 'Você precisa aceitar os Termos de Uso do perfil de freelancer.'})
@@ -681,10 +686,10 @@ class AdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ad
         fields = '__all__'
-        read_only_fields = ('author', 'created_at')
+        # Todo anúncio é uma vaga de contratante: o role é gravado pela view
+        read_only_fields = ('author', 'created_at', 'role')
 
     def validate(self, attrs):
-        role = attrs.get('role', getattr(self.instance, 'role', None))
         location_type = attrs.get('location_type', getattr(self.instance, 'location_type', None))
         description = attrs.get('description', getattr(self.instance, 'description', '') or '')
         if len(description) > 1000:
@@ -694,17 +699,6 @@ class AdSerializer(serializers.ModelSerializer):
             cidade = attrs.get('cidade', getattr(self.instance, 'cidade', None))
             if not cidade:
                 raise serializers.ValidationError({'cidade': 'A cidade é obrigatória para serviços presenciais.'})
-
-        if role == 'freelancer':
-            availability = attrs.get('availability', getattr(self.instance, 'availability', None))
-            if not isinstance(availability, dict):
-                raise serializers.ValidationError({'availability': 'Informe a disponibilidade por dia e período.'})
-            periodos_validos = {'manha', 'tarde', 'noite'}
-            if not any(
-                isinstance(periodos, list) and periodos_validos.intersection(periodos)
-                for periodos in availability.values()
-            ):
-                raise serializers.ValidationError({'availability': 'Selecione ao menos um período disponível.'})
         return attrs
 
     def get_author_name(self, obj):
@@ -716,12 +710,8 @@ class AdSerializer(serializers.ModelSerializer):
             return None
         if not hasattr(obj.author, 'profile'):
             return None
-        papel_avaliado = 'contratante' if obj.role in {'contractor', 'contratante'} else 'freelancer'
-        media = getattr(
-            obj,
-            '_media_contratante' if papel_avaliado == 'contratante' else '_media_freelancer',
-            None,
-        )
+        # O autor de um anúncio é sempre avaliado como contratante
+        media = getattr(obj, '_media_contratante', None)
         if media is None:
             return None
         return round(float(media), 1)
@@ -729,9 +719,8 @@ class AdSerializer(serializers.ModelSerializer):
     def get_author_reputation(self, obj):
         if not obj.author or not hasattr(obj.author, 'profile'):
             return None
-        papel = 'contratante' if obj.role in {'contractor', 'contratante'} else 'freelancer'
         modalidade = 'presencial' if obj.location_type == 'presencial' else 'remoto'
-        return calcular_reputacao_usuario(obj.author.profile, papel=papel, modalidade=modalidade)
+        return calcular_reputacao_usuario(obj.author.profile, papel=PAPEL_CONTRATANTE, modalidade=modalidade)
 
 from .models import Candidatura
 
@@ -845,7 +834,7 @@ class SolicitacaoCancelamentoAcordoSerializer(serializers.ModelSerializer):
         model = SolicitacaoCancelamentoAcordo
         fields = '__all__'
         read_only_fields = (
-            'solicitante', 'papel_solicitante', 'status', 'analisado_por',
+            'solicitante', 'papel_solicitante', 'motivo', 'status', 'analisado_por',
             'resposta_admin', 'criado_em', 'analisado_em',
         )
 
@@ -882,6 +871,7 @@ class SolicitacaoAlteracaoAcordoSerializer(serializers.ModelSerializer):
 class AcordoServicoSerializer(serializers.ModelSerializer):
     freelancer_id = serializers.SerializerMethodField()
     contratante_id = serializers.SerializerMethodField()
+    meu_papel = serializers.SerializerMethodField()
     anuncio_id = serializers.SerializerMethodField()
     aprovar_solicitacao = serializers.BooleanField(write_only=True, required=False)
     recusar_solicitacao = serializers.BooleanField(write_only=True, required=False)
@@ -889,6 +879,9 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
     cancelamento_pendente = serializers.SerializerMethodField()
     taxa_plataforma = serializers.FloatField(read_only=True)
     valor_total = serializers.FloatField(source='valor_total_com_taxa', read_only=True)
+    prazo_pagamento = serializers.DateTimeField(read_only=True)
+    prazo_confirmacao = serializers.DateTimeField(read_only=True)
+    atrasado = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = AcordoServico
@@ -897,17 +890,28 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
             'status_acordo', 'valor_acordado', 'titulo_anuncio',
             'descricao_servico', 'unidade_valor', 'proposta_aceita',
             'nome_contratante', 'nome_prestador', 'data_confirmacao',
-            'concluido_em', 'cancelado_em', 'candidatura',
+            'entregue_em', 'concluido_em', 'cancelado_em',
+            'motivo_cancelamento', 'candidatura',
         )
 
     def get_freelancer_id(self, obj):
-        if obj.candidatura and obj.candidatura.user:
-            return obj.candidatura.user.id
-        return None
+        _, freelancer = obj.partes()
+        return freelancer.id if freelancer else None
 
     def get_contratante_id(self, obj):
-        if obj.candidatura and obj.candidatura.ad and obj.candidatura.ad.author:
-            return obj.candidatura.ad.author.id
+        contratante, _ = obj.partes()
+        return contratante.id if contratante else None
+
+    def get_meu_papel(self, obj):
+        """Papel de quem está vendo o acordo: 'contratante', 'freelancer' ou None."""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        contratante, freelancer = obj.partes()
+        if request.user == contratante:
+            return PAPEL_CONTRATANTE
+        if request.user == freelancer:
+            return PAPEL_FREELANCER
         return None
 
     def get_anuncio_id(self, obj):
@@ -939,9 +943,7 @@ class AcordoServicoSerializer(serializers.ModelSerializer):
         recusar = validated_data.pop('recusar_solicitacao', None)
         request = self.context.get('request')
         user = request.user if request else None
-        candidatura = instance.candidatura
-        freelancer = candidatura.user if candidatura else None
-        contratante = candidatura.ad.author if candidatura and candidatura.ad else None
+        contratante, freelancer = instance.partes()
         is_admin = bool(user and (user.is_staff or user.is_superuser))
 
         if user not in {freelancer, contratante} and not is_admin:
@@ -1182,8 +1184,7 @@ class AvaliacaoSerializer(serializers.ModelSerializer):
         request = self.context['request']
         acordo = attrs['acordo']
         candidatura = acordo.candidatura
-        freelancer = candidatura.user if candidatura else None
-        contratante = candidatura.ad.author if candidatura and candidatura.ad else None
+        contratante, freelancer = acordo.partes()
 
         if acordo.status_acordo != 'Concluído':
             raise serializers.ValidationError('O acordo precisa estar concluído antes da avaliação.')

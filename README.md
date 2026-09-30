@@ -115,6 +115,11 @@ STRIPE_WEBHOOK_SECRET=        # muda a cada `stripe listen` (veja STRIPE_TESTING
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+
+# Opcionais: prazos do acordo em horas (padrão 72). Use valores curtos para demonstrar,
+# ex.: 0.05 = 3 minutos.
+PRAZO_PAGAMENTO_HORAS=
+PRAZO_CONFIRMACAO_HORAS=
 ```
 
 > Se `DATABASE_URL` ficar vazio, o Django usa um SQLite local (`db.sqlite3`). Para trabalhar no mesmo banco do grupo, use a URL do Supabase.
@@ -196,6 +201,19 @@ stripe listen --forward-to localhost:8000/api/pagamentos/webhook/
 ```
 
 O passo a passo completo dos pagamentos (variáveis, cartões de teste e problemas comuns) está em [`STRIPE_TESTING.md`](STRIPE_TESTING.md).
+
+### Prazos dos acordos
+
+Não há tarefa agendada: os prazos são aplicados sempre que alguém abre as telas de acordos, notificações ou o painel. Para aplicar na hora (por exemplo, durante a apresentação):
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py processar_prazos
+```
+
+- **Pagamento:** o contratante tem `PRAZO_PAGAMENTO_HORAS` para pagar depois da aprovação da candidatura. Se não pagar, o acordo é cancelado e a vaga volta a receber candidaturas.
+- **Confirmação:** depois que o freelancer marca o serviço como entregue, o contratante tem `PRAZO_CONFIRMACAO_HORAS` para confirmar ou relatar um problema. Sem resposta, o acordo é concluído automaticamente.
 
 ### Testes e lint
 
