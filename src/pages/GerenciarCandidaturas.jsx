@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Check, X, Tag } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNotificacoes } from '../context/ContextoNotificacao';
+import SeloPlano from '../components/SeloPlano';
 
 export default function ManageAdApplications() {
   const { id } = useParams();
@@ -154,6 +155,7 @@ export default function ManageAdApplications() {
                      <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.25rem' }}>Candidato</div>
                      <h3 style={{ fontSize: '1.25rem', margin: 0 }}>
                         <Link to={`/user/${app.user}`} className="link-hover-card">{app.applicant_name}</Link>
+                        {' '}<SeloPlano plano={app.applicant_plan} />
                      </h3>
                      <div style={{ fontSize: '0.9rem', opacity: 0.8, marginTop: '0.25rem' }}>
                        Valor proposto do anúncio: <strong>R$ {ad.price}</strong>

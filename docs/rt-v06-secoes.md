@@ -1,7 +1,7 @@
 # RT v06 — seções atualizadas (requisitos, regras e modelagem)
 
 Texto para substituir as seções correspondentes do `RT-TDS-2026-09-09_v05.docx`.
-Marcação de status: **[ok]** já implementado · **[fase 3]** moderação (a implementar).
+Marcação de status: **[ok]** já implementado.
 
 ## Atores
 
@@ -42,7 +42,7 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RF17** O contratante paga o valor acordado + 10% de taxa pelo Stripe. O acordo só inicia após a confirmação do pagamento pelo webhook. [ok]
 - **RF18** O acordo é cancelado automaticamente se o pagamento não for feito dentro do prazo, e a vaga volta a receber candidaturas. [ok]
 - **RF19** O freelancer marca o serviço como entregue/realizado e o contratante confirma a conclusão. Sem resposta dentro do prazo, a conclusão é automática. [ok]
-- **RF20** Qualquer parte relata um problema no acordo (não compareceu, não entregou, fora do combinado, desistência, outro) e o administrador decide entre estorno ao contratante e conclusão. [ok: relato com motivo · fase 3: estorno e pontos de infração]
+- **RF20** Qualquer parte relata um problema no acordo (não compareceu, não entregou, fora do combinado, desistência, outro) e o administrador decide entre cancelar o acordo (com estorno ao contratante, se já pago) ou mantê-lo (concluindo-o, se o serviço já foi entregue), indicando se alguma parte recebe ponto de infração. [ok]
 
 **Comunicação**
 - **RF21** Chat em tempo real entre as partes do acordo, disponível após a aprovação da candidatura. [ok]
@@ -52,13 +52,13 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RF23** Avaliação mútua por critérios (nota de 1 a 5, comentário opcional) após a conclusão. A reputação aparece no perfil e nas vagas. [ok]
 
 **Assinaturas e pagamentos**
-- **RF24** Planos Gratuito, Gold e Platinum. Para o contratante o plano limita as vagas publicadas por mês; para o freelancer, as candidaturas enviadas por mês. Ao atingir o limite, a ação é bloqueada. [ok]
+- **RF24** Planos Gratuito, Gold e Platinum. Para o contratante o plano limita as vagas publicadas por mês; para o freelancer, as candidaturas enviadas por mês. Ao atingir o limite, a ação é bloqueada. Assinantes Gold e Platinum têm vagas e candidaturas exibidas em destaque, com selo do plano. [ok]
 - **RF25** Assinar, cancelar (estorno integral em até 7 dias) e trocar de plano, com renovação mensal automática. [ok]
 - **RF26** Histórico de pagamentos. [ok]
 
 **Moderação**
-- **RF27** Denunciar usuário ou anúncio (somente usuário autenticado). [fase 3]
-- **RF28** O administrador julga denúncias, cancelamentos e disputas, e o denunciante é notificado do resultado. [fase 3]
+- **RF27** Denunciar usuário ou anúncio (somente usuário autenticado; não é possível denunciar a si mesmo nem o próprio anúncio). [ok]
+- **RF28** O administrador julga denúncias e disputas; o denunciante e as partes da disputa são notificados do resultado. [ok]
 - **RF29** Dashboard administrativo com indicadores por período (usuários por papel, acordos, assinaturas, denúncias). [ok]
 
 ## Requisitos não funcionais
@@ -86,9 +86,9 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RN05** Taxa da plataforma de 10% sobre o valor acordado, paga pelo contratante junto com o valor do serviço. O pagamento fica em custódia (simulada) até a conclusão.
 - **RN06** Prazo de pagamento: 72 h após a aprovação da candidatura (configurável). Pagamento aprovado depois do cancelamento é estornado automaticamente. [ok]
 - **RN07** Somente o freelancer marca a entrega e somente o contratante confirma a conclusão. Conclusão automática 3 dias após a entrega, se não houver problema relatado pendente. [ok]
-- **RN08** Disputa decidida contra uma parte gera +1 ponto de infração. Quando a decisão favorece o contratante, o estorno é integral. [fase 3]
-- **RN09** Denúncia procedente gera +1 ponto de infração. Com 3 pontos, o banimento é permanente (login bloqueado e anúncios ocultos). [fase 3]
-- **RN10** Soft ban de denúncias: quem tiver 5 ou mais denúncias improcedentes nos últimos 30 dias, representando 50% ou mais das enviadas no período, fica impedido de denunciar enquanto a condição durar. [fase 3]
+- **RN08** Disputa decidida contra uma parte gera +1 ponto de infração. Quando o acordo pago é cancelado pela moderação, o estorno ao contratante é integral. A parte infratora é indicada pelo administrador. [ok]
+- **RN09** Denúncia procedente gera +1 ponto de infração. Com 3 pontos, o banimento é permanente: login e sessões bloqueados e anúncios ocultos. Cada denúncia é julgada uma única vez. [ok]
+- **RN10** Soft ban de denúncias: quem tiver 5 ou mais denúncias improcedentes nos últimos 30 dias, representando 50% ou mais das enviadas no período, fica impedido de denunciar enquanto a condição durar. [ok]
 - **RN11** Limites mensais dos planos:
 
   | Plano | Vagas publicadas (contratante) | Candidaturas enviadas (freelancer) |

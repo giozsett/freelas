@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MapPin, Star, Wifi, Clock } from 'lucide-react';
 import PropTypes from 'prop-types';
+import SeloPlano from './SeloPlano';
 
 function diasDesde(dataISO) {
   if (!dataISO) return null;
@@ -39,6 +40,7 @@ export default function AdCard({ ad }) {
 
         <div className="ad-list-card__meta">
           <span>{ad.author}</span>
+          <SeloPlano plano={ad.authorPlan} />
         </div>
       </div>
 
@@ -81,6 +83,7 @@ AdCard.propTypes = {
     title: PropTypes.string.isRequired,
     rating: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     author: PropTypes.string,
+    authorPlan: PropTypes.string,
     locationType: PropTypes.string,
     category: PropTypes.string,
     skills: PropTypes.arrayOf(PropTypes.string),

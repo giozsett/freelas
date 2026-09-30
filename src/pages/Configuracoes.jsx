@@ -125,6 +125,10 @@ export default function Configuracoes() {
             : 'Você se candidata às vagas publicadas por contratantes e recebe pelos serviços prestados.'}
           {' '}O tipo de conta é definido no cadastro e não pode ser alterado.
         </p>
+        <p style={{ fontSize: '0.9rem', margin: '0.75rem 0 0', lineHeight: '1.5' }}>
+          <strong>Situação da conta:</strong> {user?.profile?.pontos_infracao || 0} de 3 pontos de infração.
+          <span style={{ opacity: 0.7 }}> Denúncias procedentes e disputas decididas contra você somam pontos; com 3 pontos a conta é banida.</span>
+        </p>
       </div>
 
       {role === 'contractor' && user?.profile?.tipo_empresa === 'cnpj' && (

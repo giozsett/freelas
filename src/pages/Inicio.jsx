@@ -135,6 +135,7 @@ export default function Home() {
             title: ad.title || ad.titulo || '',
             author_id: ad.author,
             author: ad.author_name || 'Usuário Desconhecido',
+            authorPlan: ad.author_plan,
             rating: ad.author_rating || 4.5,
             reviews: 10, // Mock reviews
             category: ad.category || '',

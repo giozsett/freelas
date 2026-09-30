@@ -29,6 +29,12 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.models import SocialAccount
 from .validacao_senha import validar_forca_senha
 from .ciclo_acordo import concluir_acordo, processar_prazos
+from .moderacao import (
+    MENSAGEM_CONTA_BANIDA,
+    aplicar_infracao,
+    em_soft_ban_de_denuncias,
+    usuario_denunciado,
+)
 from .papeis import (
     ANUNCIO_LEGADO_FREELANCER,
     ANUNCIO_VAGA,
@@ -52,6 +58,14 @@ def _conta_foi_removida(user):
     """True quando o usuário já excluiu a conta (soft delete)."""
     perfil = UserProfile.objects.filter(user=user).first()
     return bool(perfil and perfil.deletado)
+
+
+def _conta_banida_response(user):
+    """Resposta 403 quando a conta foi banida pela moderação; None caso contrário."""
+    perfil = UserProfile.objects.filter(user=user).first()
+    if perfil and perfil.banido:
+        return Response({'error': MENSAGEM_CONTA_BANIDA}, status=status.HTTP_403_FORBIDDEN)
+    return None
 
 
 class RegisterAPI(generics.GenericAPIView):
@@ -111,6 +125,9 @@ class LoginAPI(APIView):
 
         user = authenticate(username=candidato.username, password=password)
         if user:
+            banida = _conta_banida_response(user)
+            if banida:
+                return banida
             if VerificacaoEmail.objects.filter(usuario=user, verificado=False).exists():
                 return Response(
                     {'error': 'Confirme seu email para poder entrar.'},
@@ -362,7 +379,8 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.AllowAny()]
+            # Denúncia anônima não é aceita: o soft ban depende de quem denunciou
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):
@@ -384,10 +402,23 @@ class ReportListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+
+        reporter = self.request.user
+        if em_soft_ban_de_denuncias(reporter):
+            raise PermissionDenied(
+                'Você está temporariamente impedido de enviar denúncias porque muitas '
+                'das suas denúncias recentes foram consideradas improcedentes.'
+            )
+        denunciado = usuario_denunciado(
+            serializer.validated_data.get('type'),
+            serializer.validated_data.get('target_id'),
+        )
+        if denunciado == reporter:
+            raise ValidationError('Você não pode denunciar a si mesmo ou o seu próprio anúncio.')
         # Uma denúncia nova nunca pode chegar do cliente já julgada, e quem
         # denunciou é sempre o usuário autenticado (nunca o que o cliente
         # mandar no corpo) — reporter já é read-only no serializer.
-        reporter = self.request.user if self.request.user.is_authenticated else None
         serializer.save(status='pending', reporter=reporter)
 
 class ReportUpdateAPIView(generics.UpdateAPIView):
@@ -404,8 +435,29 @@ class ReportUpdateAPIView(generics.UpdateAPIView):
                 {'error': 'Escolha procedente ou improcedente.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Julgar de novo somaria outro ponto de infração ao denunciado
+        if report.status != 'pending':
+            return Response(
+                {'error': 'Esta denúncia já foi julgada.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         report.status = new_status
         report.save(update_fields=['status'])
+
+        if new_status == 'procedente':
+            aplicar_infracao(
+                usuario_denunciado(report.type, report.target_id),
+                'Uma denúncia contra você foi considerada procedente pela moderação.',
+            )
+        criar_notificacao(
+            usuario=report.reporter,
+            tipo='sistema',
+            titulo='Sua denúncia foi analisada',
+            mensagem=(
+                f'A denúncia sobre "{report.target_name or report.target_id}" foi considerada '
+                f'{"procedente" if new_status == "procedente" else "improcedente"} pela moderação.'
+            ),
+        )
         return Response(self.get_serializer(report).data)
 
 
@@ -431,6 +483,18 @@ MENSAGEM_LIMITE_CANDIDATURAS_ATINGIDO = (
     'Você já atingiu seu limite de candidaturas enviadas esse mês, '
     'atualize seu plano para se candidatar a mais anúncios.'
 )
+
+
+def _prioridade_por_plano(campo_plano):
+    """Expressão de ordenação: Platinum (0), Gold (1), demais planos (2)."""
+    from django.db.models import Case, IntegerField, Value, When
+
+    return Case(
+        When(**{campo_plano: 'Platinum'}, then=Value(0)),
+        When(**{campo_plano: 'Gold'}, then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
 
 
 def _plano_usuario(user):
@@ -497,14 +561,17 @@ class AdListCreateAPIView(generics.ListCreateAPIView):
         queryset = (
             Ad.objects.exclude(deletado=True)
             .exclude(role=ANUNCIO_LEGADO_FREELANCER)
+            .exclude(author__profile__banido=True)
             .select_related('author', 'author__profile')
             .annotate(
                 _media_contratante=Avg(
                     'author__profile__avaliacoes_recebidas__nota_geral',
                     filter=Q(author__profile__avaliacoes_recebidas__papel_avaliado='contratante'),
                 ),
+                # Benefício dos planos: vagas de assinantes aparecem primeiro
+                _prioridade_plano=_prioridade_por_plano('author__profile__subscription_plan'),
             )
-            .order_by('-created_at')
+            .order_by('_prioridade_plano', '-created_at')
         )
         all_ads = self.request.query_params.get('all', 'false').lower() == 'true'
         if not all_ads:
@@ -549,7 +616,7 @@ class AdRetrieveAPIView(generics.RetrieveUpdateDestroyAPIView):
         # Um anúncio vencido ou excluído (soft delete) deixa de ser "público":
         # só quem publicou ou quem já se candidatou a ele pode continuar
         # visualizando os detalhes. Para todo mundo, ele deixa de existir.
-        indisponivel = Q(deletado=True) | Q(status_anuncio='Vencido')
+        indisponivel = Q(deletado=True) | Q(status_anuncio='Vencido') | Q(author__profile__banido=True)
         user = self.request.user
         if not user or not user.is_authenticated:
             return queryset.exclude(indisponivel)
@@ -615,10 +682,13 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
         if user_id:
             queryset = queryset.filter(user=self.request.user)
         if ad_id:
+            # Benefício dos planos: candidaturas de assinantes aparecem primeiro
             queryset = queryset.filter(
                 anuncio_id=ad_id,
                 ad__author=self.request.user,
-            )
+            ).annotate(
+                _prioridade_plano=_prioridade_por_plano('user__profile__subscription_plan'),
+            ).order_by('_prioridade_plano', '-enviado_em')
 
         return queryset
 
@@ -924,6 +994,9 @@ class GoogleSocialLoginAPI(APIView):
         # Conta removida (excluída pelo usuário) não volta a entrar por login social
         if _conta_foi_removida(user):
             return _conta_inexistente_response()
+        banida = _conta_banida_response(user)
+        if banida:
+            return banida
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -1067,6 +1140,9 @@ class LinkedInSocialLoginAPI(APIView):
         # Conta removida (excluída pelo usuário) não volta a entrar por login social
         if _conta_foi_removida(user):
             return _conta_inexistente_response()
+        banida = _conta_banida_response(user)
+        if banida:
+            return banida
 
         # --- Garante que o UserProfile existe ---
         UserProfile.objects.get_or_create(
@@ -1401,6 +1477,13 @@ class SolicitacaoCancelamentoAdminListAPIView(generics.ListAPIView):
 
 
 class DecidirCancelamentoAcordoAPI(APIView):
+    """Decisão da moderação sobre um problema relatado no acordo (disputa).
+
+    - aprovar: cancela o acordo e, se ele já foi pago, estorna o contratante.
+    - recusar: mantém o acordo; se o serviço já tinha sido entregue, conclui.
+    Em qualquer caso, o admin pode indicar a parte infratora, que recebe um
+    ponto de infração (core/moderacao.py).
+    """
     permission_classes = [permissions.IsAdminUser]
 
     def patch(self, request, pk):
@@ -1410,6 +1493,12 @@ class DecidirCancelamentoAcordoAPI(APIView):
         if decisao not in {'aprovar', 'recusar'}:
             return Response(
                 {'error': 'Informe a decisão como "aprovar" ou "recusar".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        parte_infratora = str(request.data.get('parte_infratora') or '').strip() or None
+        if parte_infratora not in {None, 'freelancer', 'contratante'}:
+            return Response(
+                {'error': 'A parte infratora deve ser "freelancer", "contratante" ou vazia.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1427,16 +1516,35 @@ class DecidirCancelamentoAcordoAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
 
+            acordo = solicitacao.acordo
+            contratante, freelancer = acordo.partes()
+
+            # O estorno vem antes de qualquer gravação: se o Stripe recusar,
+            # nada muda e o admin pode tentar de novo.
+            estornado = False
+            if decisao == 'aprovar':
+                pago = acordo.pagamentos.filter(tipo='acordo', status='pago').order_by('-aprovado_em').first()
+                if pago:
+                    try:
+                        estornado = _estornar_no_stripe(pago, 'estornado_disputa')
+                    except stripe.error.StripeError as exc:
+                        return Response(
+                            {'error': getattr(exc, 'user_message', None) or 'O Stripe não conseguiu estornar o pagamento. Tente novamente.'},
+                            status=status.HTTP_502_BAD_GATEWAY,
+                        )
+
             solicitacao.status = 'aprovada' if decisao == 'aprovar' else 'recusada'
             solicitacao.analisado_por = request.user
             solicitacao.resposta_admin = str(request.data.get('resposta_admin') or '').strip() or None
             solicitacao.analisado_em = timezone.now()
+            solicitacao.parte_infratora = parte_infratora
+            solicitacao.estornado = estornado
             solicitacao.save(update_fields=[
                 'status', 'analisado_por', 'resposta_admin', 'analisado_em',
+                'parte_infratora', 'estornado',
             ])
 
             if decisao == 'aprovar':
-                acordo = solicitacao.acordo
                 acordo.status_acordo = 'Cancelado'
                 acordo.cancelado_em = timezone.now()
                 acordo.motivo_cancelamento = 'moderacao'
@@ -1445,11 +1553,29 @@ class DecidirCancelamentoAcordoAPI(APIView):
                     status='cancelado',
                     detalhe_status='cancelamento_acordo_aprovado',
                 )
+                mensagem = f'A moderação cancelou o acordo "{acordo.titulo_anuncio}".'
+                if estornado:
+                    mensagem += ' O pagamento foi estornado ao contratante.'
+                titulo = 'Acordo cancelado'
+            elif acordo.status_acordo == 'Aguardando confirmação':
+                concluir_acordo(acordo, origem='moderacao')
+                mensagem = None
+            else:
+                mensagem = (
+                    f'A moderação analisou o problema relatado no acordo "{acordo.titulo_anuncio}" '
+                    'e manteve o acordo em andamento.'
+                )
+                titulo = 'Problema relatado analisado'
 
-                contratante, freelancer = acordo.partes()
-                mensagem = f'O acordo "{acordo.titulo_anuncio}" foi cancelado.'
-                criar_notificacao(contratante, 'acordo', 'Acordo cancelado', mensagem, '/my-freelas')
-                criar_notificacao(freelancer, 'acordo', 'Acordo cancelado', mensagem, '/my-freelas')
+            if mensagem:
+                criar_notificacao(contratante, 'acordo', titulo, mensagem, '/my-freelas')
+                criar_notificacao(freelancer, 'acordo', titulo, mensagem, '/my-freelas')
+
+            if parte_infratora:
+                aplicar_infracao(
+                    freelancer if parte_infratora == 'freelancer' else contratante,
+                    f'A moderação decidiu contra você o problema relatado no acordo "{acordo.titulo_anuncio}".',
+                )
 
         return Response(
             SolicitacaoCancelamentoAcordoSerializer(
@@ -1759,17 +1885,30 @@ def _aplicar_pagamento_aprovado(pagamento, external_id=None, forma_pagamento=Non
             _estornar_pagamento_de_acordo_cancelado(pagamento)
 
 
+def _estornar_no_stripe(pagamento, detalhe_status):
+    """Estorna um pagamento de acordo no Stripe e marca o registro como cancelado.
+
+    Retorna False quando o pagamento não tem um payment_intent do Stripe (por
+    exemplo, registros legados locais). Deixa passar `stripe.error.StripeError`
+    para quem chamou decidir o que fazer.
+    """
+    payment_intent = str(pagamento.mp_payment_id or '')
+    if not _stripe_configurado() or not payment_intent.startswith('pi_'):
+        return False
+    stripe.Refund.create(payment_intent=payment_intent)
+    pagamento.status = 'cancelado'
+    pagamento.detalhe_status = detalhe_status
+    pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
+    return True
+
+
 def _estornar_pagamento_de_acordo_cancelado(pagamento):
     """Pagamento aprovado depois que o acordo já foi cancelado (por exemplo,
     o checkout foi concluído após o prazo de pagamento): estorna no Stripe."""
-    payment_intent = str(pagamento.mp_payment_id or '')
-    estornado = False
-    if _stripe_configurado() and payment_intent.startswith('pi_'):
-        try:
-            stripe.Refund.create(payment_intent=payment_intent)
-            estornado = True
-        except stripe.error.StripeError:
-            pass
+    try:
+        estornado = _estornar_no_stripe(pagamento, 'estornado_acordo_cancelado')
+    except stripe.error.StripeError:
+        estornado = False
 
     if not estornado:
         logger.warning(
@@ -1781,9 +1920,6 @@ def _estornar_pagamento_de_acordo_cancelado(pagamento):
         pagamento.save(update_fields=['detalhe_status', 'atualizado_em'])
         return
 
-    pagamento.status = 'cancelado'
-    pagamento.detalhe_status = 'estornado_acordo_cancelado'
-    pagamento.save(update_fields=['status', 'detalhe_status', 'atualizado_em'])
     criar_notificacao(
         usuario=pagamento.usuario,
         tipo='pagamento',

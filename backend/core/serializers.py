@@ -51,8 +51,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'ramos_atuacao', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer')
-        read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at')
+        fields = ('nome_completo', 'bio', 'categories', 'skills', 'subscription_plan', 'subscription_cancel_at', 'foto_perfil', 'banner', 'curriculo', 'disponivel', 'cidade', 'estado', 'telefone', 'email_visivel', 'telefone_visivel', 'redes_sociais', 'certificados', 'experiencias', 'papel', 'tipo_empresa', 'nome_empresa', 'bio_empresa', 'ramo_empresa', 'ramos_atuacao', 'porte_empresa', 'cnpj', 'site_empresa', 'aceitou_termos_empresa', 'aceitou_termos_freelancer', 'pontos_infracao')
+        read_only_fields = ('foto_perfil', 'subscription_plan', 'subscription_cancel_at', 'pontos_infracao')
 
     MAX_RAMOS_ATUACAO = 3
     MAX_TAMANHO_RAMO = 60
@@ -281,6 +281,7 @@ from .models import Report
 
 class ReportSerializer(serializers.ModelSerializer):
     reporter_name = serializers.SerializerMethodField()
+    denunciado = serializers.SerializerMethodField()
 
     class Meta:
         model = Report
@@ -291,6 +292,16 @@ class ReportSerializer(serializers.ModelSerializer):
         if not obj.reporter:
             return None
         return obj.reporter.first_name or obj.reporter.username
+
+    def get_denunciado(self, obj):
+        """Pontos de infração e banimento de quem foi denunciado (para a moderação)."""
+        from .moderacao import usuario_denunciado
+
+        usuario = usuario_denunciado(obj.type, obj.target_id)
+        profile = getattr(usuario, 'profile', None)
+        if not profile:
+            return None
+        return {'id': usuario.id, 'pontos_infracao': profile.pontos_infracao, 'banido': bool(profile.banido)}
 
 from .models import Ad, Avaliacao, CriterioAvaliacao
 
@@ -682,6 +693,7 @@ class AdSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_rating = serializers.SerializerMethodField()
     author_reputation = serializers.SerializerMethodField()
+    author_plan = serializers.CharField(source='author.profile.subscription_plan', read_only=True, default=None)
     
     class Meta:
         model = Ad
@@ -738,6 +750,7 @@ class CandidaturaSerializer(serializers.ModelSerializer):
     ad_category = serializers.SerializerMethodField()
     ad_author_id = serializers.SerializerMethodField()
     ad_author_name = serializers.SerializerMethodField()
+    applicant_plan = serializers.CharField(source='user.profile.subscription_plan', read_only=True, default=None)
     indisponivel = serializers.SerializerMethodField()
     motivo_indisponibilidade = serializers.SerializerMethodField()
 
@@ -835,7 +848,7 @@ class SolicitacaoCancelamentoAcordoSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = (
             'solicitante', 'papel_solicitante', 'motivo', 'status', 'analisado_por',
-            'resposta_admin', 'criado_em', 'analisado_em',
+            'resposta_admin', 'parte_infratora', 'estornado', 'criado_em', 'analisado_em',
         )
 
     def get_solicitante_nome(self, obj):

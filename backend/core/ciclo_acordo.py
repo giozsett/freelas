@@ -51,7 +51,7 @@ def processar_prazos():
             ).first()
             # Um problema relatado congela a conclusão automática até a moderação decidir
             if acordo and not acordo.solicitacoes_cancelamento.filter(status='pendente').exists():
-                concluir_acordo(acordo, automatico=True)
+                concluir_acordo(acordo, origem='automatico')
                 resultado['concluidos_automaticamente'] += 1
 
     return resultado
@@ -105,8 +105,12 @@ def expirar_pagamento(acordo):
     )
 
 
-def concluir_acordo(acordo, automatico=False):
-    """Conclui o acordo e libera as avaliações das duas partes."""
+def concluir_acordo(acordo, origem='contratante'):
+    """Conclui o acordo e libera as avaliações das duas partes.
+
+    `origem`: 'contratante' (confirmou a conclusão), 'automatico' (prazo de
+    confirmação terminou) ou 'moderacao' (problema relatado foi recusado).
+    """
     from .notificacoes import criar_notificacao
 
     acordo.status_acordo = 'Concluído'
@@ -114,10 +118,16 @@ def concluir_acordo(acordo, automatico=False):
     acordo.save(update_fields=['status_acordo', 'concluido_em'])
 
     contratante, freelancer = acordo.partes()
-    if automatico:
+    if origem == 'automatico':
         mensagem = (
             f'O acordo "{acordo.titulo_anuncio}" foi concluído automaticamente porque '
             'o prazo de confirmação terminou. Deixe sua avaliação.'
+        )
+        destinatarios = (contratante, freelancer)
+    elif origem == 'moderacao':
+        mensagem = (
+            f'A moderação manteve o acordo "{acordo.titulo_anuncio}" e, como o serviço já '
+            'tinha sido entregue, ele foi concluído. Deixe sua avaliação.'
         )
         destinatarios = (contratante, freelancer)
     else:

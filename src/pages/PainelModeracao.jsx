@@ -9,6 +9,7 @@ import {
   FileText,
   RefreshCw,
   ShieldAlert,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
@@ -19,6 +20,16 @@ import { ROTULO_MOTIVO_PROBLEMA } from '../constants/acordos';
 
 const API = 'http://localhost:8000';
 const PAGE_SIZE = 10;
+const LIMITE_PONTOS_BANIMENTO = 3;
+
+// Sugestão de quem recebe o ponto de infração, conforme o motivo relatado
+const INFRATOR_SUGERIDO = {
+  nao_compareceu: 'freelancer',
+  nao_entregou: 'freelancer',
+  fora_do_combinado: 'freelancer',
+};
+
+const ROTULO_PARTE = { freelancer: 'Freelancer', contratante: 'Contratante' };
 
 const statusStyle = (status) => {
   if (status === 'aprovada' || status === 'procedente') {
@@ -170,12 +181,23 @@ function ReportRows({ report, isExpanded, onToggle, onDecision }) {
                 <div><strong>Tipo do alvo:</strong><br />{typeLabel}</div>
                 <div><strong>ID do alvo:</strong><br />{report.target_id || '—'}</div>
                 <div><strong>Denunciado por:</strong><br />{report.reporter_name || 'Anônimo'}</div>
+                <div>
+                  <strong>Pontos de infração do denunciado:</strong><br />
+                  {report.denunciado
+                    ? `${report.denunciado.pontos_infracao} de ${LIMITE_PONTOS_BANIMENTO}${report.denunciado.banido ? ' · conta banida' : ''}`
+                    : '—'}
+                </div>
               </div>
               <div style={{ marginTop: '1rem' }}>
                 <strong>Descrição da denúncia:</strong>
                 <p style={{ margin: '0.35rem 0 0', whiteSpace: 'pre-wrap' }}>{report.comment || 'Sem comentário adicional.'}</p>
               </div>
 
+              {report.status === 'pending' && (
+                <p style={{ margin: '1rem 0 0', fontSize: '0.85rem', opacity: 0.75 }}>
+                  Aprovar a denúncia soma 1 ponto de infração ao denunciado; com {LIMITE_PONTOS_BANIMENTO} pontos a conta é banida. O denunciante é avisado do resultado.
+                </p>
+              )}
               {report.status === 'pending' && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => onDecision(report, 'improcedente')}>
@@ -306,6 +328,13 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
                 <p style={{ margin: '1rem 0 0' }}><strong>Resposta do administrador:</strong> {item.resposta_admin}</p>
               )}
 
+              {isCancellation && item.status !== 'pendente' && (
+                <p style={{ margin: '0.6rem 0 0', fontSize: '0.9rem' }}>
+                  <strong>Ponto de infração:</strong> {ROTULO_PARTE[item.parte_infratora] || 'Nenhuma parte'}
+                  {' · '}<strong>Estorno:</strong> {item.estornado ? 'realizado' : 'não realizado'}
+                </p>
+              )}
+
               {item.status !== 'pendente' && (
                 <div style={{
                   marginTop: '1rem',
@@ -333,12 +362,12 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
               )}
 
               {isCancellation && item.status === 'pendente' && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => onDecision(item, 'recusar')}>
-                    <XCircle size={16} /> Recusar
+                    <XCircle size={16} /> Manter acordo
                   </button>
-                  <button type="button" className="btn" onClick={() => onDecision(item, 'aprovar')} style={{ background: 'var(--success-color)', color: 'var(--success-contrast)' }}>
-                    <CheckCircle size={16} /> Aprovar cancelamento
+                  <button type="button" className="btn" onClick={() => onDecision(item, 'aprovar')} style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast)' }}>
+                    <CheckCircle size={16} /> Cancelar acordo e estornar
                   </button>
                 </div>
               )}
@@ -350,8 +379,62 @@ function RequestRows({ item, isCancellation, isExpanded, onToggle, onDecision })
   );
 }
 
+function DecisaoDisputaModal({ item, decisaoInicial, enviando, onClose, onConfirm }) {
+  const [decisao, setDecisao] = useState(decisaoInicial);
+  const [parteInfratora, setParteInfratora] = useState(INFRATOR_SUGERIDO[item.motivo] || '');
+  const [resposta, setResposta] = useState('');
+
+  const opcaoDecisao = (valor, titulo, descricao) => (
+    <label style={{
+      display: 'flex', gap: '0.6rem', alignItems: 'flex-start', padding: '0.75rem', borderRadius: '8px', cursor: 'pointer',
+      border: decisao === valor ? '2px solid var(--holo-purple-real)' : '1px solid var(--border-color)',
+    }}>
+      <input type="radio" name="decisao" checked={decisao === valor} onChange={() => setDecisao(valor)} style={{ marginTop: '0.2rem' }} />
+      <span><strong>{titulo}</strong><br /><span style={{ fontSize: '0.85rem', opacity: 0.75 }}>{descricao}</span></span>
+    </label>
+  );
+
+  return (
+    <div className="mf-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !enviando) onClose(); }}>
+      <div className="mf-modal" style={{ width: '100%', maxWidth: '520px' }}>
+        <button type="button" onClick={onClose} disabled={enviando} aria-label="Fechar"
+          style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>
+          <X size={22} />
+        </button>
+        <h2 style={{ marginTop: 0 }}>Decidir disputa</h2>
+        <p style={{ opacity: 0.75, fontSize: '0.9rem', lineHeight: 1.5 }}>
+          <strong>{item.acordo_titulo}</strong> · Motivo relatado: {ROTULO_MOTIVO_PROBLEMA[item.motivo] || '—'}
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1rem' }}>
+          {opcaoDecisao('aprovar', 'Cancelar acordo e estornar', 'Se o acordo já foi pago, o valor é estornado ao contratante pelo Stripe.')}
+          {opcaoDecisao('recusar', 'Manter acordo', 'O acordo continua; se o serviço já foi entregue, ele é concluído.')}
+        </div>
+
+        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.9rem' }}>Ponto de infração</label>
+        <select className="input" value={parteInfratora} onChange={(e) => setParteInfratora(e.target.value)} style={{ marginBottom: '1rem' }}>
+          <option value="">Nenhuma parte</option>
+          <option value="freelancer">Freelancer ({item.nome_prestador || '—'})</option>
+          <option value="contratante">Contratante ({item.nome_contratante || '—'})</option>
+        </select>
+
+        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.9rem' }}>Observação administrativa (opcional)</label>
+        <textarea className="input" rows="3" value={resposta} onChange={(e) => setResposta(e.target.value)} style={{ resize: 'vertical' }} />
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1rem' }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={enviando}>Voltar</button>
+          <button type="button" className="btn" disabled={enviando}
+            onClick={() => onConfirm({ decisao, parte_infratora: parteInfratora, resposta_admin: resposta })}>
+            {enviando ? 'Registrando...' : 'Registrar decisão'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ModerationPanel() {
-  const { confirmar, solicitarTexto } = useDialogo();
+  const { confirmar } = useDialogo();
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -364,6 +447,8 @@ export default function ModerationPanel() {
   const [expanded, setExpanded] = useState({ denuncias: {}, cancelamentos: {}, alteracoes: {} });
   const [loading, setLoading] = useState({ denuncias: false, cancelamentos: false, alteracoes: false });
   const [error, setError] = useState('');
+  const [disputaEmDecisao, setDisputaEmDecisao] = useState(null); // { item, decisao }
+  const [registrandoDisputa, setRegistrandoDisputa] = useState(false);
 
   const token = localStorage.getItem('token');
 
@@ -475,12 +560,14 @@ export default function ModerationPanel() {
     }));
   };
 
-  const handleCancellationDecision = async (item, decisao) => {
-    const action = decisao === 'aprovar' ? 'aprovar' : 'recusar';
-    if (!await confirmar(`Deseja ${action} o cancelamento do acordo "${item.acordo_titulo}"?`, { titulo: 'Decisão de cancelamento', confirmarTexto: action === 'aprovar' ? 'Aprovar' : 'Recusar' })) return;
-    const resposta = await solicitarTexto('Inclua uma observação administrativa, se necessário.', { titulo: 'Observação administrativa', placeholder: 'Observação opcional' });
-    if (resposta === null) return;
+  const handleCancellationDecision = (item, decisao) => {
+    setDisputaEmDecisao({ item, decisao });
+  };
 
+  const registrarDecisaoDisputa = async (dados) => {
+    const { item } = disputaEmDecisao;
+    setRegistrandoDisputa(true);
+    setError('');
     try {
       const response = await fetch(`${API}/api/admin/cancelamentos-acordo/${item.id}/`, {
         method: 'PATCH',
@@ -488,13 +575,17 @@ export default function ModerationPanel() {
           'Content-Type': 'application/json',
           Authorization: `Token ${token}`,
         },
-        body: JSON.stringify({ decisao, resposta_admin: resposta }),
+        body: JSON.stringify(dados),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível registrar a decisão.');
+      setDisputaEmDecisao(null);
       await fetchRequests('cancelamentos', pages.cancelamentos, filters.cancelamentos);
     } catch (err) {
+      setDisputaEmDecisao(null);
       setError(err.message);
+    } finally {
+      setRegistrandoDisputa(false);
     }
   };
 
@@ -530,7 +621,7 @@ export default function ModerationPanel() {
     ['dashboard', 'Dashboard'],
     ['denuncias', 'Denúncias'],
     ['alteracoes', 'Alterações'],
-    ['cancelamentos', 'Cancelamentos'],
+    ['cancelamentos', 'Disputas'],
     ['admin', 'Django Admin'],
   ];
 
@@ -617,7 +708,7 @@ export default function ModerationPanel() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             <div>
               <h2 style={{ margin: 0 }}>
-                {activeTab === 'cancelamentos' ? 'Solicitações de cancelamento' : 'Solicitações de alteração'}
+                {activeTab === 'cancelamentos' ? 'Problemas relatados (disputas)' : 'Solicitações de alteração'}
               </h2>
               <p style={{ margin: '0.35rem 0 0', opacity: 0.7, fontSize: '0.9rem' }}>
                 Histórico completo; expanda uma linha para visualizar os dados e o resultado da avaliação.
@@ -663,6 +754,16 @@ export default function ModerationPanel() {
             onDecision={handleCancellationDecision}
           />
         </div>
+      )}
+
+      {disputaEmDecisao && (
+        <DecisaoDisputaModal
+          item={disputaEmDecisao.item}
+          decisaoInicial={disputaEmDecisao.decisao}
+          enviando={registrandoDisputa}
+          onClose={() => setDisputaEmDecisao(null)}
+          onConfirm={registrarDecisaoDisputa}
+        />
       )}
 
       {activeTab === 'admin' && (

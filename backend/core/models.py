@@ -59,6 +59,9 @@ class UserProfile(models.Model):
     aceitou_termos_empresa = models.BooleanField(default=False)
     aceitou_termos_freelancer = models.BooleanField(default=False)
     banido = models.BooleanField(default=False, null=True, blank=True)
+    # Denúncia procedente ou disputa perdida soma 1 ponto; 3 pontos banem a conta
+    # (ver core/moderacao.py).
+    pontos_infracao = models.PositiveSmallIntegerField(default=0)
     deletado = models.BooleanField(default=False, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     atualizado_em = models.DateTimeField(auto_now=True, null=True, blank=True)
@@ -443,6 +446,9 @@ class SolicitacaoCancelamentoAcordo(models.Model):
         related_name='cancelamentos_acordo_analisados',
     )
     resposta_admin = models.TextField(null=True, blank=True)
+    # Resultado da disputa decidida pela moderação
+    parte_infratora = models.CharField(max_length=20, choices=PAPEIS, null=True, blank=True)
+    estornado = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
     analisado_em = models.DateTimeField(null=True, blank=True)
 

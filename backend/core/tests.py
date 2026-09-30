@@ -12,6 +12,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
+import stripe
 
 from .models import (
     Ad,
@@ -736,7 +737,8 @@ class PagamentoAPITests(TestCase):
         self.assertEqual(pending.status, 'procedente')
         self.assertEqual(pending.comment, 'Descrição da denúncia.')
 
-    def test_denuncia_publica_sempre_nasce_pendente(self):
+    def test_denuncia_sempre_nasce_pendente(self):
+        self.client.force_authenticate(self.contratante)
         response = self.client.post(
             '/api/reports/',
             {
@@ -1390,6 +1392,212 @@ class CicloAcordoAPITests(TestCase):
         self.acordo.refresh_from_db()
         self.assertEqual(self.acordo.status_acordo, 'Cancelado')
         self.assertIn('Pagamentos expirados: 1', saida.getvalue())
+
+
+class ModeracaoAPITests(TestCase):
+    """Moderação com consequência (core/moderacao.py): denúncias, pontos de
+    infração, banimento, soft ban de denúncias, disputas e destaque por plano."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser('root@example.com', 'root@example.com', 'secret123')
+        self.contratante = _criar_usuario_com_papel('contrata@example.com', 'contratante', 'Carla')
+        self.freelancer = _criar_usuario_com_papel('freela@example.com', 'freelancer', 'Fred')
+        self.vaga = Ad.objects.create(author=self.contratante, title='Site', price='500.00', role='contractor')
+
+    def _denunciar(self, autor, alvo_id, tipo='user'):
+        self.client.force_authenticate(autor)
+        return self.client.post('/api/reports/', {
+            'type': tipo, 'target_id': str(alvo_id), 'target_name': 'Alvo',
+            'category': 'fraude', 'comment': 'Detalhes da denúncia.',
+        }, format='json')
+
+    def _julgar(self, report_id, novo_status):
+        self.client.force_authenticate(self.admin)
+        return self.client.patch(f'/api/reports/{report_id}/', {'status': novo_status}, format='json')
+
+    def _denuncias_enviadas(self, autor, improcedentes, procedentes=0):
+        for status_denuncia, quantidade in (('improcedente', improcedentes), ('procedente', procedentes)):
+            for _ in range(quantidade):
+                Report.objects.create(
+                    type='user', target_id=str(self.contratante.id), reporter=autor, status=status_denuncia,
+                )
+
+    def _acordo_com_problema(self, status_acordo='Ativo'):
+        candidatura = Candidatura.objects.create(user=self.freelancer, ad=self.vaga, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+        acordo = AcordoServico.objects.get(candidatura=candidatura)
+        AcordoServico.objects.filter(pk=acordo.pk).update(status_acordo=status_acordo)
+        pagamento = Pagamento.objects.create(
+            usuario=self.contratante, tipo='acordo', status='pago', valor=Decimal('550.00'),
+            referencia_externa=f'acordo:moderacao:{acordo.pk}', acordo=acordo,
+            mp_payment_id='pi_disputa', aprovado_em=timezone.now(),
+        )
+        relato = SolicitacaoCancelamentoAcordo.objects.create(
+            acordo=acordo, solicitante=self.contratante, papel_solicitante='contratante',
+            motivo='nao_entregou', justificativa='O serviço não foi entregue.',
+        )
+        return acordo, pagamento, relato
+
+    def _decidir_disputa(self, relato, **dados):
+        self.client.force_authenticate(self.admin)
+        return self.client.patch(f'/api/admin/cancelamentos-acordo/{relato.id}/', dados, format='json')
+
+    def test_denuncia_exige_login(self):
+        resposta = self.client.post('/api/reports/', {
+            'type': 'user', 'target_id': str(self.freelancer.id), 'comment': 'Anônima.',
+        }, format='json')
+
+        self.assertIn(resposta.status_code, (401, 403))
+        self.assertFalse(Report.objects.exists())
+
+    def test_nao_pode_denunciar_a_si_mesmo_nem_o_proprio_anuncio(self):
+        self.assertEqual(self._denunciar(self.freelancer, self.freelancer.id).status_code, 400)
+        self.assertEqual(self._denunciar(self.contratante, self.vaga.id, tipo='ad').status_code, 400)
+
+    def test_denuncia_procedente_soma_ponto_ao_dono_do_anuncio_e_avisa_denunciante(self):
+        denuncia = self._denunciar(self.freelancer, self.vaga.id, tipo='ad')
+        self.assertEqual(denuncia.status_code, 201, denuncia.data)
+
+        julgamento = self._julgar(denuncia.data['id'], 'procedente')
+
+        self.assertEqual(julgamento.status_code, 200)
+        self.contratante.profile.refresh_from_db()
+        self.assertEqual(self.contratante.profile.pontos_infracao, 1)
+        self.assertTrue(Notificacao.objects.filter(usuario=self.freelancer, titulo='Sua denúncia foi analisada').exists())
+        self.assertTrue(Notificacao.objects.filter(usuario=self.contratante, titulo='Você recebeu um ponto de infração').exists())
+
+    def test_denuncia_so_pode_ser_julgada_uma_vez(self):
+        denuncia = self._denunciar(self.freelancer, self.contratante.id)
+        self._julgar(denuncia.data['id'], 'procedente')
+
+        de_novo = self._julgar(denuncia.data['id'], 'procedente')
+
+        self.assertEqual(de_novo.status_code, 409)
+        self.contratante.profile.refresh_from_db()
+        self.assertEqual(self.contratante.profile.pontos_infracao, 1)
+
+    def test_tres_pontos_banem_a_conta_bloqueiam_login_e_ocultam_anuncios(self):
+        UserProfile.objects.filter(user=self.contratante).update(pontos_infracao=2)
+        Token.objects.create(user=self.contratante)
+        denuncia = self._denunciar(self.freelancer, self.contratante.id)
+
+        self._julgar(denuncia.data['id'], 'procedente')
+
+        self.contratante.profile.refresh_from_db()
+        self.assertTrue(self.contratante.profile.banido)
+        self.assertFalse(Token.objects.filter(user=self.contratante).exists())
+        self.client.force_authenticate(None)
+        login = self.client.post('/api/auth/login/', {'username': self.contratante.email, 'password': 'secret123'}, format='json')
+        self.assertEqual(login.status_code, 403)
+        self.assertIn('banida', login.data['error'])
+        self.assertEqual(self.client.get('/api/ads/').data, [])
+
+    def test_token_emitido_antes_do_banimento_deixa_de_funcionar(self):
+        token = Token.objects.create(user=self.freelancer)
+        UserProfile.objects.filter(user=self.freelancer).update(banido=True)
+
+        cliente = APIClient()
+        cliente.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        resposta = cliente.get('/api/auth/user/')
+
+        self.assertEqual(resposta.status_code, 401)
+
+    def test_soft_ban_bloqueia_quem_tem_muitas_denuncias_improcedentes(self):
+        self._denuncias_enviadas(self.freelancer, improcedentes=5, procedentes=1)
+
+        resposta = self._denunciar(self.freelancer, self.contratante.id)
+
+        self.assertEqual(resposta.status_code, 403)
+
+    def test_soft_ban_exige_metade_das_denuncias_improcedentes(self):
+        self._denuncias_enviadas(self.freelancer, improcedentes=5, procedentes=6)
+
+        self.assertEqual(self._denunciar(self.freelancer, self.contratante.id).status_code, 201)
+
+    def test_denuncias_antigas_nao_contam_para_o_soft_ban(self):
+        self._denuncias_enviadas(self.freelancer, improcedentes=5)
+        Report.objects.update(created_at=timezone.now() - timedelta(days=31))
+
+        self.assertEqual(self._denunciar(self.freelancer, self.contratante.id).status_code, 201)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create')
+    def test_disputa_aprovada_estorna_contratante_e_aplica_infracao(self, refund_create):
+        acordo, pagamento, relato = self._acordo_com_problema()
+
+        resposta = self._decidir_disputa(relato, decisao='aprovar', parte_infratora='freelancer')
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        refund_create.assert_called_once_with(payment_intent='pi_disputa')
+        acordo.refresh_from_db()
+        pagamento.refresh_from_db()
+        relato.refresh_from_db()
+        self.assertEqual(acordo.status_acordo, 'Cancelado')
+        self.assertEqual(acordo.motivo_cancelamento, 'moderacao')
+        self.assertEqual(pagamento.status, 'cancelado')
+        self.assertEqual(pagamento.detalhe_status, 'estornado_disputa')
+        self.assertTrue(relato.estornado)
+        self.assertEqual(relato.parte_infratora, 'freelancer')
+        self.freelancer.profile.refresh_from_db()
+        self.assertEqual(self.freelancer.profile.pontos_infracao, 1)
+
+    @patch('core.views.stripe.api_key', 'sk_test_fake')
+    @patch('core.views.stripe.Refund.create', side_effect=stripe.error.StripeError('Stripe indisponível'))
+    def test_disputa_nao_muda_nada_se_o_estorno_falhar(self, refund_create):
+        acordo, pagamento, relato = self._acordo_com_problema()
+
+        resposta = self._decidir_disputa(relato, decisao='aprovar', parte_infratora='freelancer')
+
+        self.assertEqual(resposta.status_code, 502)
+        relato.refresh_from_db()
+        acordo.refresh_from_db()
+        self.assertEqual(relato.status, 'pendente')
+        self.assertEqual(acordo.status_acordo, 'Ativo')
+        self.freelancer.profile.refresh_from_db()
+        self.assertEqual(self.freelancer.profile.pontos_infracao, 0)
+
+    def test_disputa_recusada_com_servico_entregue_conclui_o_acordo(self):
+        acordo, _, relato = self._acordo_com_problema(status_acordo='Aguardando confirmação')
+
+        resposta = self._decidir_disputa(relato, decisao='recusar')
+
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        acordo.refresh_from_db()
+        self.assertEqual(acordo.status_acordo, 'Concluído')
+        self.assertEqual(
+            set(Notificacao.objects.filter(titulo='Acordo concluído').values_list('usuario', flat=True)),
+            {self.contratante.id, self.freelancer.id},
+        )
+
+    def test_parte_infratora_invalida(self):
+        _, _, relato = self._acordo_com_problema()
+
+        self.assertEqual(self._decidir_disputa(relato, decisao='recusar', parte_infratora='admin').status_code, 400)
+
+    def test_vagas_de_assinantes_aparecem_primeiro(self):
+        assinante = _criar_usuario_com_papel('platinum@example.com', 'contratante', 'Paula')
+        UserProfile.objects.filter(user=assinante).update(subscription_plan='Platinum')
+        vaga_destaque = Ad.objects.create(author=assinante, title='Loja virtual', price='900.00', role='contractor')
+        Ad.objects.filter(pk=vaga_destaque.pk).update(created_at=timezone.now() - timedelta(days=5))
+
+        listagem = self.client.get('/api/ads/').data
+
+        self.assertEqual([ad['id'] for ad in listagem], [vaga_destaque.id, self.vaga.id])
+        self.assertEqual(listagem[0]['author_plan'], 'Platinum')
+
+    def test_candidaturas_de_assinantes_aparecem_primeiro_para_o_contratante(self):
+        assinante = _criar_usuario_com_papel('gold@example.com', 'freelancer', 'Gabi')
+        UserProfile.objects.filter(user=assinante).update(subscription_plan='Gold')
+        destaque = Candidatura.objects.create(user=assinante, ad=self.vaga, status='pendente')
+        Candidatura.objects.create(user=self.freelancer, ad=self.vaga, status='pendente')
+
+        self.client.force_authenticate(self.contratante)
+        candidaturas = self.client.get(f'/api/candidaturas/?ad_id={self.vaga.id}').data
+
+        self.assertEqual(candidaturas[0]['id'], destaque.id)
+        self.assertEqual(candidaturas[0]['applicant_plan'], 'Gold')
 
 
 class ChatSegurancaAPITests(TestCase):
