@@ -1,22 +1,42 @@
 import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { Briefcase, CalendarDays, Globe, Handshake, Ruler, UserRound } from 'lucide-react';
+import { Briefcase, CalendarDays, Edit3, Globe, Handshake, Ruler, UserRound } from 'lucide-react';
 import { PORTES_EMPRESA } from '../constants/options';
 
 const ROTULO_PORTE = Object.fromEntries(PORTES_EMPRESA.map(({ valor, rotulo }) => [valor, rotulo]));
 
-function Vazio({ proprio, texto }) {
-  return (
-    <p style={{ opacity: 0.7, margin: 0 }}>
-      {texto}{' '}
-      {proprio && <Link to="/profile/edit" style={{ color: 'var(--primary)', fontWeight: 600 }}>Adicionar em Editar perfil</Link>}
-    </p>
-  );
+function Vazio({ texto }) {
+  return <p style={{ opacity: 0.7, margin: 0 }}>{texto}</p>;
 }
 
 Vazio.propTypes = {
-  proprio: PropTypes.bool,
   texto: PropTypes.string.isRequired,
+};
+
+/**
+ * Título de seção com o lápis de edição (só no próprio perfil), no mesmo
+ * estilo do lápis das habilidades do freelancer. Abre a edição direto na aba
+ * onde ficam esses campos.
+ */
+function TituloSecao({ icone: Icone, titulo, proprio }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+      <h2 style={{ fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {Icone && <Icone size={20} color="var(--primary)" />} {titulo}
+      </h2>
+      {proprio && (
+        <Link to="/profile/edit" state={{ aba: 'atuacao' }} title={`Editar ${titulo.toLowerCase()}`} aria-label={`Editar ${titulo.toLowerCase()}`} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--surface-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', cursor: 'pointer', flexShrink: 0 }}>
+          <Edit3 size={18} />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+TituloSecao.propTypes = {
+  icone: PropTypes.elementType,
+  titulo: PropTypes.string.isRequired,
+  proprio: PropTypes.bool,
 };
 
 /**
@@ -51,28 +71,24 @@ export default function SobreContratante({ perfil, ehEmpresa, proprio = false })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div>
-        <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Briefcase size={20} color="var(--primary)" /> Serviços que contrata
-        </h2>
+        <TituloSecao icone={Briefcase} titulo="Serviços que contrata" proprio={proprio} />
         {servicos.length > 0 ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {servicos.map((servico) => <span key={servico} className="badge purple">{servico}</span>)}
           </div>
-        ) : <Vazio proprio={proprio} texto="Nenhum serviço informado." />}
+        ) : <Vazio texto="Nenhum serviço informado." />}
       </div>
 
       <div>
-        <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Handshake size={20} color="var(--primary)" /> Como trabalha com freelancers
-        </h2>
+        <TituloSecao icone={Handshake} titulo="Como trabalha com freelancers" proprio={proprio} />
         {perfil.como_trabalha
           ? <p style={{ margin: 0, lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{perfil.como_trabalha}</p>
-          : <Vazio proprio={proprio} texto="Ainda não descreveu como trabalha com freelancers." />}
+          : <Vazio texto="Ainda não descreveu como trabalha com freelancers." />}
       </div>
 
       {ehEmpresa && (
         <div>
-          <h2 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>Dados da empresa</h2>
+          <TituloSecao titulo="Dados da empresa" proprio={proprio} />
           {dadosEmpresa.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
               {dadosEmpresa.map(({ icone: Icone, rotulo, valor }) => (
@@ -84,7 +100,7 @@ export default function SobreContratante({ perfil, ehEmpresa, proprio = false })
                 </div>
               ))}
             </div>
-          ) : <Vazio proprio={proprio} texto="Nenhum dado da empresa informado." />}
+          ) : <Vazio texto="Nenhum dado da empresa informado." />}
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { Camera, User, Plus, Trash2, Upload, ToggleLeft, ToggleRight, Briefcase, Pencil, Check } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
@@ -57,7 +57,9 @@ export default function EditProfile() {
   const { alerta } = useDialogo();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [activeEditTab, setActiveEditTab] = useState('identidade');
+  // O lápis de uma seção do perfil pode pedir para abrir direto na aba dela
+  const location = useLocation();
+  const [activeEditTab, setActiveEditTab] = useState(location.state?.aba || 'identidade');
   const tabsScrollRef = useScrollEdges();
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState([{ name: '', level: 'iniciante' }]);
