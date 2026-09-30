@@ -1600,6 +1600,62 @@ class ModeracaoAPITests(TestCase):
         self.assertEqual(candidaturas[0]['applicant_plan'], 'Gold')
 
 
+class ComandosDemonstracaoTests(TestCase):
+    """Comandos de preparação da apresentação: popular_demo e verificar_dados."""
+
+    def _contas_demo(self):
+        return User.objects.filter(email__endswith='@demo.freelas.com')
+
+    def test_popular_demo_cria_um_acordo_em_cada_etapa(self):
+        call_command('popular_demo', stdout=StringIO())
+
+        self.assertEqual(self._contas_demo().count(), 6)
+        self.assertEqual(
+            sorted(AcordoServico.objects.values_list('status_acordo', flat=True)),
+            sorted(['Concluído', 'Ativo', 'Aguardando confirmação', 'Pendente Pagamento', 'Ativo', 'Cancelado']),
+        )
+        self.assertEqual(Avaliacao.objects.count(), 2)
+        self.assertEqual(SolicitacaoCancelamentoAcordo.objects.filter(status='pendente').count(), 1)
+        self.assertEqual(Report.objects.filter(status='pending').count(), 1)
+        # O acordo expirado por falta de pagamento reabriu a vaga
+        self.assertEqual(Ad.objects.get(title='Fotos dos produtos para o cardápio').status_anuncio, 'Em aberto')
+
+    def test_popular_demo_pode_rodar_de_novo_e_nao_toca_em_outras_contas(self):
+        outra = User.objects.create_user('real@example.com', 'real@example.com', 'secret123')
+
+        call_command('popular_demo', stdout=StringIO())
+        call_command('popular_demo', stdout=StringIO())
+        self.assertEqual(self._contas_demo().count(), 6)
+        self.assertEqual(AcordoServico.objects.count(), 6)
+
+        call_command('popular_demo', '--remover', stdout=StringIO())
+        self.assertFalse(self._contas_demo().exists())
+        self.assertFalse(AcordoServico.objects.exists())
+        self.assertTrue(User.objects.filter(pk=outra.pk).exists())
+
+    def test_dados_de_demonstracao_seguem_as_regras(self):
+        call_command('popular_demo', stdout=StringIO())
+        saida = StringIO()
+
+        call_command('verificar_dados', stdout=saida)
+
+        self.assertIn('Nenhuma inconsistência encontrada', saida.getvalue())
+
+    def test_verificar_dados_aponta_dados_fora_das_regras_sem_alterar(self):
+        User.objects.create_user('sempapel@example.com', 'sempapel@example.com', 'secret123')
+        freelancer = _criar_usuario_com_papel('freela-antigo@example.com', 'freelancer', 'Fabi')
+        Ad.objects.create(author=freelancer, title='Serviço antigo', role='freelancer')
+        saida = StringIO()
+
+        call_command('verificar_dados', '--detalhes', stdout=saida)
+
+        texto = saida.getvalue()
+        self.assertIn('sempapel@example.com', texto)
+        self.assertIn('Serviço antigo', texto)
+        self.assertNotIn('Nenhuma inconsistência', texto)
+        self.assertTrue(Ad.objects.filter(title='Serviço antigo', deletado=False).exists())
+
+
 class ChatSegurancaAPITests(TestCase):
     """Admins (is_staff) não participantes de um acordo não podem ler nem
     enviar mensagens no chat entre as partes — só os próprios envolvidos."""
@@ -2338,6 +2394,46 @@ class PerfilBioEReputacaoAPITests(TestCase):
         self.assertIn('contratante', response.data['reputacao'])
         self.assertEqual(response.data['reputacao']['freelancer']['total_avaliacoes'], 0)
         self.assertEqual(response.data['reputacao']['freelancer']['score'], 40)
+
+    def test_perfil_de_freelancer_mostra_so_a_reputacao_de_freelancer(self):
+        freelancer = _criar_usuario_com_papel('rep-freela@example.com', 'freelancer', 'Fabi')
+
+        dados = self.client.get(f'/api/users/{freelancer.id}/').data
+
+        self.assertEqual(list(dados['reputacao']), ['freelancer'])
+        self.assertEqual(list(dados['resumo_avaliacoes']), ['freelancer'])
+
+    def test_perfil_de_contratante_ignora_avaliacoes_antigas_como_freelancer(self):
+        contratante = _criar_usuario_com_papel('rep-contrata@example.com', 'contratante', 'Carla')
+        outro = _criar_usuario_com_papel('rep-outro@example.com', 'freelancer', 'Otto')
+        ad = Ad.objects.create(author=contratante, title='Vaga', role='contractor')
+        candidatura = Candidatura.objects.create(user=outro, ad=ad, status='pendente')
+        candidatura.status = 'aprovada'
+        candidatura.save()
+        acordo = AcordoServico.objects.get(candidatura=candidatura)
+        # Avaliação de quando a conta ainda podia atuar nos dois papéis
+        Avaliacao.objects.create(
+            acordo=acordo, avaliador=outro.profile, avaliado=contratante.profile,
+            papel_avaliado='freelancer', nota_geral=Decimal('2.00'),
+        )
+        Avaliacao.objects.create(
+            acordo=acordo, avaliador=contratante.profile, avaliado=contratante.profile,
+            papel_avaliado='contratante', nota_geral=Decimal('5.00'),
+        )
+
+        dados = self.client.get(f'/api/users/{contratante.id}/').data
+
+        self.assertEqual(list(dados['reputacao']), ['contratante'])
+        self.assertEqual(dados['resumo_avaliacoes'], {'contratante': {'nota': 5.0, 'total': 1}})
+        self.assertEqual([a['papel_avaliado'] for a in dados['avaliacoes_recebidas']], ['contratante'])
+
+    def test_administrador_nao_tem_reputacao(self):
+        admin = User.objects.create_superuser('rep-admin@example.com', 'rep-admin@example.com', 'secret123')
+
+        dados = self.client.get(f'/api/users/{admin.id}/').data
+
+        self.assertEqual(dados['reputacao'], {})
+        self.assertEqual(dados['resumo_avaliacoes'], {})
 
 
 class RamosAtuacaoEmpresaAPITests(TestCase):

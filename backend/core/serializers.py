@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from .models import UserProfile
 from .notificacoes import criar_notificacao
-from .papeis import PAPEIS_ESCOLHIVEIS, PAPEL_CONTRATANTE, PAPEL_FREELANCER
+from .papeis import PAPEIS_ESCOLHIVEIS, PAPEL_ADMIN, PAPEL_CONTRATANTE, PAPEL_FREELANCER
 from .validacao_senha import validar_forca_senha
 
 def _destruir_imagem_cloudinary(url):
@@ -197,15 +197,28 @@ class UserSerializer(serializers.ModelSerializer):
     def get_tem_senha(self, obj):
         return obj.has_usable_password()
 
+    @staticmethod
+    def _papeis_avaliados(obj):
+        """Papéis cuja reputação aparece no perfil: só o papel da conta.
+
+        Contas antigas, ainda sem papel, mostram os dois; o administrador não
+        tem reputação.
+        """
+        papel = getattr(getattr(obj, 'profile', None), 'papel', None)
+        if papel in (PAPEL_FREELANCER, PAPEL_CONTRATANTE):
+            return (papel,)
+        if papel == PAPEL_ADMIN:
+            return ()
+        return (PAPEL_FREELANCER, PAPEL_CONTRATANTE)
+
     def get_resumo_avaliacoes(self, obj):
-        result = {
-            'freelancer': {'nota': None, 'total': 0},
-            'contratante': {'nota': None, 'total': 0},
-        }
+        papeis = self._papeis_avaliados(obj)
+        result = {papel: {'nota': None, 'total': 0} for papel in papeis}
         if not hasattr(obj, 'profile'):
             return result
         aggregates = obj.profile.avaliacoes_recebidas.filter(
             deletado=False,
+            papel_avaliado__in=papeis,
         ).values('papel_avaliado').annotate(
             nota=Avg('nota_geral'),
             total=Count('id'),
@@ -222,15 +235,15 @@ class UserSerializer(serializers.ModelSerializer):
             return []
         queryset = obj.profile.avaliacoes_recebidas.select_related(
             'avaliador__user', 'acordo',
-        ).filter(deletado=False)
+        ).filter(deletado=False, papel_avaliado__in=self._papeis_avaliados(obj))
         return AvaliacaoSerializer(queryset, many=True, context=self.context).data
 
     def get_reputacao(self, obj):
         if not hasattr(obj, 'profile'):
             return None
         return {
-            'freelancer': calcular_reputacao_usuario(obj.profile, papel='freelancer'),
-            'contratante': calcular_reputacao_usuario(obj.profile, papel='contratante'),
+            papel: calcular_reputacao_usuario(obj.profile, papel=papel)
+            for papel in self._papeis_avaliados(obj)
         }
 
     def update(self, instance, validated_data):

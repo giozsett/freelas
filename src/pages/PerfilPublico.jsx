@@ -7,7 +7,7 @@ import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
 import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
-import { PAPEL_CONTRATANTE, PAPEL_FREELANCER } from '../constants/papeis';
+import { PAPEL_CONTRATANTE, PAPEIS_REPUTACAO } from '../constants/papeis';
 
 const API = 'http://localhost:8000';
 
@@ -43,7 +43,8 @@ export default function PublicProfile() {
     roles: [],
     reviews: [],
   });
-  const [reputacao, setReputacao] = useState({ freelancer: null, contratante: null });
+  // A API devolve só a reputação do papel da conta (freelancer ou contratante)
+  const [reputacao, setReputacao] = useState({});
 
   useEffect(() => {
     setIsLoading(true);
@@ -83,21 +84,14 @@ export default function PublicProfile() {
             cnpj: data.profile?.cnpj || '',
             site_empresa: data.profile?.site_empresa || '',
           },
-          roles: [
-            {
-              type: 'Freelancer',
-              papel: PAPEL_FREELANCER,
-              rating: data.resumo_avaliacoes?.freelancer?.nota,
-              reviews: data.resumo_avaliacoes?.freelancer?.total || 0,
-            },
-            {
-              type: 'Contratante',
-              papel: PAPEL_CONTRATANTE,
-              rating: data.resumo_avaliacoes?.contratante?.nota,
-              reviews: data.resumo_avaliacoes?.contratante?.total || 0,
-            },
-          // Papel fixo: mostra só a nota do papel da conta (contas antigas sem papel mostram as duas)
-          ].filter(r => !data.profile?.papel || r.papel === data.profile.papel),
+          roles: PAPEIS_REPUTACAO
+            .filter(item => data.resumo_avaliacoes?.[item.key])
+            .map(item => ({
+              type: item.label,
+              className: item.className,
+              rating: data.resumo_avaliacoes[item.key].nota,
+              reviews: data.resumo_avaliacoes[item.key].total || 0,
+            })),
           reviews: Array.isArray(data.avaliacoes_recebidas) ? data.avaliacoes_recebidas : [],
         }));
         if (data.reputacao) setReputacao(data.reputacao);
@@ -199,7 +193,7 @@ export default function PublicProfile() {
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
               {user.roles.map(role => (
                 <div key={role.type} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className={role.type === 'Freelancer' ? "badge salmon" : "badge purple"} style={{ color: 'white' }}>{role.type}</span>
+                  <span className={`badge ${role.className}`} style={{ color: 'white' }}>{role.type}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
                       <Star fill={role.rating ? 'currentColor' : 'transparent'} size={22} color="var(--warning-color)" /> {role.rating ?? '—'} ({role.reviews})
                   </span>
@@ -283,8 +277,9 @@ export default function PublicProfile() {
         <section className="profile-section">
           <h2 style={{ marginBottom: '1rem', fontSize: '1.4rem' }}>Reputação</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-            <TermometroReputacao titulo="Reputação como Freelancer" reputacao={reputacao.freelancer} />
-            <TermometroReputacao titulo="Reputação como Contratante" reputacao={reputacao.contratante} />
+            {PAPEIS_REPUTACAO.filter(item => reputacao[item.key]).map(item => (
+              <TermometroReputacao key={item.key} titulo={`Reputação como ${item.label}`} reputacao={reputacao[item.key]} />
+            ))}
           </div>
         </section>
 

@@ -215,6 +215,19 @@ python manage.py processar_prazos
 - **Pagamento:** o contratante tem `PRAZO_PAGAMENTO_HORAS` para pagar depois da aprovação da candidatura. Se não pagar, o acordo é cancelado e a vaga volta a receber candidaturas.
 - **Confirmação:** depois que o freelancer marca o serviço como entregue, o contratante tem `PRAZO_CONFIRMACAO_HORAS` para confirmar ou relatar um problema. Sem resposta, o acordo é concluído automaticamente.
 
+### Dados de demonstração e verificação do banco
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py popular_demo            # recria as contas @demo.freelas.com (senha Freelas@2026)
+python manage.py popular_demo --remover  # remove só os dados de demonstração
+python manage.py verificar_dados         # lista dados fora das regras atuais, sem alterar nada
+```
+
+- `popular_demo` cria contratantes, freelancers, vagas e um acordo em cada etapa do ciclo. Só mexe nas contas `@demo.freelas.com`, então pode rodar no banco compartilhado; rode no dia da apresentação, porque os prazos contam a partir da criação.
+- O roteiro da apresentação está em [`docs/roteiro-apresentacao.md`](docs/roteiro-apresentacao.md) e os textos e diagramas do relatório técnico em [`docs/rt-v06-secoes.md`](docs/rt-v06-secoes.md) e [`docs/rt-v06-diagramas.md`](docs/rt-v06-diagramas.md).
+
 ### Testes e lint
 
 ```powershell

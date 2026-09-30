@@ -49,7 +49,7 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RF22** Notificações em tempo real sobre candidaturas, acordos, prazos, pagamentos, avaliações e moderação. [ok]
 
 **Avaliação**
-- **RF23** Avaliação mútua por critérios (nota de 1 a 5, comentário opcional) após a conclusão. A reputação aparece no perfil e nas vagas. [ok]
+- **RF23** Avaliação mútua por critérios (nota de 1 a 5, comentário opcional) após a conclusão. A reputação aparece no perfil e nas vagas; o perfil mostra somente a reputação do papel da conta (de freelancer ou de contratante). [ok]
 
 **Assinaturas e pagamentos**
 - **RF24** Planos Gratuito, Gold e Platinum. Para o contratante o plano limita as vagas publicadas por mês; para o freelancer, as candidaturas enviadas por mês. Ao atingir o limite, a ação é bloqueada. Assinantes Gold e Platinum têm vagas e candidaturas exibidas em destaque, com selo do plano. [ok]
@@ -104,6 +104,8 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RN16** O chat existe só entre as partes de um acordo, depois da aprovação da candidatura.
 
 ## Ajustes na modelagem
+
+Os diagramas atualizados (casos de uso, classes, estados, DER e containers) estão em [`rt-v06-diagramas.md`](rt-v06-diagramas.md).
 
 - **Casos de uso:** acrescentar o ator Visitante (Consultar vagas, Consultar planos). "Postar anúncio" é do Contratante e "Enviar candidatura" é do Freelancer. Acrescentar "Marcar entrega" (Freelancer), "Confirmar conclusão" (Contratante), "Relatar problema" (ambos) e "Julgar disputa" (Administrador).
 - **Estados do acordo:** Pendente Pagamento → Ativo → Aguardando confirmação → Concluído, ou Cancelado (motivo: prazo de pagamento expirado ou decisão da moderação). Candidatura: pendente, aprovada, recusada, encerrada (outra foi aprovada) e cancelada (o acordo foi cancelado).

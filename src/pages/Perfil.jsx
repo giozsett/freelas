@@ -6,7 +6,7 @@ import IconeRedeSocial from '../components/IconeRedeSocial';
 import TermometroReputacao from '../components/TermometroReputacao';
 import { calcularTempo } from '../utils/calcularTempo';
 import useScrollEdges from '../hooks/useScrollEdges';
-import { PAPEL_CONTRATANTE } from '../constants/papeis';
+import { PAPEL_CONTRATANTE, PAPEIS_REPUTACAO } from '../constants/papeis';
 
 const API = 'http://localhost:8000';
 
@@ -33,12 +33,10 @@ export default function Profile() {
   const [certificados, setCertificados] = useState([]);
   const [experiencias, setExperiencias] = useState([]);
   const [activeTab, setActiveTab] = useState('skills');
-  const [reviewSummary, setReviewSummary] = useState({
-    freelancer: { nota: null, total: 0 },
-    contratante: { nota: null, total: 0 },
-  });
+  // A API devolve só a reputação do papel da conta (freelancer ou contratante)
+  const [reviewSummary, setReviewSummary] = useState({});
   const [receivedReviews, setReceivedReviews] = useState([]);
-  const [reputacao, setReputacao] = useState({ freelancer: null, contratante: null });
+  const [reputacao, setReputacao] = useState({});
 
   useEffect(() => {
     if (!token) return;
@@ -114,6 +112,8 @@ export default function Profile() {
   };
 
   const ehEmpresaCnpj = authUser?.profile?.papel === PAPEL_CONTRATANTE && profile.tipo_empresa === 'cnpj';
+  // A completude do perfil é a mesma em qualquer papel
+  const completudePerfil = Object.values(reputacao).find(Boolean)?.completude_perfil_detalhe;
   const nomeExibido = ehEmpresaCnpj && profile.nome_empresa ? profile.nome_empresa : userContext.name;
   const bioExibida = ehEmpresaCnpj && profile.bio_empresa
     ? profile.bio_empresa
@@ -175,10 +175,7 @@ export default function Profile() {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-              {[
-                { key: 'freelancer', label: 'Freelancer', className: 'salmon' },
-                { key: 'contratante', label: 'Contratante', className: 'purple' },
-              ].map(item => {
+              {PAPEIS_REPUTACAO.filter(item => reviewSummary[item.key]).map(item => {
                 const summary = reviewSummary[item.key];
                 return (
                   <div key={item.key} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -247,12 +244,13 @@ export default function Profile() {
             Quanto mais completo o seu perfil, mais pontos de confiança ele soma — <Link to="/profile/edit" style={{ color: 'var(--primary)', fontWeight: 600 }}>complete suas informações</Link> para melhorar sua reputação.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-            <TermometroReputacao titulo="Reputação como Freelancer" reputacao={reputacao.freelancer} />
-            <TermometroReputacao titulo="Reputação como Contratante" reputacao={reputacao.contratante} />
+            {PAPEIS_REPUTACAO.filter(item => reputacao[item.key]).map(item => (
+              <TermometroReputacao key={item.key} titulo={`Reputação como ${item.label}`} reputacao={reputacao[item.key]} />
+            ))}
           </div>
-          {reputacao.freelancer?.completude_perfil_detalhe && (
+          {completudePerfil && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1rem', marginTop: '0.85rem' }}>
-              {reputacao.freelancer.completude_perfil_detalhe.map((item) => (
+              {completudePerfil.map((item) => (
                 <span
                   key={item.chave}
                   style={{
