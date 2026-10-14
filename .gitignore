@@ -51,3 +51,12 @@ supabase-migration
 backend/.env.bak
 
 /historico
+
+# Scripts de debug locais (um deles continha credencial do banco)
+backend/apply_sql.py
+backend/check_db.py
+backend/fix_db.py
+backend/test_api.py
+backend/test_db_url.py
+_bal.js
+_bal.mjs

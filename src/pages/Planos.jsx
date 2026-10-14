@@ -2,11 +2,20 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
+import { useRole } from '../context/ContextoPapel';
 import { useDialogo } from '../context/ContextoDialogo';
+import useExigirAutenticacao from '../hooks/useExigirAutenticacao';
 
 export default function Plans() {
   const { token } = useAuth();
+  const { role } = useRole();
+  // Contratante usa o limite de vagas; freelancer, o de candidaturas.
+  // Visitante (sem papel) vê os dois, identificando a quem cada um se aplica.
+  const visitante = !role;
+  const mostrarAnuncios = role !== 'freelancer';
+  const mostrarCandidaturas = role !== 'contractor';
   const navigate = useNavigate();
+  const exigirAutenticacao = useExigirAutenticacao();
   const [loadingPlan, setLoadingPlan] = useState(null);
   const { alerta } = useDialogo();
 
@@ -17,6 +26,7 @@ export default function Plans() {
       price: 'R$ 0/mês',
       ads: 3,
       candidaturas: 5,
+      destaque: false,
       color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
@@ -27,6 +37,7 @@ export default function Plans() {
       price: 'R$ 29,90/mês',
       ads: 6,
       candidaturas: 20,
+      destaque: true,
       color: 'var(--holo-gradient-gold)',
       badge: 'Mais Popular',
       icon: <Star size={32} />
@@ -37,6 +48,7 @@ export default function Plans() {
       price: 'R$ 79,90/mês',
       ads: 'Ilimitados',
       candidaturas: 'Ilimitadas',
+      destaque: true,
       color: 'var(--holo-gradient-platinum)',
       badge: 'Profissional',
       icon: <Gem size={32} />
@@ -115,26 +127,35 @@ export default function Plans() {
             </div>
 
             <ul style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, textAlign: 'left', width: '100%' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span style={{ fontWeight: '500' }}>{plan.ads} anúncios por mês</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span>Acesso a todos os freelancers e contratantes</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
-                <CheckCircle size={20} />
-                <span>Chat integrado</span>
-              </li>
+              {mostrarAnuncios && (
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                  <CheckCircle size={20} />
+                  <span style={{ fontWeight: '500' }}>{plan.ads} vagas publicadas por mês{visitante && ' (contratantes)'}</span>
+                </li>
+              )}
+              {mostrarCandidaturas && (
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                  <CheckCircle size={20} />
+                  <span style={{ fontWeight: '500' }}>{plan.candidaturas} candidaturas enviadas por mês{visitante && ' (freelancers)'}</span>
+                </li>
+              )}
+              {plan.destaque && (
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                  <CheckCircle size={20} />
+                  <span style={{ fontWeight: '500' }}>
+                    {role === 'contractor'
+                      ? 'Vagas em destaque na página inicial'
+                      : role === 'freelancer'
+                        ? 'Candidaturas em destaque para o contratante'
+                        : 'Destaque nas vagas e candidaturas'}
+                    , com selo {plan.name}
+                  </span>
+                </li>
+              )}
             </ul>
 
             <button
-              onClick={() => handleSubscribe(plan.id)}
+              onClick={() => exigirAutenticacao(() => handleSubscribe(plan.id))}
               className="btn plan-subscribe-btn"
               disabled={loadingPlan !== null}
               style={{

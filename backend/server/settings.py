@@ -157,6 +157,11 @@ ASGI_APPLICATION = 'server.asgi.application'
 # Nota: o chat usa Redis Pub/Sub diretamente (consumer em core/consumers.py),
 # sem depender de channels-redis (incompatível com Python 3.14 neste setup).
 
+# Prazos do ciclo do acordo, em horas (core/ciclo_acordo.py). Valores curtos
+# (ex.: 0.05 = 3 minutos) ajudam a demonstrar os prazos na apresentação.
+PRAZO_PAGAMENTO_HORAS = float(os.environ.get('PRAZO_PAGAMENTO_HORAS', '72'))
+PRAZO_CONFIRMACAO_HORAS = float(os.environ.get('PRAZO_CONFIRMACAO_HORAS', '72'))
+
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
@@ -186,7 +191,7 @@ CORS_ALLOWED_ORIGINS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'core.autenticacao.TokenAuthenticationSemBanidos',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [

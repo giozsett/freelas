@@ -62,7 +62,7 @@ export default function AdCard({ ad }) {
 
       <div className="ad-list-card__zone ad-list-card__zone--footer">
         <div className="ad-list-card__price">
-          <span className="label">{ad.type === 'freelancer' ? 'A partir de' : 'Orçamento'}</span>
+          <span className="label">Orçamento</span>
           <strong>
             R$ {ad.price}
             {ad.priceUnit && ad.priceUnit !== 'total' && <small>{ad.priceUnit}</small>}
@@ -81,6 +81,7 @@ AdCard.propTypes = {
     title: PropTypes.string.isRequired,
     rating: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     author: PropTypes.string,
+
     locationType: PropTypes.string,
     category: PropTypes.string,
     skills: PropTypes.arrayOf(PropTypes.string),

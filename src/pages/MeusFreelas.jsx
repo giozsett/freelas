@@ -5,7 +5,7 @@ import {
   Briefcase, User, Calendar, MessageSquare, AlertCircle,
   CheckCircle, ChevronDown, Bell, Check, X, Clock,
   FileText, HelpCircle, TrendingUp, Edit, Star, Ban,
-  Wallet, CircleCheck, CircleDot, CircleX, Send
+  Wallet, CircleCheck, CircleDot, CircleX, Send, PackageCheck, AlertTriangle, Hourglass
 } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useRole } from '../context/ContextoPapel';
@@ -13,12 +13,16 @@ import { useNotificacoes } from '../context/ContextoNotificacao';
 import { useDialogo } from '../context/ContextoDialogo';
 import useScrollEdges from '../hooks/useScrollEdges';
 import { CandidaturasView } from './MinhasCandidaturas';
+import {
+  STATUS_AGUARDANDO_CONFIRMACAO, MOTIVOS_PROBLEMA, ROTULO_MOTIVO_PROBLEMA,
+  ROTULO_MOTIVO_CANCELAMENTO, formatarDataHora,
+} from '../constants/acordos';
 
 function AgreementSteps({ status, isPaid }) {
   const steps = [
     { key: 'aceito', label: 'Acordo aceito', done: true },
-    { key: 'pagamento', label: 'Pagamento', done: isPaid || ['Ativo', 'Concluído'].includes(status) },
-    { key: 'andamento', label: 'Em andamento', done: status === 'Concluído' },
+    { key: 'pagamento', label: 'Pagamento', done: isPaid || ['Ativo', STATUS_AGUARDANDO_CONFIRMACAO, 'Concluído'].includes(status) },
+    { key: 'entrega', label: 'Entrega', done: [STATUS_AGUARDANDO_CONFIRMACAO, 'Concluído'].includes(status) },
     { key: 'conclusao', label: 'Conclusão', done: status === 'Concluído' },
     { key: 'avaliacao', label: 'Avaliação', done: false },
   ];
@@ -136,10 +140,12 @@ export default function MeusFreelas() {
   const [expandedCards, setExpandedCards] = useState({});
   const [payingAgreementId, setPayingAgreementId] = useState(null);
   const [concludingAgreementId, setConcludingAgreementId] = useState(null);
+  const [deliveringAgreementId, setDeliveringAgreementId] = useState(null);
   const [agreementTab, setAgreementTab] = useState('ativos');
   const [pendingRequestsExpanded, setPendingRequestsExpanded] = useState(false);
   const [cancellationAgreement, setCancellationAgreement] = useState(null);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellationMotivo, setCancellationMotivo] = useState('');
   const [requestingCancellation, setRequestingCancellation] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -190,8 +196,8 @@ export default function MeusFreelas() {
 
   const handleConcludeAgreement = async (agreement) => {
     const confirmed = await confirmar(
-      `Deseja concluir o acordo "${agreement.titulo_anuncio}"? Depois disso, as duas partes poderão enviar suas avaliações.`,
-      { titulo: 'Concluir acordo', confirmarTexto: 'Concluir acordo' },
+      `Confirma a conclusão do acordo "${agreement.titulo_anuncio}"? Depois disso, as duas partes poderão enviar suas avaliações.`,
+      { titulo: 'Confirmar conclusão', confirmarTexto: 'Confirmar conclusão' },
     );
     if (!confirmed) return;
     setConcludingAgreementId(agreement.id);
@@ -209,15 +215,40 @@ export default function MeusFreelas() {
     }
   };
 
+  const handleDeliver = async (agreement) => {
+    const confirmed = await confirmar(
+      `Confirma que o serviço "${agreement.titulo_anuncio}" foi entregue/realizado? O contratante será avisado para confirmar a conclusão.`,
+      { titulo: 'Marcar como entregue', confirmarTexto: 'Marcar como entregue' },
+    );
+    if (!confirmed) return;
+    setDeliveringAgreementId(agreement.id);
+    try {
+      const response = await fetch(`http://localhost:8000/api/acordos/${agreement.id}/entregar/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Token ${localStorage.getItem('token')}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Não foi possível marcar a entrega (HTTP ${response.status}).`);
+      setAgreements(current => current.map(a => a.id === agreement.id ? data : a));
+      showStatus('Entrega registrada. Agora o contratante confirma a conclusão.', 'success');
+    } catch (error) {
+      showStatus(error.message, 'error');
+    } finally {
+      setDeliveringAgreementId(null);
+    }
+  };
+
   const openCancellationModal = (agreement) => {
     setCancellationAgreement(agreement);
     setCancellationReason('');
+    setCancellationMotivo('');
   };
 
   const closeCancellationModal = () => {
     if (requestingCancellation) return;
     setCancellationAgreement(null);
     setCancellationReason('');
+    setCancellationMotivo('');
   };
 
   const handleRequestCancellation = async (event) => {
@@ -230,15 +261,16 @@ export default function MeusFreelas() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${localStorage.getItem('token')}` },
-          body: JSON.stringify({ justificativa: cancellationReason }),
+          body: JSON.stringify({ motivo: cancellationMotivo, justificativa: cancellationReason }),
         },
       );
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Não foi possível solicitar o cancelamento.');
+      if (!response.ok) throw new Error(data.error || 'Não foi possível relatar o problema.');
       setAgreements(current => current.map(a => a.id === cancellationAgreement.id ? { ...a, cancelamento_pendente: data } : a));
-      showStatus('Você enviou sua solicitação de cancelamento. Aguarde a aprovação da moderação.', 'success');
+      showStatus('Problema relatado. A moderação vai analisar o caso.', 'success');
       setCancellationAgreement(null);
       setCancellationReason('');
+      setCancellationMotivo('');
       fetchAgreements();
     } catch (error) {
       showStatus(error.message, 'error');
@@ -298,12 +330,11 @@ export default function MeusFreelas() {
     return !isFreelancer;
   };
 
-  const userRoleInAgreement = (app) => isContractorOfAgreement(app) ? 'contratante' : 'freelancer';
+  // O backend informa o papel de quem está vendo o acordo (meu_papel)
+  const userRoleInAgreement = (app) => app.meu_papel || (isContractorOfAgreement(app) ? 'contratante' : 'freelancer');
 
-  // Separação estrita por papel: freelancer vê só os acordos em que atua como
-  // freelancer; empresa vê só os acordos em que atua como contratante.
-  const papelDoUsuario = isFreelancer ? 'freelancer' : 'contratante';
-  const agreementsVisiveis = agreements.filter(app => userRoleInAgreement(app) === papelDoUsuario);
+  // Com papel fixo por conta, todos os acordos do usuário são do mesmo papel
+  const agreementsVisiveis = agreements;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -371,7 +402,7 @@ export default function MeusFreelas() {
   };
 
   const pendingPaymentAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Pendente Pagamento');
-  const activeAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Ativo');
+  const activeAgreements = agreementsVisiveis.filter(app => ['Ativo', STATUS_AGUARDANDO_CONFIRMACAO].includes(app.status_acordo));
   const completedAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Concluído');
   const cancelledAgreements = agreementsVisiveis.filter(app => app.status_acordo === 'Cancelado');
   const historyAgreements = agreementTab === 'concluidos' ? completedAgreements : cancelledAgreements;
@@ -380,7 +411,12 @@ export default function MeusFreelas() {
     app.tem_solicitacao && app.solicitado_por !== userRoleInAgreement(app)
   ));
 
-  const attentionCount = pendingPaymentAgreements.length + receivedRequests.length;
+  // Entregas que só o contratante pode confirmar antes da conclusão automática
+  const deliveriesAwaitingMe = activeAgreements.filter(app => (
+    app.status_acordo === STATUS_AGUARDANDO_CONFIRMACAO && isContractorOfAgreement(app)
+  ));
+
+  const attentionCount = pendingPaymentAgreements.length + receivedRequests.length + deliveriesAwaitingMe.length;
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
@@ -586,7 +622,7 @@ export default function MeusFreelas() {
                             </span>
                             {app.cancelamento_pendente && (
                               <span className="badge" style={{ background: 'var(--danger-color)', color: 'var(--danger-contrast) !important', fontSize: '0.75rem' }}>
-                                <Ban size={11} /> Cancelamento Pendente
+                                <Ban size={11} /> Problema relatado
                               </span>
                             )}
                           </div>
@@ -598,8 +634,16 @@ export default function MeusFreelas() {
                           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
                             {userIsContractor
                               ? 'Para ativar este acordo, conclua o pagamento no checkout seguro do Stripe.'
-                              : 'Aguardando o contratante concluir o pagamento para iniciar o projeto.'}
+                              : 'Aguardando o contratante concluir o pagamento. Não comece o serviço antes da confirmação.'}
                           </p>
+                          {app.prazo_pagamento && (
+                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.84rem', color: 'var(--pending-accent)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <Hourglass size={13} />
+                              {userIsContractor
+                                ? `Pague até ${formatarDataHora(app.prazo_pagamento)}. Depois disso o acordo é cancelado automaticamente.`
+                                : `Se o pagamento não for feito até ${formatarDataHora(app.prazo_pagamento)}, o acordo é cancelado automaticamente.`}
+                            </p>
+                          )}
                         </div>
                         <div className="mf-card__price">
                           <div className="mf-card__price-label">Valor do Serviço</div>
@@ -635,7 +679,7 @@ export default function MeusFreelas() {
                           {!app.cancelamento_pendente && (
                             <MoreActionsMenu items={[
                               { icon: <Edit size={15} />, label: 'Solicitar alteração', onClick: () => handleOpenModal(app), disabled: Boolean(app.tem_solicitacao) },
-                              { icon: <Ban size={15} />, label: 'Solicitar cancelamento', onClick: () => openCancellationModal(app), danger: true },
+                              { icon: <Ban size={15} />, label: 'Relatar problema', onClick: () => openCancellationModal(app), danger: true },
                             ]} buttonLabel="Mais ações" />
                           )}
                         </div>
@@ -662,7 +706,11 @@ export default function MeusFreelas() {
                 {activeAgreements.map(app => {
                   const isExpanded = expandedCards[app.id];
                   const userIsContractor = isContractorOfAgreement(app);
-                  const isPaid = Boolean(app.status_acordo === 'Ativo');
+                  const aguardandoConfirmacao = app.status_acordo === STATUS_AGUARDANDO_CONFIRMACAO;
+                  const isPaid = app.status_acordo === 'Ativo' || aguardandoConfirmacao;
+                  const proximaAcao = aguardandoConfirmacao
+                    ? (userIsContractor ? 'Confirmar a conclusão' : 'Aguardar a confirmação do contratante')
+                    : (userIsContractor ? 'Aguardar a entrega do freelancer' : 'Marcar o serviço como entregue');
                   return (
                     <div key={app.id} className="mf-card mf-card--completed">
                       {/* Collapsed summary */}
@@ -677,9 +725,19 @@ export default function MeusFreelas() {
                                 <Bell size={11} /> Alteração Pendente
                               </span>
                             )}
+                            {aguardandoConfirmacao && (
+                              <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning-color) !important', fontSize: '0.75rem' }}>
+                                <Hourglass size={11} /> Aguardando confirmação
+                              </span>
+                            )}
+                            {app.atrasado && (
+                              <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger-color) !important', fontSize: '0.75rem' }}>
+                                <AlertTriangle size={11} /> Atrasado
+                              </span>
+                            )}
                             {app.cancelamento_pendente && (
                               <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger-color) !important', fontSize: '0.75rem' }}>
-                                <Ban size={11} /> Cancelamento Pendente
+                                <Ban size={11} /> Problema relatado
                               </span>
                             )}
                           </div>
@@ -690,9 +748,7 @@ export default function MeusFreelas() {
                             <span><Calendar size={14} /> Prazo: <strong>{app.conclusao_prevista ? new Date(app.conclusao_prevista + 'T00:00:00').toLocaleDateString() : '—'}</strong></span>
                           </div>
                           <div className="mf-card__next">
-                            Próxima ação: <strong>
-                              {userIsContractor ? 'Marcar como concluído' : 'Aguardar conclusão'}
-                            </strong>
+                            Próxima ação: <strong>{proximaAcao}</strong>
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
@@ -737,6 +793,22 @@ export default function MeusFreelas() {
                               Previsão de Conclusão: <strong>{app.conclusao_prevista ? new Date(app.conclusao_prevista + 'T00:00:00').toLocaleDateString() : '—'}</strong>
                             </div>
 
+                            {aguardandoConfirmacao && (
+                              <div style={{
+                                background: 'var(--warning-soft)', border: '1px solid var(--warning-color)',
+                                borderRadius: '10px', padding: '0.9rem 1rem', fontSize: '0.86rem'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, marginBottom: '0.3rem', fontSize: '0.9rem' }}>
+                                  <PackageCheck size={15} /> Serviço entregue em {formatarDataHora(app.entregue_em)}
+                                </div>
+                                <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                                  {userIsContractor
+                                    ? `Confirme a conclusão ou use "Relatar problema" até ${formatarDataHora(app.prazo_confirmacao)}. Depois disso o acordo é concluído automaticamente.`
+                                    : `Se o contratante não responder até ${formatarDataHora(app.prazo_confirmacao)}, o acordo é concluído automaticamente.`}
+                                </p>
+                              </div>
+                            )}
+
                             {/* Pending change request notice */}
                             {app.tem_solicitacao && (
                               <div style={{
@@ -771,10 +843,10 @@ export default function MeusFreelas() {
                                 borderRadius: '10px', padding: '0.9rem 1rem'
                               }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, marginBottom: '0.4rem', fontSize: '0.9rem' }}>
-                                  <Ban size={15} /> Cancelamento pendente
+                                  <Ban size={15} /> Problema relatado: {ROTULO_MOTIVO_PROBLEMA[app.cancelamento_pendente.motivo] || 'Outro motivo'}
                                 </div>
                                 <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-                                  Aguardando aprovação da moderação. Justificativa: {`"${app.cancelamento_pendente.justificativa}"`}
+                                  Aguardando análise da moderação. Justificativa: {`"${app.cancelamento_pendente.justificativa}"`}
                                 </p>
                               </div>
                             )}
@@ -795,15 +867,17 @@ export default function MeusFreelas() {
                               <Link to={`/chat/${app.id}`} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
                                 <MessageSquare size={15} /> Abrir Conversa
                               </Link>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenModal(app)}
-                                className="btn btn-secondary"
-                                disabled={Boolean(app.tem_solicitacao)}
-                                style={{ fontSize: '0.85rem' }}
-                              >
-                                <Edit size={15} /> {app.tem_solicitacao ? 'Alteração Pendente' : 'Solicitar Alterações'}
-                              </button>
+                              {!aguardandoConfirmacao && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenModal(app)}
+                                  className="btn btn-secondary"
+                                  disabled={Boolean(app.tem_solicitacao)}
+                                  style={{ fontSize: '0.85rem' }}
+                                >
+                                  <Edit size={15} /> {app.tem_solicitacao ? 'Alteração Pendente' : 'Solicitar Alterações'}
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => openCancellationModal(app)}
@@ -811,18 +885,32 @@ export default function MeusFreelas() {
                                 disabled={Boolean(app.cancelamento_pendente)}
                                 style={{ fontSize: '0.85rem', color: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
                               >
-                                <Ban size={15} /> {app.cancelamento_pendente ? 'Cancelamento Pendente' : 'Solicitar Cancelamento'}
+                                <Ban size={15} /> {app.cancelamento_pendente ? 'Problema relatado' : 'Relatar problema'}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => handleConcludeAgreement(app)}
-                                className="btn"
-                                disabled={concludingAgreementId !== null || Boolean(app.cancelamento_pendente)}
-                                style={{ fontSize: '0.85rem' }}
-                              >
-                                <CheckCircle size={15} />
-                                {concludingAgreementId === app.id ? 'Concluindo...' : 'Concluir Acordo'}
-                              </button>
+                              {!userIsContractor && !aguardandoConfirmacao && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeliver(app)}
+                                  className="btn"
+                                  disabled={deliveringAgreementId !== null || Boolean(app.cancelamento_pendente)}
+                                  style={{ fontSize: '0.85rem' }}
+                                >
+                                  <PackageCheck size={15} />
+                                  {deliveringAgreementId === app.id ? 'Registrando...' : 'Marcar como entregue'}
+                                </button>
+                              )}
+                              {userIsContractor && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleConcludeAgreement(app)}
+                                  className="btn"
+                                  disabled={concludingAgreementId !== null || Boolean(app.cancelamento_pendente)}
+                                  style={{ fontSize: '0.85rem' }}
+                                >
+                                  <CheckCircle size={15} />
+                                  {concludingAgreementId === app.id ? 'Concluindo...' : 'Confirmar conclusão'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
@@ -835,7 +923,9 @@ export default function MeusFreelas() {
               <div className="mf-empty">
                 <div className="mf-empty__icon"><CheckCircle size={30} /></div>
                 <h3>Nenhum acordo em andamento</h3>
-                <p>Aprove propostas nas suas candidaturas ou anúncios para iniciar uma parceria.</p>
+                <p>{isFreelancer
+                  ? 'Candidate-se a vagas: quando o contratante aprovar, o acordo aparece aqui.'
+                  : 'Aprove uma candidatura nos seus anúncios para iniciar um acordo.'}</p>
                 <Link to="/" className="btn">Navegar por Anúncios</Link>
               </div>
             )}
@@ -874,6 +964,7 @@ export default function MeusFreelas() {
                             {(isConcluido ? app.concluido_em : app.cancelado_em)
                               ? new Date(isConcluido ? app.concluido_em : app.cancelado_em).toLocaleDateString()
                               : '—'}
+                            {!isConcluido && ROTULO_MOTIVO_CANCELAMENTO[app.motivo_cancelamento] && ` · ${ROTULO_MOTIVO_CANCELAMENTO[app.motivo_cancelamento]}`}
                           </span>
                         </div>
                         <h3 className="mf-card__title" style={{ fontSize: '1.15rem', fontWeight: 500 }}>{app.titulo_anuncio}</h3>
@@ -1005,22 +1096,29 @@ export default function MeusFreelas() {
               <X size={22} />
             </button>
             <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Ban size={22} color="var(--danger-color)" /> Solicitar Cancelamento
+              <Ban size={22} color="var(--danger-color)" /> Relatar problema
             </h2>
             <p style={{ opacity: 0.75, lineHeight: 1.5, fontSize: '0.9rem' }}>
-              O acordo <strong>{cancellationAgreement.titulo_anuncio}</strong> continuará com o status atual até que um administrador analise a solicitação.
+              O acordo <strong>{cancellationAgreement.titulo_anuncio}</strong> continuará com o status atual até que um administrador analise o caso. Enquanto isso, ele não é concluído automaticamente.
             </p>
-            {cancellationAgreement.status_acordo === 'Ativo' && (
+            {['Ativo', STATUS_AGUARDANDO_CONFIRMACAO].includes(cancellationAgreement.status_acordo) && (
               <div style={{ background: 'var(--warning-soft)', borderLeft: '4px solid var(--warning-color)', padding: '0.75rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.84rem' }}>
                 A aprovação cancela o acordo na plataforma, mas não realiza automaticamente um estorno de pagamento já aprovado.
               </div>
             )}
             <form onSubmit={handleRequestCancellation}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.92rem' }}>Motivo</label>
+              <select className="input" required value={cancellationMotivo}
+                onChange={(e) => setCancellationMotivo(e.target.value)}
+                style={{ marginBottom: '1rem', background: 'var(--bg-color)', color: 'var(--text-color)' }}>
+                <option value="">Selecione o motivo...</option>
+                {MOTIVOS_PROBLEMA.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+              </select>
               <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.35rem', fontSize: '0.92rem' }}>Justificativa</label>
               <textarea className="input" rows="5" minLength="10" required
                 value={cancellationReason}
                 onChange={(e) => setCancellationReason(e.target.value)}
-                placeholder="Explique o motivo do cancelamento para análise administrativa..."
+                placeholder="Descreva o que aconteceu para a análise da moderação..."
                 style={{ resize: 'vertical' }} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={closeCancellationModal} disabled={requestingCancellation}>Voltar</button>

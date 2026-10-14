@@ -20,9 +20,7 @@ valor do pagamento.
 - [Stripe CLI](https://docs.stripe.com/stripe-cli) instalado. É a forma mais
   simples de testar o webhook localmente, sem precisar expor sua máquina na
   internet.
-  - Windows: `winget install stripe.stripe-cli`
-  - Mac: `brew install stripe/stripe-cli/stripe`
-  - Linux: instruções em https://docs.stripe.com/stripe-cli
+  - Instalação (Windows): `winget install stripe.stripe-cli`
 - Python (venv) e Node.js já instalados, seguindo o `README.md` do projeto.
 
 ## 2. Configurar o `backend/.env`
@@ -46,22 +44,10 @@ backend antes de testar.
 
 ## 3. Subir o backend e o frontend
 
-**Windows (PowerShell):**
 ```powershell
 # Terminal 1 — backend
 cd backend
 .\venv\Scripts\Activate.ps1
-python manage.py runserver
-
-# Terminal 2 — frontend
-npm run dev
-```
-
-**Mac/Linux:**
-```bash
-# Terminal 1 — backend
-cd backend
-source venv/bin/activate
 python manage.py runserver
 
 # Terminal 2 — frontend
@@ -92,8 +78,7 @@ Ready! Your webhook signing secret is whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 3. **Deixe o `stripe listen` rodando** durante todo o teste — é ele quem
    entrega a confirmação de pagamento para o seu backend.
 
-> Alternativa: o projeto também tem um script (`npm run dev:checkout` /
-> `npm run dev:checkout:windows`) que sobe um túnel ngrok com domínio fixo e
+> Alternativa: o projeto também tem um script (`npm run dev:checkout`) que sobe um túnel ngrok com domínio fixo e
 > espera um webhook já configurado no Dashboard do Stripe apontando pra ele.
 > Use essa opção só se precisar testar em outro dispositivo (ex: celular) ou
 > já tiver esse webhook configurado no Dashboard — para desenvolvimento do

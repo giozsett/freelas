@@ -22,13 +22,17 @@ def _canal_pubsub(acordo_id):
 
 
 def _autenticar_por_token(token):
-    """Autentica usando o Token REST. Retorna o usuário ou None."""
+    """Autentica usando o Token REST. Retorna o usuário ou None (inclusive
+    para contas banidas, como na autenticação REST)."""
     from rest_framework.authtoken.models import Token
     try:
-        token_obj = Token.objects.select_related('user').get(key=token)
-        return token_obj.user
+        token_obj = Token.objects.select_related('user__profile').get(key=token)
     except Token.DoesNotExist:
         return None
+    profile = getattr(token_obj.user, 'profile', None)
+    if profile and profile.banido:
+        return None
+    return token_obj.user
 
 
 def _acordo_e_participacao(acordo_id, user):

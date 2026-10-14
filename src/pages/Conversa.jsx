@@ -15,6 +15,7 @@ const WS_BASE = API.replace(/^http/, 'ws');
 const STATUS_CHIP = {
   'Pendente Pagamento': { label: 'Aguardando pagamento', tone: 'warning' },
   'Ativo': { label: 'Em andamento', tone: 'ativo' },
+  'Aguardando confirmação': { label: 'Aguardando confirmação', tone: 'warning' },
   'Concluído': { label: 'Concluído', tone: 'done' },
   'Cancelado': { label: 'Cancelado', tone: 'cancelled' },
 };
@@ -651,11 +652,6 @@ export default function Conversa() {
             >
               <X size={16} />
             </button>
-            <div className="chat-details__avatar">
-              <Avatar nome={outraParte?.nome} foto={outraParte?.foto_perfil} tamanho={48} />
-              <h3>{outraParte?.nome || 'Participante'}</h3>
-              {outraParte?.papel && <span className="chat-papel-tag">{PAPEL_LABEL[outraParte.papel] || outraParte.papel}</span>}
-            </div>
             <div className="chat-details__section">
               <span className="chat-details__label">Acordo</span>
               <div className="chat-details__row"><span>Anúncio</span><span>{chat.titulo_anuncio}</span></div>

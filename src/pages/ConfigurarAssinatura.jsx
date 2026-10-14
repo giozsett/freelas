@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap, Star, Gem } from 'lucide-react';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { useDialogo } from '../context/ContextoDialogo';
+import { useRole } from '../context/ContextoPapel';
 
 export default function SubscriptionSetup() {
   const { token } = useAuth();
+  const { role } = useRole();
   const navigate = useNavigate();
   const [selectedPlanId, setSelectedPlanId] = useState('gold'); // Default is 'gold'
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -16,7 +18,9 @@ export default function SubscriptionSetup() {
       id: 'free',
       name: 'Gratuito',
       price: 'R$ 0/mês',
-      ads: 2,
+      ads: 3,
+      candidaturas: 5,
+      destaque: false,
       color: 'var(--holo-gradient-free)',
       badge: null,
       icon: <Zap size={32} />
@@ -25,7 +29,9 @@ export default function SubscriptionSetup() {
       id: 'gold',
       name: 'Gold',
       price: 'R$ 29,90/mês',
-      ads: 10,
+      ads: 6,
+      candidaturas: 20,
+      destaque: true,
       color: 'var(--holo-gradient-gold)',
       badge: 'Mais Popular',
       icon: <Star size={32} />
@@ -35,6 +41,8 @@ export default function SubscriptionSetup() {
       name: 'Platinum',
       price: 'R$ 79,90/mês',
       ads: 'Ilimitados',
+      candidaturas: 'Ilimitadas',
+      destaque: true,
       color: 'var(--holo-gradient-platinum)',
       badge: 'Profissional',
       icon: <Gem size={32} />
@@ -132,8 +140,21 @@ export default function SubscriptionSetup() {
               <ul style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, textAlign: 'left', width: '100%' }}>
                 <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                   <CheckCircle size={20} />
-                  <span style={{ fontWeight: '500' }}>{plan.ads} anúncios por mês</span>
+                  <span style={{ fontWeight: '500' }}>
+                    {role === 'contractor'
+                      ? `${plan.ads} vagas publicadas por mês`
+                      : `${plan.candidaturas} candidaturas enviadas por mês`}
+                  </span>
                 </li>
+                {plan.destaque && (
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
+                    <CheckCircle size={20} />
+                    <span style={{ fontWeight: '500' }}>
+                      {role === 'contractor' ? 'Vagas em destaque na página inicial' : 'Candidaturas em destaque para o contratante'}
+                      , com selo {plan.name}
+                    </span>
+                  </li>
+                )}
                 <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a1a1a' }}>
                   <CheckCircle size={20} />
                   <span>Acesso a todos os freelancers e contratantes</span>

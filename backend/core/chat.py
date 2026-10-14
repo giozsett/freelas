@@ -19,7 +19,7 @@ import redis as redis_lib
 from django.conf import settings
 
 # Status em que as duas partes podem trocar mensagens
-STATUS_CHAT_ATIVO = {'Pendente Pagamento', 'Ativo'}
+STATUS_CHAT_ATIVO = {'Pendente Pagamento', 'Ativo', 'Aguardando confirmação'}
 
 
 class ChatIndisponivel(Exception):
@@ -51,12 +51,9 @@ def chat_ativo(acordo):
 
 def partes_do_acordo(acordo):
     """Retorna (contratante, freelancer)."""
-    if not acordo or not acordo.candidatura:
+    if not acordo:
         return None, None
-    candidatura = acordo.candidatura
-    freelancer = candidatura.user if candidatura else None
-    contratante = candidatura.ad.author if candidatura and candidatura.ad else None
-    return contratante, freelancer
+    return acordo.partes()
 
 
 # Canal Pub/Sub onde os consumers WebSocket escutam novas mensagens do chat.

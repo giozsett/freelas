@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import BarraNavegacao from './components/BarraNavegacao';
 import Inicio from './pages/Inicio';
 import Perfil from './pages/Perfil';
@@ -27,30 +27,32 @@ import Configuracoes from './pages/Configuracoes';
 import EscolherPapel from './pages/EscolherPapel';
 import CriarPerfilEmpresa from './pages/CriarPerfilEmpresa';
 import { ProvedorDialogo } from './context/ContextoDialogo';
+import { PAPEL_CONTRATANTE, PAPEL_FREELANCER } from './constants/papeis';
 
-function App() {
+function ConteudoApp() {
+  const location = useLocation();
+  const isPaginaAutenticacao = location.pathname === '/login' || location.pathname === '/register';
+
   return (
-    <ProvedorDialogo>
-    <Router>
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <BarraNavegacao />
-        <div className="container" style={{ marginTop: '2rem', marginBottom: '4rem', flex: 1, width: '100%' }}>
+        <div className="container" style={{ marginTop: '2rem', marginBottom: isPaginaAutenticacao ? '1.5rem' : '4rem', flex: isPaginaAutenticacao ? '0 1 auto' : 1, width: '100%' }}>
         <Routes>
-          <Route path="/" element={<RotaPrivada><Inicio /></RotaPrivada>} />
+          <Route path="/" element={<Inicio />} />
           <Route path="/login" element={<Login />} />
           <Route path="/linkedin-callback" element={<LinkedinCallback />} />
           <Route path="/register" element={<Cadastro />} />
           <Route path="/profile" element={<RotaPrivada><Perfil /></RotaPrivada>} />
           <Route path="/profile/edit" element={<RotaPrivada><EditarPerfil /></RotaPrivada>} />
-          <Route path="/create-ad" element={<RotaPrivada><CriarAnuncio /></RotaPrivada>} />
-          <Route path="/edit-ad/:id" element={<RotaPrivada><EditarAnuncio /></RotaPrivada>} />
-          <Route path="/ad/:id" element={<RotaPrivada><DetalhesAnuncio /></RotaPrivada>} />
+          <Route path="/create-ad" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><CriarAnuncio /></RotaPrivada>} />
+          <Route path="/edit-ad/:id" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><EditarAnuncio /></RotaPrivada>} />
+          <Route path="/ad/:id" element={<DetalhesAnuncio />} />
           <Route path="/chat" element={<RotaPrivada><Conversa /></RotaPrivada>} />
           <Route path="/chat/:acordoId" element={<RotaPrivada><Conversa /></RotaPrivada>} />
-          <Route path="/plans" element={<RotaPrivada><Planos /></RotaPrivada>} />
-          <Route path="/my-ads" element={<RotaPrivada><MeusAnuncios /></RotaPrivada>} />
-          <Route path="/my-ads/manage/:id" element={<RotaPrivada><GerenciarCandidaturas /></RotaPrivada>} />
-          <Route path="/my-applications" element={<RotaPrivada><Navigate to="/my-freelas?tab=candidaturas" replace /></RotaPrivada>} />
+          <Route path="/plans" element={<Planos />} />
+          <Route path="/my-ads" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><MeusAnuncios /></RotaPrivada>} />
+          <Route path="/my-ads/manage/:id" element={<RotaPrivada papel={PAPEL_CONTRATANTE}><GerenciarCandidaturas /></RotaPrivada>} />
+          <Route path="/my-applications" element={<RotaPrivada papel={PAPEL_FREELANCER}><Navigate to="/my-freelas?tab=candidaturas" replace /></RotaPrivada>} />
           <Route path="/user/:id" element={<RotaPrivada><PerfilPublico /></RotaPrivada>} />
           <Route path="/moderator-login" element={<LoginModerador />} />
           <Route path="/moderation-panel" element={<PainelModeracao />} />
@@ -66,7 +68,15 @@ function App() {
       </div>
       <Rodape />
       </div>
-    </Router>
+  );
+}
+
+function App() {
+  return (
+    <ProvedorDialogo>
+      <Router>
+        <ConteudoApp />
+      </Router>
     </ProvedorDialogo>
   );
 }

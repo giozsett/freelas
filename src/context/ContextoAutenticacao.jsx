@@ -55,8 +55,12 @@ export const AuthProvider = ({ children }) => {
     setUser(prev => (prev ? { ...prev, profile: { ...prev.profile, papel } } : prev));
   };
 
+  const atualizarFotoPerfil = (foto_perfil) => {
+    setUser(prev => (prev ? { ...prev, profile: { ...prev.profile, foto_perfil } } : prev));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading, ajustarPapel }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, ajustarPapel, atualizarFotoPerfil }}>
       {children}
     </AuthContext.Provider>
   );

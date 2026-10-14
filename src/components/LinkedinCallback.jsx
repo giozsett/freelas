@@ -53,7 +53,7 @@ export default function LinkedinCallback() {
         } else {
           cancel(data.error || 'Erro ao entrar com o LinkedIn.');
         }
-      } catch (err) {
+      } catch {
         cancel('Erro interno de conexão.');
       }
     };

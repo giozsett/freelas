@@ -7,7 +7,7 @@ import { useDialogo } from '../context/ContextoDialogo';
 import { checkPasswordStrength } from '../utils/validacaoSenha';
 
 const GoogleIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 48 48" style={{ marginRight: '8px' }}>
+  <svg width="20" height="20" viewBox="0 0 48 48">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
     <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -45,12 +45,32 @@ export default function Cadastro() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!name.trim()) {
+      setErrorMsg('Por favor, preencha seu nome completo.');
+      return;
+    }
+    if (!email.trim()) {
+      setErrorMsg('Por favor, preencha seu e-mail.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrorMsg('Digite um e-mail válido.');
+      return;
+    }
+    if (!password) {
+      setErrorMsg('Por favor, preencha sua senha.');
+      return;
+    }
+    if (!confirmPassword) {
+      setErrorMsg('Por favor, confirme sua senha.');
+      return;
+    }
     if (password !== confirmPassword) {
       setErrorMsg('As senhas não coincidem!');
       return;
     }
     if (passwordStrength === 'Fraca') {
-      setErrorMsg('Sua senha é Fraca. Utilize letras e números no mínimo.');
+      setErrorMsg('Sua senha é fraca.\nA senha precisa ter no mínimo 6 caracteres, e, pelo menos, 1 número e 1 letra.');
       return;
     }
     if (!agreedToTerms) {
@@ -188,7 +208,7 @@ export default function Cadastro() {
                 style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
               />
             </div>
-            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.65rem 0.8rem', textAlign: 'left', fontSize: '0.9rem', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>{errorMsg}</div>}
             <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
               Verificar
             </button>
@@ -207,59 +227,40 @@ export default function Cadastro() {
   // ── Etapa de cadastro ──
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-      <div style={{ maxWidth: '500px', margin: '4rem auto' }}>
+      <div style={{ maxWidth: '500px', margin: '1.5rem auto' }}>
         <div className="card fade-in">
           <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Crie sua conta</h1>
 
-                    <div style={{ maxWidth: '400px', margin: '0 auto 1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <GoogleLogin
-                onSuccess={handleGoogleRegister}
-                onError={() => setErrorMsg('Erro ao cadastrar com o Google. Tente novamente.')}
-                text="signup_with"
-                shape="rectangular"
-                logo_alignment="left"
-                width="400"
-              />
+          <div style={{ maxWidth: '468px', margin: '0 auto 1.5rem' }}>
+            <div className="social-btn-overlay">
+              <div className="social-btn-overlay__visual btn-social" aria-hidden="true">
+                <GoogleIcon />
+                Cadastrar com o Google
+              </div>
+              <div className="social-btn-overlay__real">
+                <GoogleLogin
+                  onSuccess={handleGoogleRegister}
+                  onError={() => setErrorMsg('Erro ao cadastrar com o Google. Tente novamente.')}
+                  text="signup_with"
+                  shape="rectangular"
+                  logo_alignment="left"
+                  width="468"
+                />
+              </div>
             </div>
 
-                        <button
+            <button
               type="button"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-                width: '100%',
-                height: '40px',
-                minHeight: '40px',
-                padding: '0 1rem',
-                marginTop: '0.75rem',
-                background: '#fff',
-                backgroundImage: 'none',
-                color: '#333',
-                border: '1px solid rgba(0, 0, 0, 0.12)',
-                borderRadius: '0',
-                fontFamily: "var(--font-family)",
-                fontSize: '0.95rem',
-                fontWeight: '500',
-                letterSpacing: '0.25px',
-                cursor: 'pointer',
-                transition: 'background-color 0.1s, box-shadow 0.2s',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f8f8f8'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#fff'; }}
+              className="btn-social"
+              style={{ marginTop: '0.75rem' }}
               onClick={handleLinkedinRegister}
             >
-              <span style={{ position: 'absolute', left: '1rem', display: 'flex', alignItems: 'center' }}>
-                <LinkedinIcon />
-              </span>
-              <span>Fazer login com o LinkedIn</span>
+              <LinkedinIcon />
+              Cadastrar com o LinkedIn
             </button>
           </div>
 
-          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.8rem', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>{errorMsg}</div>}
+          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.65rem 0.8rem', marginBottom: '1.5rem', textAlign: 'left', fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'pre-line', fontFamily: "'Outfit', sans-serif" }}>{errorMsg}</div>}
 
           <div style={{ margin: '1.5rem 0', textAlign: 'center', position: 'relative' }}>
             <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border-color)', zIndex: 1 }}></div>
@@ -268,30 +269,31 @@ export default function Cadastro() {
 
           <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nome Completo</label>
-              <input type="text" className="input" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Seu nome" />
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nome Completo <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+              <input type="text" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
             </div>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail</label>
-              <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="exemplo@email.com" />
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+              <input type="text" className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@email.com" />
             </div>
             <div className="form-row">
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label style={{ fontWeight: '500' }}>Senha</label>
+                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+                <div className="password-field">
+                  <input type={showPassword ? 'text' : 'password'} className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" />
                   <button
                     type="button"
                     className="password-toggle"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <input type={showPassword ? 'text' : 'password'} className="input" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Sua senha" />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a Senha</label>
-                <input type={showPassword ? 'text' : 'password'} className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Confirme" />
+                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a Senha <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+                <input type={showPassword ? 'text' : 'password'} className="input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirme" />
               </div>
             </div>
 
@@ -309,6 +311,7 @@ export default function Cadastro() {
                   <div style={{ flex: 1, borderRadius: '3px', background: passwordStrength === 'Forte' ? 'var(--success-color)' : 'var(--border-color)' }}></div>
                 </div>
                 <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem', lineHeight: '1.4' }}>
+                  Mínimo de 6 caracteres.<br />
                   Forte: Mínimo 1 letra maiúscula, 1 número e 1 caractere especial.<br />
                   Média: Letras e números.<br />
                   Fraca: Apenas letras ou números (não permitida).

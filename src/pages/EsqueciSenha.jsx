@@ -54,7 +54,22 @@ export default function EsqueciSenha() {
       setErrorMsg('Digite o código recebido no email.');
       return;
     }
-    setEtapa('nova_senha');
+    // Não pula direto para nova senha sem validar no backend (verificação correta do código)
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/verificar-codigo/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, codigo }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setEtapa('nova_senha');
+      } else {
+        setErrorMsg(data.error || 'Código incorreto.');
+      }
+    } catch (err) {
+      setErrorMsg('Erro interno de conexão.');
+    }
   };
 
   const handleRedefinirSenha = async (e) => {
@@ -117,7 +132,7 @@ export default function EsqueciSenha() {
                 type="email"
                 className="input"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value.trim())}
                 required
                 placeholder="exemplo@email.com"
               />
@@ -148,7 +163,7 @@ export default function EsqueciSenha() {
                 type="text"
                 className="input"
                 value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
+                onChange={(e) => setCodigo(e.target.value.replace(/[^0-9]/g, ''))}
                 required
                 placeholder="000000"
                 maxLength={6}
@@ -181,17 +196,8 @@ export default function EsqueciSenha() {
           Digite sua nova senha abaixo.
         </p>
         <form onSubmit={handleRedefinirSenha} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label style={{ fontWeight: '500' }}>Nova senha</label>
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+          <div className="password-field">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Nova senha</label>
             <input
               type={showPassword ? 'text' : 'password'}
               className="input"
@@ -200,18 +206,17 @@ export default function EsqueciSenha() {
               required
               placeholder="Sua nova senha"
             />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label style={{ fontWeight: '500' }}>Confirme a nova senha</label>
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+          <div className="password-field">
+            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Confirme a nova senha</label>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               className="input"
@@ -220,6 +225,14 @@ export default function EsqueciSenha() {
               required
               placeholder="Confirme"
             />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
 
           {novaSenha && (

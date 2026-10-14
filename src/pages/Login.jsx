@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 
 const GoogleIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 48 48" style={{ marginRight: '8px' }}>
+  <svg width="20" height="20" viewBox="0 0 48 48">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
     <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -27,6 +27,9 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
   const { login } = useAuth();
+  const destinoPosLogin = location.state?.from
+    ? `${location.state.from.pathname}${location.state.from.search || ''}`
+    : '/';
 
   useEffect(() => {
     if (location.state?.linkedinError) {
@@ -37,6 +40,10 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!email.trim() || !password) {
+      setErrorMsg('Preencha o email e a senha para realizar o login.');
+      return;
+    }
     setErrorMsg('');
     try {
       const response = await fetch('http://localhost:8000/api/auth/login/', {
@@ -47,7 +54,9 @@ export default function Login() {
       const data = await response.json();
       if (response.ok) {
         login(data.user, data.token);
-        navigate('/');
+        navigate(destinoPosLogin, { replace: true });
+      } else if (data.error === 'email_not_found') {
+        setErrorMsg('Email inválido. Confira o email digitado ou cadastre-se se ainda não tiver uma conta.');
       } else {
         setErrorMsg(
           data.error && data.error !== 'Wrong Credentials'
@@ -57,31 +66,6 @@ export default function Login() {
       }
     } catch (err) {
       setErrorMsg('E-mail ou senha incorretos.');
-    }
-  };
-
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setErrorMsg('');
-    const idToken = credentialResponse?.credential;
-    if (!idToken) {
-      setErrorMsg('Não foi possível obter o login do Google. Tente novamente.');
-      return;
-    }
-    try {
-      const response = await fetch('http://localhost:8000/api/auth/google/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_token: idToken }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        login(data.user, data.token);
-        navigate('/');
-      } else {
-        setErrorMsg(data.error || 'Erro ao entrar com o Google. Tente novamente.');
-      }
-    } catch (err) {
-      setErrorMsg('Erro ao entrar com o Google. Tente novamente.');
     }
   };
 
@@ -105,50 +89,73 @@ export default function Login() {
     window.location.href = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
   };
 
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setErrorMsg('');
+    const idToken = credentialResponse?.credential;
+    if (!idToken) {
+      setErrorMsg('Não foi possível obter o login do Google. Tente novamente.');
+      return;
+    }
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/google/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        login(data.user, data.token);
+        navigate(destinoPosLogin, { replace: true });
+      } else {
+        setErrorMsg(data.error || 'Erro ao entrar com o Google. Tente novamente.');
+      }
+    } catch (err) {
+      setErrorMsg('Erro ao entrar com o Google. Tente novamente.');
+    }
+  };
+
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <div style={{ maxWidth: '400px', margin: '1.5rem auto' }}>
-        <div className="card fade-in" style={{ padding: '1.25rem' }}>
-          <h1 style={{ fontSize: '1.4rem', marginBottom: '1rem', textAlign: 'center' }}>Bem-vindo de volta!</h1>
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+        <div className="card fade-in">
+          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Bem vindo ao <span className="brand-gradient-text">Freelas</span></h1>
+          {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '4px', padding: '0.65rem 0.8rem', marginBottom: '1rem', textAlign: 'left', fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'pre-line', fontFamily: "'Outfit', sans-serif" }}>{errorMsg}</div>}
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.4rem' }}>E-mail</label>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>E-mail <span style={{ color: 'var(--danger-color)' }}>*</span></label>
               <input
                 type="email"
                 className="input"
                 style={{ padding: '0.6rem 0.9rem' }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
                 placeholder="exemplo@email.com"
               />
             </div>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                <label style={{ fontWeight: '500' }}>Senha</label>
+              <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Senha <span style={{ color: 'var(--danger-color)' }}>*</span></label>
+              <div className="password-field">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Sua senha"
+                />
                 <button
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                className="input"
-                style={{ padding: '0.6rem 0.9rem' }}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Sua senha"
-              />
               <Link to="/esqueci-senha" style={{ fontSize: '0.8rem', textDecoration: 'underline', color: 'var(--text-secondary, #888)' }}>
                 Esqueci minha senha
               </Link>
             </div>
-            {errorMsg && <div className="form-error" style={{ color: 'var(--danger-color)', marginTop: '0.5rem', textAlign: 'center', fontSize: '0.85rem' }}>{errorMsg}</div>}
-            <button type="submit" className="btn dark-text" style={{ marginTop: '0.5rem', width: '100%' }}>
+            <button type="submit" className="btn dark-text" style={{ marginTop: '1rem', width: '100%' }}>
               Entrar
             </button>
           </form>
@@ -158,52 +165,33 @@ export default function Login() {
             <span style={{ position: 'relative', zIndex: 2, background: 'var(--surface-color)', padding: '0 1rem', fontWeight: 'bold', fontSize: '0.8rem' }}>OU</span>
           </div>
 
-                    <div style={{ maxWidth: '340px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setErrorMsg('Erro ao entrar com o Google. Tente novamente.')}
-                text="signin_with"
-                shape="rectangular"
-                logo_alignment="left"
-                width="340"
-              />
+          <div style={{ maxWidth: '368px', margin: '0 auto' }}>
+            <div className="social-btn-overlay">
+              <div className="social-btn-overlay__visual btn-social" aria-hidden="true">
+                <GoogleIcon />
+                Fazer login com o Google
+              </div>
+              <div className="social-btn-overlay__real">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setErrorMsg('Erro ao entrar com o Google. Tente novamente.')}
+                  text="signin_with"
+                  shape="rectangular"
+                  logo_alignment="left"
+                  width="368"
+                />
+              </div>
             </div>
 
             <button
-  type="button"
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    width: '100%',
-    height: '40px',
-    minHeight: '40px',
-    padding: '0 1rem',
-    marginTop: '0.75rem',
-    background: '#fff',
-    backgroundImage: 'none',
-    color: '#333',
-    border: '1px solid rgba(0, 0, 0, 0.12)',
-    borderRadius: '0',
-    fontFamily: 'var(--font-family)',
-    fontSize: '0.95rem',
-    fontWeight: '500',
-    letterSpacing: '0.25px',
-    cursor: 'pointer',
-    transition: 'background-color 0.1s, box-shadow 0.2s',
-    whiteSpace: 'nowrap',
-  }}
-  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f8f8f8'; }}
-  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#fff'; }}
-  onClick={handleLinkedinLogin}
->
-  <span style={{ position: 'absolute', left: '1rem', display: 'flex', alignItems: 'center' }}>
-    <LinkedinIcon />
-  </span>
-  <span>Fazer login com o LinkedIn</span>
-</button>
+              type="button"
+              className="btn-social"
+              style={{ marginTop: '0.75rem' }}
+              onClick={handleLinkedinLogin}
+            >
+              <LinkedinIcon />
+              Fazer login com o LinkedIn
+            </button>
           </div>
 
           <p style={{ marginTop: '1rem', textAlign: 'center' }}>
