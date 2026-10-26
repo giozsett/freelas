@@ -708,6 +708,7 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        from django.db import IntegrityError, transaction
         from rest_framework.exceptions import PermissionDenied, ValidationError
 
         ad = serializer.validated_data.get('ad')
@@ -734,11 +735,17 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             usuario_id = self.request.user.profile.id
         except Exception:
             usuario_id = self.request.user.id
-        candidatura = serializer.save(
-            user=self.request.user,
-            usuario_id=usuario_id,
-            status='pendente',
-        )
+        # A checagem acima não basta contra requisições simultâneas (duplo
+        # clique): a restrição única do banco decide quem grava primeiro.
+        try:
+            with transaction.atomic():
+                candidatura = serializer.save(
+                    user=self.request.user,
+                    usuario_id=usuario_id,
+                    status='pendente',
+                )
+        except IntegrityError:
+            raise ValidationError('Você já se candidatou a este anúncio.')
 
         if ad.author and ad.author_id != self.request.user.id:
             profile = getattr(self.request.user, 'profile', None)

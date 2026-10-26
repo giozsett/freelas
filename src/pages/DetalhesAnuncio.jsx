@@ -41,6 +41,7 @@ export default function AdDetails() {
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [proposalText, setProposalText] = useState('');
   const [hasApplied, setHasApplied] = useState(false);
+  const [enviandoCandidatura, setEnviandoCandidatura] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [applicationsCount, setApplicationsCount] = useState(null);
   const [candidaturaLimiteAtingido, setCandidaturaLimiteAtingido] = useState(false);
@@ -133,6 +134,9 @@ export default function AdDetails() {
       alerta('Você precisa estar logado para se candidatar.', { titulo: 'Login necessário', variante: 'perigo' });
       return;
     }
+    // Evita duplo clique/Enter disparando duas candidaturas
+    if (enviandoCandidatura) return;
+    setEnviandoCandidatura(true);
     const token = localStorage.getItem('token');
     fetch('http://localhost:8000/api/candidaturas/', {
       method: 'POST',
@@ -162,7 +166,8 @@ export default function AdDetails() {
     .catch(err => {
       console.error(err);
       console.error("Erro de conexão ao enviar candidatura.");
-    });
+    })
+    .finally(() => setEnviandoCandidatura(false));
   };
 
   const handleDeleteAd = async () => {
@@ -498,7 +503,9 @@ export default function AdDetails() {
 
                  <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                     <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setIsModalOpen(false); setProposalPrice(''); setShowPriceInput(false); }}>Cancelar</button>
-                    <button type="submit" className="btn dark-text" style={{ flex: 1 }}>Enviar Apresentação</button>
+                    <button type="submit" className="btn dark-text" style={{ flex: 1 }} disabled={enviandoCandidatura}>
+                      {enviandoCandidatura ? 'Enviando...' : 'Enviar Apresentação'}
+                    </button>
                  </div>
               </form>
            </div>
