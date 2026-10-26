@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRole } from '../context/ContextoPapel';
 import AdCard from '../components/CardAnuncio';
+import ComboBusca from '../components/ComboBusca';
 import {
   CATEGORIAS_SERVICO,
   HABILIDADES_POR_CATEGORIA,
@@ -18,70 +19,6 @@ const SUBTITULO_POR_PAPEL = {
   contractor: 'Vagas publicadas por pessoas e empresas contratantes. Publique a sua em "Criar anúncio".',
 };
 const SUBTITULO_VISITANTE = 'Vagas publicadas por pessoas e empresas contratantes. Crie sua conta para se candidatar ou contratar.';
-
-function ComboFiltro({ label, placeholder, valor, opcoes, onSelecionar, hint }) {
-  const [query, setQuery] = useState(valor);
-  const [aberto, setAberto] = useState(false);
-
-  useEffect(() => { setQuery(valor); }, [valor]);
-
-  const opcoesFiltradas = (query.trim()
-    ? opcoes.filter(o => o.toLowerCase().includes(query.trim().toLowerCase()))
-    : opcoes
-  ).slice(0, 8);
-
-  return (
-    <div className="combo">
-      <label className="combo__label">{label}</label>
-      <div className="combo__field">
-        <input
-          type="text"
-          className="input combo__input"
-          placeholder={placeholder}
-          autoComplete="off"
-          value={query}
-          onFocus={() => setAberto(true)}
-          onChange={(e) => { setQuery(e.target.value); setAberto(true); }}
-          onBlur={() => setTimeout(() => setAberto(false), 150)}
-        />
-        {valor && (
-          <button
-            type="button"
-            className="combo__clear"
-            aria-label={`Limpar ${label.toLowerCase()}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { setQuery(''); onSelecionar(''); }}
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
-      {aberto && (
-        <ul className="combo__list">
-          {opcoesFiltradas.length ? opcoesFiltradas.map(opcao => (
-            <li
-              key={opcao}
-              className="combo__option"
-              onMouseDown={(e) => { e.preventDefault(); setQuery(opcao); setAberto(false); onSelecionar(opcao); }}
-            >
-              {opcao}
-            </li>
-          )) : <li className="combo__empty">Nenhuma opção encontrada</li>}
-        </ul>
-      )}
-      {hint && <p className="combo__hint">{hint}</p>}
-    </div>
-  );
-}
-
-ComboFiltro.propTypes = {
-  label: PropTypes.string.isRequired,
-  placeholder: PropTypes.string,
-  valor: PropTypes.string.isRequired,
-  opcoes: PropTypes.arrayOf(PropTypes.string).isRequired,
-  onSelecionar: PropTypes.func.isRequired,
-  hint: PropTypes.string,
-};
 
 function Pagination({ page, count, onChange }) {
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
@@ -217,14 +154,14 @@ export default function Home() {
         <div className="filter-groups">
           <section className="filter-group">
             <h3>Categoria e habilidades</h3>
-            <ComboFiltro
+            <ComboBusca
               label="Categoria"
               placeholder="Buscar categoria..."
               valor={categoryFilter}
               opcoes={CATEGORIAS_SERVICO}
               onSelecionar={(valor) => { setCategoryFilter(valor); setSkillFilter(''); }}
             />
-            <ComboFiltro
+            <ComboBusca
               label="Habilidade"
               placeholder="Buscar habilidade..."
               valor={skillFilter}
