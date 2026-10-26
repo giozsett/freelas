@@ -2913,3 +2913,46 @@ class ExclusaoFisicaUsuarioTests(TestCase):
 
         self.assertFalse(UserProfile.objects.filter(pk=self.perfil_freelancer.pk).exists())
         self.assertFalse(Candidatura.objects.filter(pk=self.candidatura.pk).exists())
+
+
+class CandidaturaDuplicadaTests(TestCase):
+    """Duas requisições simultâneas (ex.: duplo clique em "Enviar") passavam
+    juntas pela checagem de "já se candidatou" e gravavam duas candidaturas."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.freelancer = _criar_usuario_com_papel('freela@example.com', 'freelancer', 'Fabi')
+        self.contratante = _criar_usuario_com_papel('contrata@example.com', 'contratante', 'Carlos')
+        self.vaga = Ad.objects.create(author=self.contratante, title='Site', price='100.00', role='contractor')
+
+    def test_banco_rejeita_segunda_candidatura_ativa_do_mesmo_freelancer(self):
+        from django.db import IntegrityError, transaction
+
+        Candidatura.objects.create(user=self.freelancer, ad=self.vaga)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Candidatura.objects.create(user=self.freelancer, ad=self.vaga)
+
+    def test_candidatura_concorrente_responde_400_sem_duplicar(self):
+        from core import views
+
+        status_original = views._status_limite_candidaturas
+
+        def outra_requisicao_grava_no_meio(user):
+            # Roda depois da checagem de duplicidade e antes do save:
+            # simula a requisição concorrente vencendo a corrida.
+            Candidatura.objects.create(user=self.freelancer, ad=self.vaga)
+            return status_original(user)
+
+        self.client.force_authenticate(self.freelancer)
+        with patch('core.views._status_limite_candidaturas', side_effect=outra_requisicao_grava_no_meio):
+            response = self.client.post('/api/candidaturas/', {'ad': self.vaga.id}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('já se candidatou', str(response.data))
+        self.assertEqual(Candidatura.objects.filter(user=self.freelancer, ad=self.vaga).count(), 1)
+
+    def test_candidatura_excluida_nao_bloqueia_nova(self):
+        Candidatura.objects.create(user=self.freelancer, ad=self.vaga, deletado=True)
+        Candidatura.objects.create(user=self.freelancer, ad=self.vaga)
+
+        self.assertEqual(Candidatura.objects.filter(user=self.freelancer, ad=self.vaga).count(), 2)
