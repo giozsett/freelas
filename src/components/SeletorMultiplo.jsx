@@ -4,9 +4,12 @@ import { X } from 'lucide-react';
 
 // Campo de texto que só aceita opções de uma lista fixa: quem digita filtra as
 // opções e precisa escolher uma delas (até `maximo`). As escolhidas viram chips.
-export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singular, plural }) {
+export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singular, plural, feminino = false }) {
   const [query, setQuery] = useState('');
   const [aberto, setAberto] = useState(false);
+  const [um, nenhum, encontrado, escolhidos] = feminino
+    ? ['uma', 'Nenhuma', 'encontrada', 'escolhidas']
+    : ['um', 'Nenhum', 'encontrado', 'escolhidos'];
 
   const limiteAtingido = valor.length >= maximo;
   const termo = query.trim().toLowerCase();
@@ -31,7 +34,7 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
             type="text"
             className="input combo__input"
             style={{ width: '100%' }}
-            placeholder={limiteAtingido ? `Limite de ${maximo} ${plural} atingido` : `Digite para buscar um ${singular}...`}
+            placeholder={limiteAtingido ? `Limite de ${maximo} ${plural} atingido` : `Digite para buscar ${um} ${singular}...`}
             aria-label={singular}
             autoComplete="off"
             disabled={limiteAtingido}
@@ -59,7 +62,7 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
               >
                 {opcao}
               </li>
-            )) : <li className="combo__empty">Nenhum {singular} encontrado — escolha um da lista</li>}
+            )) : <li className="combo__empty">{nenhum} {singular} {encontrado} — escolha {um} da lista</li>}
           </ul>
         )}
       </div>
@@ -82,7 +85,7 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
         </div>
       )}
       <p className="combo__hint">
-        {valor.length} de {maximo} {plural} escolhidos. Só é possível escolher {plural} da lista.
+        {valor.length} de {maximo} {plural} {escolhidos}. Só é possível escolher {plural} da lista.
       </p>
     </div>
   );
@@ -95,4 +98,5 @@ SeletorMultiplo.propTypes = {
   maximo: PropTypes.number.isRequired,
   singular: PropTypes.string.isRequired,
   plural: PropTypes.string.isRequired,
+  feminino: PropTypes.bool,
 };

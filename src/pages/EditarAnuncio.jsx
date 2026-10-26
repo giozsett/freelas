@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/ContextoAutenticacao';
-import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
+import { CATEGORIAS_SERVICO } from '../constants/options';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
+import CampoCategoriaHabilidades from '../components/CampoCategoriaHabilidades';
 
 export default function EditAd() {
   const limiteDescricao = 1000;
@@ -11,12 +12,11 @@ export default function EditAd() {
   const navigate = useNavigate();
 
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState(CATEGORIAS_SERVICO[0]);
+  const [category, setCategory] = useState('');
+  // Categoria salva que saiu do catálogo: obriga a escolher uma nova
+  const [categoriaAnterior, setCategoriaAnterior] = useState('');
   const [skills, setSkills] = useState([]);
-  const [currentSkill, setCurrentSkill] = useState('');
-  const [skillError, setSkillError] = useState('');
-  const habilidadesDisponiveis = HABILIDADES_POR_CATEGORIA[category] || [];
-  
+
   const [price, setPrice] = useState('');
   const [priceUnit, setPriceUnit] = useState('/h');
   
@@ -28,7 +28,8 @@ export default function EditAd() {
   });
   
   const [deadline, setDeadline] = useState('');
-  
+  const [submitError, setSubmitError] = useState('');
+
   const [isLoading, setIsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState('');
 
@@ -53,7 +54,9 @@ export default function EditAd() {
         }
 
         setTitle(data.title || data.titulo || '');
-        setCategory(data.category || CATEGORIAS_SERVICO[0]);
+        const categoriaValida = CATEGORIAS_SERVICO.includes(data.category);
+        setCategory(categoriaValida ? data.category : '');
+        setCategoriaAnterior(categoriaValida ? '' : data.category || '');
         setSkills(data.skills || []);
         setPrice(data.price || (data.valor ? String(data.valor) : ''));
         setPriceUnit(data.price_unit || '/h');
@@ -76,32 +79,13 @@ export default function EditAd() {
       });
   }, [id, user, navigate]);
 
-  const handleAddSkill = (e) => {
-    e.preventDefault();
-    if (!currentSkill.trim()) return;
-    
-    if (skills.length >= 5) {
-      setSkillError('Só é possível adicionar 5 habilidades por anúncio.');
-      return;
-    }
-    
-    if (skills.includes(currentSkill)) {
-      setSkillError('Esta habilidade já foi adicionada.');
-      return;
-    }
-    
-    setSkills([...skills, currentSkill.trim()]);
-    setCurrentSkill('');
-    setSkillError('');
-  };
-
-  const handleRemoveSkill = (index) => {
-    setSkills(skills.filter((_, i) => i !== index));
-    if (skillError) setSkillError('');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+    if (!category) {
+      setSubmitError('Escolha uma categoria da lista.');
+      return;
+    }
     const token = localStorage.getItem('token');
     
     if (!token) {
@@ -140,11 +124,11 @@ export default function EditAd() {
       } else {
         const errorData = await response.json();
         console.error(errorData);
-        console.error('Erro ao salvar as edições do anúncio.');
+        setSubmitError(errorData.detail || errorData[0] || 'Erro ao salvar as edições do anúncio.');
       }
     } catch (err) {
       console.error(err);
-      console.error('Erro de conexão ao salvar o anúncio.');
+      setSubmitError('Erro de conexão ao salvar o anúncio.');
     }
   };
 
@@ -185,18 +169,14 @@ export default function EditAd() {
             />
           </div>
 
+          <CampoCategoriaHabilidades
+            categoria={category}
+            habilidades={skills}
+            onChange={({ categoria, habilidades }) => { setCategory(categoria); setSkills(habilidades); }}
+            categoriaAnterior={categoriaAnterior}
+          />
+
           <div className="form-row">
-             <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categoria</label>
-                <select className="input" value={category} onChange={(e) => {
-                  setCategory(e.target.value);
-                  setCurrentSkill('');
-                }}>
-                  {CATEGORIAS_SERVICO.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-             </div>
              <div style={{ flex: 1 }}>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor (R$)</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -221,46 +201,6 @@ export default function EditAd() {
                   </select>
                 </div>
              </div>
-          </div>
-
-          <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5)</label>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-              <select
-                className="input"
-                value={currentSkill}
-                onChange={(e) => setCurrentSkill(e.target.value)}
-                style={{ flex: 1, minWidth: 0 }}
-              >
-                <option value="">Selecione uma habilidade...</option>
-                {habilidadesDisponiveis.map(skill => (
-                  <option key={skill} value={skill}>{skill}</option>
-                ))}
-              </select>
-              <button 
-                type="button" 
-                className="btn dark-text" 
-                onClick={handleAddSkill}
-                disabled={skills.length >= 5}
-              >
-                Adicionar
-              </button>
-            </div>
-            {skillError && <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{skillError}</p>}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {skills.map((skill, index) => (
-                <span key={index} className="badge purple" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  {skill}
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveSkill(index)}
-                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem', padding: 0 }}
-                  >
-                    &times;
-                  </button>
-                </span>
-              ))}
-            </div>
           </div>
 
           <div>
@@ -316,6 +256,12 @@ export default function EditAd() {
             ></textarea>
             <small className="character-counter">{limiteDescricao - description.length} caracteres restantes</small>
           </div>
+
+          {submitError && (
+            <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+              {submitError}
+            </p>
+          )}
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
             <button type="button" className="btn btn-secondary" style={{ flex: 1, padding: '1rem', fontSize: '1.2rem' }} onClick={() => navigate(`/ad/${id}`)}>

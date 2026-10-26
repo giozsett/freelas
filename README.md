@@ -158,6 +158,36 @@ O banco do Supabase é **compartilhado pelo grupo**. Se outra pessoa já aplicou
 
 ---
 
+## Antes de abrir o projeto
+
+Rode esta sequência **sempre depois de um `git pull` ou de trocar de branch**. Todos os comandos podem ser repetidos sem risco: se não houver nada novo, eles só confirmam que está tudo em dia.
+
+```powershell
+# Na raiz do projeto
+npm install
+
+cd backend
+.\venv\Scripts\Activate.ps1
+pip install -r ..\requirements.txt
+python manage.py makemigrations --check --dry-run   # 1. alguém alterou um model sem criar a migration?
+python manage.py showmigrations core                # 2. lista as migrations; [ ] = ainda não aplicada
+python manage.py migrate                            # 3. aplica as que faltam
+cd ..
+```
+
+| Comando | Por que rodar |
+|---|---|
+| `npm install` | `package.json` ou `package-lock.json` mudaram |
+| `pip install -r ..\requirements.txt` | `requirements.txt` mudou |
+| `makemigrations --check --dry-run` | Deve responder `No changes detected`. Se listar mudanças, um model foi alterado sem migration: avise quem fez a alteração. |
+| `showmigrations core` | Mostra o estado das migrations antes de aplicar |
+| `migrate` | Novos arquivos em `backend\core\migrations\` |
+| Variáveis novas de `.env` | Peça os valores ao grupo e acrescente aos seus `.env` |
+
+Se o `migrate` falhar com `Conflicting migrations detected`, veja [Conflitos de migration](#conflitos-de-migration).
+
+---
+
 ## Executando o projeto
 
 Na raiz do projeto:
@@ -236,8 +266,13 @@ npm run lint                      # frontend
 
 cd backend
 .\venv\Scripts\Activate.ps1
-python manage.py test             # backend
+python manage.py test --keepdb    # backend (leva cerca de 7 minutos)
+python manage.py test core.tests.CandidaturaDuplicadaTests --keepdb   # só uma classe de testes
 ```
+
+Os testes do backend **precisam do PostgreSQL**: as migrations usam SQL específico do Postgres, então o SQLite não serve. O Django cria um banco `test_postgres` no Supabase.
+
+Use sempre `--keepdb`. Pela porta 6543 (pooler do Supabase), a conexão continua aberta por alguns instantes depois dos testes, e o Django não consegue apagar o banco de teste no final. Sem `--keepdb`, a próxima execução encontra o banco antigo e para com a pergunta `Type 'yes' if you would like to try deleting the test database`. Com `--keepdb`, o banco de teste é reaproveitado e só recebe as migrations novas.
 
 ---
 
@@ -266,14 +301,7 @@ git push origin giovana
 
 ### Depois do `git pull`: o que rodar
 
-Confira o que mudou e execute só o que for necessário:
-
-| O que mudou no pull | Comando |
-|---|---|
-| `package.json` ou `package-lock.json` | `npm install` |
-| `requirements.txt` | `cd backend`, ativar o venv e `pip install -r ..\requirements.txt` |
-| Arquivos em `backend\core\migrations\` | `cd backend`, ativar o venv e `python manage.py migrate` |
-| Variáveis novas de `.env` | Peça os valores ao grupo e acrescente aos seus `.env` |
+Rode a sequência de [Antes de abrir o projeto](#antes-de-abrir-o-projeto).
 
 Para ver o que veio no pull:
 
@@ -289,7 +317,30 @@ Se o `git pull` avisar de conflito:
 2. Abra cada arquivo e resolva os trechos entre `<<<<<<<`, `=======` e `>>>>>>>`, mantendo o código correto.
 3. Finalize com `git add <arquivo>` e `git commit`.
 
-Conflitos em migrations do Django (dois integrantes criando `0042_...`) precisam de atenção: avise o grupo antes de resolver.
+### Conflitos de migration
+
+Acontecem quando duas pessoas criam migrations com o mesmo número em branches diferentes (por exemplo, duas `0048_...` partindo da `0047`). O Git não acusa conflito, porque os nomes dos arquivos são diferentes, mas o Django recusa o `migrate`:
+
+```
+CommandError: Conflicting migrations detected; multiple leaf nodes in the migration graph
+```
+
+Para resolver, depois de juntar as branches:
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py makemigrations --merge   # cria uma migration que junta as duas
+python manage.py migrate
+```
+
+Faça o commit da migration de merge e avise o grupo.
+
+**Como o banco é compartilhado, aplique uma migration no Supabase só depois de enviá-la ao GitHub** (`git push`). Uma migration aplicada a partir de código que não está em nenhuma branch fica registrada no banco sem que o resto do grupo tenha o arquivo, e ninguém consegue reproduzir nem desfazer a mudança. Para conferir o que já foi aplicado no banco:
+
+```powershell
+python manage.py showmigrations core
+```
 
 ---
 
@@ -305,3 +356,7 @@ Conflitos em migrations do Django (dois integrantes criando `0042_...`) precisam
 | `Signature verification failed` (Stripe) | O `STRIPE_WEBHOOK_SECRET` está desatualizado. Veja `STRIPE_TESTING.md`. |
 | Pagamento fica pendente | O `stripe listen` não está rodando durante o pagamento. |
 | Erro de CORS no navegador | Acesse o frontend por `http://localhost:5173` ou `http://127.0.0.1:5173`. |
+| `ModuleNotFoundError: No module named 'django'` | O venv não está ativo. Rode `.\venv\Scripts\Activate.ps1` dentro de `backend`. |
+| `Type 'yes' if you would like to try deleting the test database` | Sobrou um banco de teste de uma execução anterior. Rode os testes com `--keepdb` (veja [Testes e lint](#testes-e-lint)). |
+| `database "test_..." is being accessed by other users` | O pooler do Supabase ainda segura a conexão no fim dos testes. Use `--keepdb`; os resultados dos testes aparecem antes desse erro. |
+| `Conflicting migrations detected` | Duas migrations com o mesmo número. Veja [Conflitos de migration](#conflitos-de-migration). |

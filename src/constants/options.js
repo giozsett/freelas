@@ -5,6 +5,7 @@ export const RAMOS_EMPRESA = ramosEmpresa.ramos;
 export const MAX_RAMOS_EMPRESA = ramosEmpresa.maxSelecionados;
 // Limite de "Serviços que contrata" no perfil do contratante (espelha o backend)
 export const MAX_SERVICOS_CONTRATADOS = 5;
+export const MAX_HABILIDADES_ANUNCIO = 5;
 
 export const PORTES_EMPRESA = [
   { valor: 'autonomo', rotulo: 'Autônomo' },
