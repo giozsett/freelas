@@ -24,6 +24,7 @@ Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de 
 | Pagamentos | **Stripe** (checkout, assinaturas e webhook) |
 | Túnel público | **Ngrok** (expõe o backend para o Stripe entregar o webhook) |
 | Mídia | Cloudinary (imagens) |
+| Busca no catálogo | **fastembed** (modelo de embeddings multilíngue, roda localmente via ONNX). Veja [Busca no catálogo](#busca-no-catálogo-categorias-e-habilidades) |
 | E-mail | SMTP do Gmail (validação de cadastro) |
 | Qualidade | ESLint e `node --test` (frontend), `manage.py test` (backend) |
 
@@ -32,9 +33,11 @@ Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de 
 ```
 freelas/
 ├── src/                 # Frontend (pages, components, context, hooks, utils, constants, data)
+│   └── data/            # Catálogo de categorias e habilidades (usado também pelo backend)
 ├── backend/
 │   ├── server/          # Configuração do Django (settings, urls, asgi)
-│   └── core/            # App principal (models, views, serializers, chat, consumers, routing, notificações)
+│   ├── core/            # App principal (models, views, serializers, chat, consumers, routing, notificações)
+│   └── .cache/          # Modelo e vetores da busca no catálogo (gerados localmente, fora do Git)
 ├── scripts/
 │   └── dev-checkout.ps1 # Sobe todo o ambiente de desenvolvimento
 ├── tools/redis/         # Redis portátil para Windows (baixado automaticamente pelo script)
@@ -120,6 +123,10 @@ CLOUDINARY_API_SECRET=
 # ex.: 0.05 = 3 minutos.
 PRAZO_PAGAMENTO_HORAS=
 PRAZO_CONFIRMACAO_HORAS=
+
+# Opcional: outro modelo do fastembed para a busca no catálogo
+# (padrão sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2)
+BUSCA_CATALOGO_MODELO=
 ```
 
 > Se `DATABASE_URL` ficar vazio, o Django usa um SQLite local (`db.sqlite3`). Para trabalhar no mesmo banco do grupo, use a URL do Supabase.
@@ -144,6 +151,17 @@ npm install
 
 > Se o PowerShell bloquear o `Activate.ps1`, execute uma vez:
 > `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+
+Prepare a busca no catálogo (baixa uma vez um modelo de cerca de 220 MB para `backend\.cache`):
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py preparar_busca_catalogo
+cd ..
+```
+
+Sem esse passo o projeto funciona, mas a primeira busca dispara o download em segundo plano e, até ele terminar, as sugestões saem só pelo texto.
 
 ### 5. Aplicar as migrations do banco
 
@@ -182,6 +200,7 @@ cd ..
 | `makemigrations --check --dry-run` | Deve responder `No changes detected`. Se listar mudanças, um model foi alterado sem migration: avise quem fez a alteração. |
 | `showmigrations core` | Mostra o estado das migrations antes de aplicar |
 | `migrate` | Novos arquivos em `backend\core\migrations\` |
+| `python manage.py preparar_busca_catalogo` | Na primeira vez depois de instalar o `fastembed`, para baixar o modelo da busca no catálogo |
 | Variáveis novas de `.env` | Peça os valores ao grupo e acrescente aos seus `.env` |
 
 Se o `migrate` falhar com `Conflicting migrations detected`, veja [Conflitos de migration](#conflitos-de-migration).
@@ -257,6 +276,31 @@ python manage.py verificar_dados         # lista dados fora das regras atuais, s
 
 - `popular_demo` cria contratantes, freelancers, vagas e um acordo em cada etapa do ciclo. Só mexe nas contas `@demo.freelas.com`, então pode rodar no banco compartilhado; rode no dia da apresentação, porque os prazos contam a partir da criação.
 - O roteiro da apresentação está em [`docs/roteiro-apresentacao.md`](docs/roteiro-apresentacao.md) e os textos e diagramas do relatório técnico em [`docs/rt-v06-secoes.md`](docs/rt-v06-secoes.md) e [`docs/rt-v06-diagramas.md`](docs/rt-v06-diagramas.md).
+
+### Busca no catálogo (categorias e habilidades)
+
+As vagas usam um catálogo fixo, de dois níveis: **categorias amplas** (ex.: "Cuidados Pessoais") e **habilidades** que as especificam (ex.: "Babá", "Manicure"). Os filtros da página inicial, o formulário de vaga e a validação do backend usam os mesmos arquivos:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `src/data/professional-options.json` | Categorias e as habilidades de cada uma. Uma habilidade pode aparecer em mais de uma categoria (ex.: "Garçom" em Gastronomia e em Eventos e Promoções). |
+| `src/data/termos-habilidades.json` | Palavras que as pessoas digitam ao procurar uma habilidade (ex.: "Encanador" → "torneira vazando, cano, descarga"). Só a busca usa. |
+
+A **busca semântica** (`backend/core/busca_catalogo.py`, rota `GET /api/catalogo/buscar/?q=...&tipo=habilidade|categoria&categoria=...`) entende o significado do texto: "cuidar do meu filho à noite" sugere "Babá Noturna", e "babá" no campo de categoria sugere "Cuidados Pessoais". Ela roda toda no computador, sem serviço na nuvem:
+
+- O modelo `paraphrase-multilingual-MiniLM-L12-v2` (fastembed/ONNX, cerca de 220 MB) fica em `backend\.cache\busca_catalogo\modelos`.
+- Cada categoria e habilidade vira um vetor uma vez; os vetores ficam em `backend\.cache\busca_catalogo` e são refeitos sozinhos quando o catálogo, os termos ou o modelo mudam. O catálogo cabe na memória, então não há banco vetorial: a comparação leva milissegundos.
+- A nota final soma a semelhança do modelo com um bônus para cada palavra digitada que aparece no texto da habilidade. Sem esse bônus, o modelo pequeno erra pedidos como "trocar o chuveiro".
+- Enquanto o modelo carrega, ou se o `fastembed` não estiver instalado, a busca responde só pelo texto.
+- Para testar outro modelo do fastembed, defina `BUSCA_CATALOGO_MODELO` no `backend\.env` e rode `python manage.py preparar_busca_catalogo`.
+
+A pesquisa de anúncios da página inicial usa as mesmas sugestões: o anúncio aparece se tiver todas as palavras digitadas (título, descrição, categoria ou habilidades) ou se pedir uma das habilidades sugeridas.
+
+**Para alterar o catálogo:**
+
+- **Acrescentar** uma categoria ou habilidade: edite o JSON. Nada mais é necessário.
+- **Melhorar a busca** de uma habilidade: acrescente termos em `termos-habilidades.json`. As chaves precisam existir no catálogo (um teste confere).
+- **Renomear ou remover** uma categoria ou habilidade: anúncios e perfis guardam os nomes como texto, então crie também uma migration de dados que troque o nome antigo pelo novo, como a `0049_categorias_amplas`. Sem isso, as vagas antigas somem dos filtros e não podem ser editadas sem trocar a categoria.
 
 ### Testes e lint
 
@@ -360,3 +404,5 @@ python manage.py showmigrations core
 | `Type 'yes' if you would like to try deleting the test database` | Sobrou um banco de teste de uma execução anterior. Rode os testes com `--keepdb` (veja [Testes e lint](#testes-e-lint)). |
 | `database "test_..." is being accessed by other users` | O pooler do Supabase ainda segura a conexão no fim dos testes. Use `--keepdb`; os resultados dos testes aparecem antes desse erro. |
 | `Conflicting migrations detected` | Duas migrations com o mesmo número. Veja [Conflitos de migration](#conflitos-de-migration). |
+| Sugestões de categoria/habilidade só aparecem quando o texto bate | A busca semântica ainda está carregando ou falhou. Rode `python manage.py preparar_busca_catalogo` e leia a mensagem. |
+| `To support symlinks on Windows, you either need to activate Developer Mode` | Aviso do download do modelo; pode ser ignorado. O modelo funciona sem symlinks. |

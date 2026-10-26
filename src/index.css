@@ -321,6 +321,10 @@ a { color: var(--text-color); text-decoration: none; }
 }
 .combo__option { padding: 0.5rem 0.65rem; border-radius: 7px; cursor: pointer; font-size: 0.87rem; }
 .combo__option:hover { background: var(--secondary); color: var(--primary); }
+.combo__secao {
+  padding: 0.55rem 0.65rem 0.25rem; font-size: 0.72rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
+}
 .combo__empty { padding: 0.5rem 0.65rem; font-size: 0.83rem; color: var(--text-secondary); }
 .combo__hint { font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.35rem; }
 

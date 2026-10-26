@@ -18,5 +18,7 @@ As skills ficam em `.claude/skills/`. Leia o `SKILL.md` correspondente **antes**
 - **Banco compartilhado:** `migrate` e qualquer escrita no `DATABASE_URL` afetam o grupo inteiro na hora. Peça confirmação antes e aplique só migrations que já estejam no GitHub.
 - **Testes do backend:** `backend\venv\Scripts\python.exe manage.py test <alvo> --keepdb`, rodado de dentro de `backend\`. Corrija um bug escrevendo primeiro um teste que reproduza o problema.
 - **Antes de dizer que terminou:** o backend passa nos testes, e no frontend `npm run lint` e `npx vite build` não dão erro.
+- **Catálogo de categorias e habilidades:** a fonte única é `src/data/professional-options.json` (categorias amplas, habilidades específicas), lida pelo frontend e pelo backend (`backend/core/catalogo.py`), que recusa vagas fora dele. Renomear ou remover um nome exige uma migration de dados para os anúncios e perfis que já o gravaram (veja a seção "Busca no catálogo" do `README.md`). Termos de busca de cada habilidade ficam em `src/data/termos-habilidades.json`.
+- **Busca semântica:** roda localmente (`backend/core/busca_catalogo.py`, fastembed). Nos testes, use um modelo falso (veja `ModeloFalsoBusca` em `backend/core/tests.py`); nunca baixe o modelo dentro de um teste.
 - **Idioma:** textos de interface, mensagens de erro, comentários e nomes novos em português, seguindo o código ao redor.
 - **Segredos:** os `.env` não vão para o Git. Nunca copie valores deles para código, commits ou mensagens.

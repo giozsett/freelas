@@ -85,7 +85,7 @@ FREELANCERS = [
         'chave': 'ana', 'nome': 'Ana Souza', 'plano': 'Gold',
         'perfil': {
             'bio': 'Designer gráfica há 6 anos, especialista em identidade visual para pequenos negócios.',
-            'categories': ['Design Gráfico', 'UI/UX e Produto'],
+            'categories': ['Design'],
             'skills': ['Identidade Visual', 'Criação de Logotipo', 'Illustrator', 'Figma'],
         },
     },
@@ -93,7 +93,7 @@ FREELANCERS = [
         'chave': 'bruno', 'nome': 'Bruno Lima', 'plano': 'Gratuito',
         'perfil': {
             'bio': 'Desenvolvedor web full stack: sites institucionais, sistemas de agendamento e APIs.',
-            'categories': ['Desenvolvimento Web'],
+            'categories': ['Tecnologia'],
             'skills': ['React', 'Django', 'APIs REST', 'JavaScript'],
         },
     },
@@ -110,13 +110,13 @@ FREELANCERS = [
 VAGAS = [
     {
         'chave': 'identidade', 'autor': 'clinica', 'title': 'Identidade visual para clínica veterinária',
-        'category': 'Design Gráfico', 'skills': ['Identidade Visual', 'Criação de Logotipo', 'Illustrator'],
+        'category': 'Design', 'skills': ['Identidade Visual', 'Criação de Logotipo', 'Illustrator'],
         'price': '800', 'price_unit': 'total', 'dias_prazo': 20,
         'description': 'Logotipo, paleta de cores e aplicação em fachada, receituário e redes sociais.',
     },
     {
         'chave': 'site', 'autor': 'clinica', 'title': 'Site institucional com agendamento online',
-        'category': 'Desenvolvimento Web', 'skills': ['React', 'Django', 'APIs REST'],
+        'category': 'Tecnologia', 'skills': ['React', 'Django', 'APIs REST'],
         'price': '2500', 'price_unit': 'total', 'dias_prazo': 30,
         'description': 'Site com páginas de serviços, equipe e agendamento de consultas integrado à agenda da clínica.',
     },
@@ -134,7 +134,7 @@ VAGAS = [
     },
     {
         'chave': 'cardapio', 'autor': 'padaria', 'title': 'Cardápio digital para pedidos de delivery',
-        'category': 'Desenvolvimento Web', 'skills': ['HTML/CSS', 'JavaScript', 'WordPress'],
+        'category': 'Tecnologia', 'skills': ['HTML/CSS', 'JavaScript', 'WordPress'],
         'price': '1200', 'price_unit': 'total', 'dias_prazo': 15,
         'description': 'Página com o cardápio, fotos dos produtos e botão de pedido pelo WhatsApp.',
     },
@@ -146,13 +146,13 @@ VAGAS = [
     },
     {
         'chave': 'logotipo', 'autor': 'marcos', 'title': 'Logotipo para loja virtual de bolos caseiros',
-        'category': 'Design Gráfico', 'skills': ['Criação de Logotipo', 'Canva'],
+        'category': 'Design', 'skills': ['Criação de Logotipo', 'Canva'],
         'price': '300', 'price_unit': 'total', 'dias_prazo': 14,
         'description': 'Logotipo simples e versões para perfil do Instagram e etiqueta de embalagem.',
     },
     {
         'chave': 'planilha', 'autor': 'marcos', 'title': 'Planilha de controle financeiro da loja',
-        'category': 'Dados e Inteligência Artificial', 'skills': ['Excel Avançado', 'Análise de Dados'],
+        'category': 'Tecnologia', 'skills': ['Excel Avançado', 'Análise de Dados'],
         'price': '60', 'price_unit': '/h', 'dias_prazo': 10,
         'description': 'Planilha de entradas, saídas e estoque com gráfico mensal de vendas.',
     },

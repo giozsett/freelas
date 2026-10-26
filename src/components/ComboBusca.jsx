@@ -1,21 +1,29 @@
 import { useState, useEffect, useId } from 'react';
 import PropTypes from 'prop-types';
 import { X } from 'lucide-react';
+import useSugestoesCatalogo from '../hooks/useSugestoesCatalogo';
+import { normalizarTexto } from '../utils/filtrarAnuncios';
 
 // Escolha única com busca: quem digita filtra a lista, mas o valor só muda ao
 // clicar numa opção. Usado nos filtros da página inicial e no formulário de
 // anúncio, para que os dois ofereçam as mesmas opções do mesmo jeito.
-export default function ComboBusca({ label, placeholder, valor, opcoes, onSelecionar, hint, obrigatorio = false }) {
+// Com `sugestoes`, também mostra opções parecidas pelo significado.
+export default function ComboBusca({ label, placeholder, valor, opcoes, onSelecionar, hint, obrigatorio = false, sugestoes }) {
   const id = useId();
   const [query, setQuery] = useState(valor);
   const [aberto, setAberto] = useState(false);
 
   useEffect(() => { setQuery(valor); }, [valor]);
 
+  const digitando = query.trim() && query !== valor;
   // Com uma opção já escolhida, focar no campo mostra a lista inteira (rolável)
-  const opcoesFiltradas = query.trim() && query !== valor
-    ? opcoes.filter(o => o.toLowerCase().includes(query.trim().toLowerCase()))
+  const opcoesFiltradas = digitando
+    ? opcoes.filter(o => normalizarTexto(o).includes(normalizarTexto(query)))
     : opcoes;
+  const semanticas = useSugestoesCatalogo(digitando ? query : '', { ...sugestoes, ativo: Boolean(sugestoes) && aberto });
+  const opcoesSemanticas = semanticas
+    .map((r) => r.nome)
+    .filter((nome) => opcoes.includes(nome) && !opcoesFiltradas.includes(nome));
 
   const escolher = (opcao) => {
     setQuery(opcao);
@@ -43,7 +51,8 @@ export default function ComboBusca({ label, placeholder, valor, opcoes, onSeleci
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              if (aberto && opcoesFiltradas.length) escolher(opcoesFiltradas[0]);
+              const primeira = opcoesFiltradas[0] || opcoesSemanticas[0];
+              if (aberto && primeira) escolher(primeira);
             } else if (e.key === 'Escape') {
               setAberto(false);
             }
@@ -63,7 +72,7 @@ export default function ComboBusca({ label, placeholder, valor, opcoes, onSeleci
       </div>
       {aberto && (
         <ul className="combo__list">
-          {opcoesFiltradas.length ? opcoesFiltradas.map(opcao => (
+          {opcoesFiltradas.map(opcao => (
             <li
               key={opcao}
               className="combo__option"
@@ -72,7 +81,20 @@ export default function ComboBusca({ label, placeholder, valor, opcoes, onSeleci
             >
               {opcao}
             </li>
-          )) : <li className="combo__empty">Nenhuma opção encontrada</li>}
+          ))}
+          {opcoesSemanticas.length > 0 && <li className="combo__secao">Pelo significado</li>}
+          {opcoesSemanticas.map(opcao => (
+            <li
+              key={`sugestao-${opcao}`}
+              className="combo__option"
+              onMouseDown={(e) => { e.preventDefault(); escolher(opcao); }}
+            >
+              {opcao}
+            </li>
+          ))}
+          {!opcoesFiltradas.length && !opcoesSemanticas.length && (
+            <li className="combo__empty">Nenhuma opção encontrada</li>
+          )}
         </ul>
       )}
       {hint && <p className="combo__hint">{hint}</p>}
@@ -88,4 +110,9 @@ ComboBusca.propTypes = {
   onSelecionar: PropTypes.func.isRequired,
   hint: PropTypes.string,
   obrigatorio: PropTypes.bool,
+  // Liga as sugestões pelo significado (busca semântica do catálogo)
+  sugestoes: PropTypes.shape({
+    tipo: PropTypes.oneOf(['categoria', 'habilidade']),
+    categoria: PropTypes.string,
+  }),
 };

@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Avg, Count
 from django.utils import timezone
 from rest_framework import serializers
+from .catalogo import MAX_HABILIDADES_ANUNCIO, habilidades_por_categoria
 from .models import UserProfile
 from .notificacoes import criar_notificacao
 from .papeis import PAPEIS_ESCOLHIVEIS, PAPEL_ADMIN, PAPEL_CONTRATANTE, PAPEL_FREELANCER
@@ -772,7 +773,34 @@ class AdSerializer(serializers.ModelSerializer):
             cidade = attrs.get('cidade', getattr(self.instance, 'cidade', None))
             if not cidade:
                 raise serializers.ValidationError({'cidade': 'A cidade é obrigatória para serviços presenciais.'})
+
+        # Anúncio antigo fora do catálogo continua editável enquanto a edição
+        # não mexer em categoria nem habilidades
+        if self.instance is None or 'category' in attrs or 'skills' in attrs:
+            self._validar_catalogo(
+                attrs.get('category', getattr(self.instance, 'category', None)),
+                attrs.get('skills', getattr(self.instance, 'skills', None) or []),
+            )
         return attrs
+
+    def _validar_catalogo(self, categoria, habilidades):
+        catalogo = habilidades_por_categoria()
+        if categoria not in catalogo:
+            raise serializers.ValidationError({'category': 'Escolha uma categoria da lista.'})
+
+        if not isinstance(habilidades, list) or not all(isinstance(h, str) for h in habilidades):
+            raise serializers.ValidationError({'skills': 'Envie as habilidades como uma lista de textos.'})
+        if len(habilidades) > MAX_HABILIDADES_ANUNCIO:
+            raise serializers.ValidationError(
+                {'skills': f'Escolha no máximo {MAX_HABILIDADES_ANUNCIO} habilidades.'}
+            )
+        if len(set(habilidades)) != len(habilidades):
+            raise serializers.ValidationError({'skills': 'Há habilidades repetidas.'})
+        fora_da_categoria = [h for h in habilidades if h not in catalogo[categoria]]
+        if fora_da_categoria:
+            raise serializers.ValidationError({
+                'skills': f'Não fazem parte de "{categoria}": {", ".join(fora_da_categoria)}.',
+            })
 
     def get_author_name(self, obj):
         name = obj.author.first_name
