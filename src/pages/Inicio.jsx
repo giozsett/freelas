@@ -4,13 +4,17 @@ import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRole } from '../context/ContextoPapel';
 import AdCard from '../components/CardAnuncio';
 import ComboBusca from '../components/ComboBusca';
+import SeletorMultiplo from '../components/SeletorMultiplo';
 import {
   CATEGORIAS_SERVICO,
   HABILIDADES_POR_CATEGORIA,
   HABILIDADES_PROFISSIONAIS,
 } from '../constants/options';
+import { anuncioPassaNosFiltros } from '../utils/filtrarAnuncios';
+import useSugestoesCatalogo from '../hooks/useSugestoesCatalogo';
 
 const PAGE_SIZE = 9;
+const MAX_HABILIDADES_FILTRO = 5;
 
 // Só contratantes publicam anúncios: a página lista vagas para todo mundo,
 // muda apenas a chamada conforme quem está vendo.
@@ -48,7 +52,7 @@ export default function Home() {
   const [adsLoading, setAdsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [skillFilter, setSkillFilter] = useState('');
+  const [skillsFilter, setSkillsFilter] = useState([]);
   const [locationTypeFilter, setLocationTypeFilter] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
   const [cidadeFilter, setCidadeFilter] = useState('');
@@ -70,6 +74,7 @@ export default function Home() {
           const normalizedAds = data.map(ad => ({
             id: ad.id,
             title: ad.title || ad.titulo || '',
+            description: ad.description || ad.descricao || '',
             author_id: ad.author,
             author: ad.author_name || 'Usuário Desconhecido',
             authorPlan: ad.author_plan,
@@ -116,29 +121,31 @@ export default function Home() {
 
   useEffect(() => {
     setPagina(1);
-  }, [categoryFilter, skillFilter, locationTypeFilter, estadoFilter, cidadeFilter, searchQuery, minPriceFilter, maxPriceFilter]);
+  }, [categoryFilter, skillsFilter, locationTypeFilter, estadoFilter, cidadeFilter, searchQuery, minPriceFilter, maxPriceFilter]);
 
-  const filteredAds = ads.filter((ad) => {
-    // Hide approved/finalized ads from the main page
-    if (ad.status && ad.status !== 'Em aberto' && ad.status !== 'Ativo' && ad.status !== '') return false;
+  // Habilidades parecidas com o texto pesquisado ("cuidar do meu filho" → Babá)
+  const habilidadesRelacionadas = useSugestoesCatalogo(searchQuery, { tipo: 'habilidade' }).map((r) => r.nome);
 
-    if (categoryFilter && ad.category.toLowerCase() !== categoryFilter.toLowerCase()) return false;
-    if (skillFilter && (!Array.isArray(ad.skills) || !ad.skills.some(skill => skill.toLowerCase() === skillFilter.toLowerCase()))) return false;
-    if (locationTypeFilter && ad.locationType !== locationTypeFilter) return false;
-    if (locationTypeFilter === 'presencial' && estadoFilter && ad.estado !== estadoFilter) return false;
-    if (locationTypeFilter === 'presencial' && cidadeFilter && ad.city !== cidadeFilter) return false;
+  const filteredAds = ads.filter((ad) => anuncioPassaNosFiltros(ad, {
+    categoria: categoryFilter,
+    habilidades: skillsFilter,
+    busca: searchQuery,
+    modalidade: locationTypeFilter,
+    estado: estadoFilter,
+    cidade: cidadeFilter,
+    precoMinimo: minPriceFilter,
+    precoMaximo: maxPriceFilter,
+    habilidadesRelacionadas,
+  }));
 
-    // Price filter (numerical, with 1000 representing 'No limit')
-    const adPrice = parseFloat(ad.price) || 0;
-    if (adPrice < Number(minPriceFilter)) return false;
-    if (Number(maxPriceFilter) < 1000 && adPrice > Number(maxPriceFilter)) return false;
-
-    if (searchQuery && ad.title) {
-      const matchTitle = ad.title.toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchTitle) return false;
+  const trocarCategoria = (categoria) => {
+    setCategoryFilter(categoria);
+    // Mantém só as habilidades que existem na nova categoria
+    if (categoria) {
+      const permitidas = HABILIDADES_POR_CATEGORIA[categoria] || [];
+      setSkillsFilter((atuais) => atuais.filter((h) => permitidas.includes(h)));
     }
-    return true;
-  });
+  };
 
   const totalPaginas = Math.max(1, Math.ceil(filteredAds.length / PAGE_SIZE));
   const paginaAtual = Math.min(pagina, totalPaginas);
@@ -159,24 +166,31 @@ export default function Home() {
               placeholder="Buscar categoria..."
               valor={categoryFilter}
               opcoes={CATEGORIAS_SERVICO}
-              onSelecionar={(valor) => { setCategoryFilter(valor); setSkillFilter(''); }}
+              sugestoes={{ tipo: 'categoria' }}
+              onSelecionar={trocarCategoria}
             />
-            <ComboBusca
-              label="Habilidade"
-              placeholder="Buscar habilidade..."
-              valor={skillFilter}
-              opcoes={habilidadesDoFiltro}
-              onSelecionar={setSkillFilter}
-              hint={categoryFilter
-                ? `${habilidadesDoFiltro.length} habilidades em "${categoryFilter}".`
-                : `${habilidadesDoFiltro.length} habilidades — digite para buscar.`}
-            />
+            <div>
+              <span className="combo__label">Habilidades</span>
+              <SeletorMultiplo
+                valor={skillsFilter}
+                onChange={setSkillsFilter}
+                opcoes={habilidadesDoFiltro}
+                maximo={MAX_HABILIDADES_FILTRO}
+                singular="habilidade"
+                plural="habilidades"
+                feminino
+                sugestoes={{ tipo: 'habilidade', categoria: categoryFilter || undefined }}
+                dica={skillsFilter.length > 1
+                  ? 'Mostra anúncios que pedem pelo menos uma delas.'
+                  : `${habilidadesDoFiltro.length} habilidades${categoryFilter ? ` em "${categoryFilter}"` : ''}. Escolha até ${MAX_HABILIDADES_FILTRO}.`}
+              />
+            </div>
           </section>
           <section className="filter-group">
             <h3>Pesquisar anúncio</h3>
             <div className="filter-search">
               <Search size={17} aria-hidden="true" />
-              <input type="text" className="input" aria-label="Pesquisar pelo título" placeholder="Digite parte do título" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <input type="text" className="input" aria-label="Pesquisar no título e na descrição" placeholder="Título ou descrição" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </section>
           <section className="filter-group">
@@ -239,7 +253,7 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <div className="ads-grid stagger" key={`${categoryFilter}-${skillFilter}-${locationTypeFilter}-${estadoFilter}-${cidadeFilter}-${searchQuery}-${minPriceFilter}-${maxPriceFilter}-${paginaAtual}`}>
+            <div className="ads-grid stagger" key={`${categoryFilter}-${skillsFilter.join(',')}-${locationTypeFilter}-${estadoFilter}-${cidadeFilter}-${searchQuery}-${minPriceFilter}-${maxPriceFilter}-${paginaAtual}`}>
               {adsDaPagina.map(ad => <AdCard key={ad.id} ad={ad} />)}
               {filteredAds.length === 0 && (
                 <div className="empty-state" style={{ gridColumn: '1 / -1' }}>

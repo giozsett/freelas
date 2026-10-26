@@ -37,6 +37,8 @@ __pycache__/
 *$py.class
 db.sqlite3
 backend/media/
+# Modelo de embeddings e vetores da busca no catálogo (refeitos localmente)
+backend/.cache/
 
 # Environment variables
 .env

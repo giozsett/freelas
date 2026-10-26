@@ -30,7 +30,8 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 **Anúncios (vagas)**
 - **RF10** Somente o contratante publica anúncios de vaga. [ok]
 - **RF11** O autor edita e exclui suas vagas. Vaga com acordo não pode ser excluída. [ok]
-- **RF12** Listagem de vagas com filtros por categoria, habilidade, modalidade (remoto/presencial), estado/cidade, faixa de valor e título. [ok]
+- **RF12** Listagem de vagas com filtros por categoria, até 5 habilidades (basta a vaga pedir uma delas), modalidade (remoto/presencial), estado/cidade, faixa de valor e pesquisa por texto no título, na descrição, na categoria e nas habilidades. A pesquisa também entende o significado: "cuidar do meu filho à noite" encontra vagas de "Babá Noturna". [ok]
+- **RF12a** Os campos de categoria e habilidade (filtros e formulário de vaga) sugerem opções pelo significado do texto digitado, com busca semântica local (sem serviço na nuvem). [ok]
 
 **Candidaturas**
 - **RF13** Somente o freelancer se candidata a vagas, com mensagem de proposta e, opcionalmente, contraproposta de valor. [ok]
@@ -75,7 +76,7 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RNF10** Execução local em Windows 10/11 com um único comando (`npm run dev:checkout`), usando o PostgreSQL do Supabase compartilhado pelo grupo.
 - **RNF11** Testes do backend (`manage.py test`) e lint do frontend (`npm run lint`) sem erros novos antes de integrar na `main`.
 - **RNF12** Tema claro/escuro e identidade visual por papel (freelancer/contratante).
-- **RNF13** Tecnologias: React + Vite (Node.js), Django + Django REST Framework, PostgreSQL (Supabase), Redis, Stripe, Cloudinary, OAuth do Google e do LinkedIn.
+- **RNF13** Tecnologias: React + Vite (Node.js), Django + Django REST Framework, PostgreSQL (Supabase), Redis, Stripe, Cloudinary, OAuth do Google e do LinkedIn, fastembed (modelo de embeddings local para a busca semântica do catálogo).
 
 ## Regras de negócio
 
@@ -102,6 +103,7 @@ O papel de cada conta é escolhido no primeiro acesso e **não pode ser alterado
 - **RN14** A plataforma não gera contrato com validade jurídica.
 - **RN15** Uma avaliação por parte e por acordo concluído.
 - **RN16** O chat existe só entre as partes de um acordo, depois da aprovação da candidatura.
+- **RN17** Toda vaga tem uma categoria ampla (ex.: "Cuidados Pessoais") e até 5 habilidades que a especificam (ex.: "Babá", "Manicure"), escolhidas do catálogo da plataforma. O backend recusa categoria fora do catálogo e habilidade que não pertence à categoria escolhida. [ok]
 
 ## Ajustes na modelagem
 

@@ -2956,3 +2956,261 @@ class CandidaturaDuplicadaTests(TestCase):
         Candidatura.objects.create(user=self.freelancer, ad=self.vaga)
 
         self.assertEqual(Candidatura.objects.filter(user=self.freelancer, ad=self.vaga).count(), 2)
+
+
+class CatalogoAnuncioAPITests(TestCase):
+    """Categoria e habilidades do anúncio vêm do mesmo catálogo dos filtros da
+    página inicial (src/data/professional-options.json): o que é publicado
+    precisa poder ser encontrado pelos filtros."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = _criar_usuario_com_papel('catalogo@example.com', 'contratante', 'Cora')
+        self.client.force_authenticate(self.contratante)
+
+    def _payload_anuncio(self, **extra):
+        payload = {
+            'title': 'Site institucional',
+            'description': 'Site com 5 páginas.',
+            'price': '800.00',
+            'category': 'Tecnologia',
+            'skills': ['React', 'Django'],
+        }
+        payload.update(extra)
+        return payload
+
+    def test_anuncio_com_categoria_e_habilidades_do_catalogo_e_aceito(self):
+        response = self.client.post('/api/ads/', self._payload_anuncio(), format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Ad.objects.get(pk=response.data['id']).skills, ['React', 'Django'])
+
+    def test_categoria_fora_do_catalogo_e_recusada(self):
+        response = self.client.post('/api/ads/', self._payload_anuncio(category='Inventada', skills=[]), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('category', response.data)
+        self.assertFalse(Ad.objects.exists())
+
+    def test_anuncio_novo_exige_categoria(self):
+        payload = self._payload_anuncio(skills=[])
+        del payload['category']
+        response = self.client.post('/api/ads/', payload, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('category', response.data)
+
+    def test_habilidade_de_outra_categoria_e_recusada(self):
+        response = self.client.post('/api/ads/', self._payload_anuncio(skills=['React', 'Fotografia']), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Fotografia', str(response.data['skills']))
+
+    def test_no_maximo_cinco_habilidades(self):
+        seis = ['HTML/CSS', 'JavaScript', 'TypeScript', 'React', 'Vue.js', 'Angular']
+        response = self.client.post('/api/ads/', self._payload_anuncio(skills=seis), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('skills', response.data)
+
+    def test_habilidades_repetidas_sao_recusadas(self):
+        response = self.client.post('/api/ads/', self._payload_anuncio(skills=['React', 'React']), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('skills', response.data)
+
+    def test_trocar_categoria_sem_trocar_habilidades_incompativeis_e_recusado(self):
+        anuncio = Ad.objects.create(
+            author=self.contratante, title='Site', price='100.00', role='contractor',
+            category='Tecnologia', skills=['React'],
+        )
+        response = self.client.patch(
+            f'/api/ads/{anuncio.id}/', {'category': 'Vídeo, Áudio e Fotografia'}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('skills', response.data)
+
+    def test_anuncio_antigo_fora_do_catalogo_ainda_edita_outros_campos(self):
+        anuncio = Ad.objects.create(
+            author=self.contratante, title='Site', price='100.00', role='contractor',
+            category='Categoria antiga', skills=['Habilidade antiga'],
+        )
+        response = self.client.patch(f'/api/ads/{anuncio.id}/', {'title': 'Site novo'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        anuncio.refresh_from_db()
+        self.assertEqual(anuncio.title, 'Site novo')
+
+
+class MigracaoCategoriasAmplasTests(TestCase):
+    """A migração 0049 troca as categorias antigas (estreitas ou repetidas)
+    pelas categorias amplas do catálogo atual, nos anúncios e nos perfis."""
+
+    def setUp(self):
+        from importlib import import_module
+        from django.apps import apps
+
+        self.migracao = import_module('core.migrations.0049_categorias_amplas')
+        self.apps = apps
+        self.contratante = _criar_usuario_com_papel('migra@example.com', 'contratante', 'Mia')
+
+    def test_anuncio_com_categoria_antiga_passa_para_a_ampla(self):
+        anuncio = Ad.objects.create(
+            author=self.contratante, title='Vídeo', price='100.00', role='contractor',
+            category='Edição de Vídeo', skills=['After Effects'],
+        )
+        self.migracao.migrar_categorias(self.apps, None)
+
+        anuncio.refresh_from_db()
+        self.assertEqual(anuncio.category, 'Vídeo, Áudio e Fotografia')
+        self.assertEqual(anuncio.skills, ['After Effects'])
+
+    def test_categoria_que_nao_mudou_ou_desconhecida_fica_como_esta(self):
+        mantida = Ad.objects.create(author=self.contratante, title='A', price='1', category='Tecnologia')
+        desconhecida = Ad.objects.create(author=self.contratante, title='B', price='1', category='Inventada')
+        self.migracao.migrar_categorias(self.apps, None)
+
+        mantida.refresh_from_db()
+        desconhecida.refresh_from_db()
+        self.assertEqual(mantida.category, 'Tecnologia')
+        self.assertEqual(desconhecida.category, 'Inventada')
+
+    def test_listas_do_perfil_trocam_de_nome_sem_repetir(self):
+        perfil = self.contratante.profile
+        perfil.categories = ['Desenvolvimento Web', 'Tecnologia', 'Design Gráfico']
+        perfil.servicos_contratados = ['Cuidados com Crianças e Idosos', 'Beleza e Cuidados Pessoais']
+        perfil.save(update_fields=['categories', 'servicos_contratados'])
+
+        self.migracao.migrar_categorias(self.apps, None)
+
+        perfil.refresh_from_db()
+        self.assertEqual(perfil.categories, ['Tecnologia', 'Design'])
+        self.assertEqual(perfil.servicos_contratados, ['Cuidados Pessoais'])
+
+    def test_todo_destino_existe_no_catalogo(self):
+        from .catalogo import habilidades_por_categoria
+
+        destinos = set(self.migracao.CATEGORIA_NOVA.values())
+        self.assertLessEqual(destinos, set(habilidades_por_categoria()))
+
+
+class ModeloFalsoBusca:
+    """Substitui o modelo de embeddings nos testes: cada palavra (sem acento)
+    vira uma dimensão, então textos com palavras em comum ficam próximos."""
+
+    DIMENSOES = 4096
+
+    def __init__(self):
+        self.textos_vetorizados = 0
+
+    def _vetor(self, texto):
+        import hashlib
+        import re
+        import unicodedata
+
+        import numpy as np
+
+        vetor = np.zeros(self.DIMENSOES)
+        normalizado = unicodedata.normalize('NFD', texto).encode('ascii', 'ignore').decode().lower()
+        for palavra in re.findall(r'\w{3,}', normalizado):
+            vetor[int(hashlib.md5(palavra.encode()).hexdigest(), 16) % self.DIMENSOES] += 1
+        return vetor
+
+    def passage_embed(self, textos):
+        textos = list(textos)
+        self.textos_vetorizados += len(textos)
+        return [self._vetor(t) for t in textos]
+
+    def query_embed(self, consulta):
+        return [self._vetor(consulta)]
+
+
+class BuscaCatalogoTests(TestCase):
+    """Busca semântica local sobre categorias e habilidades
+    (core/busca_catalogo.py), com o modelo trocado por um falso."""
+
+    def setUp(self):
+        import tempfile
+
+        from . import busca_catalogo
+
+        self.busca_catalogo = busca_catalogo
+        self.pasta = tempfile.mkdtemp()
+        self.modelo = ModeloFalsoBusca()
+        self.indice = busca_catalogo.IndiceCatalogo(pasta_cache=self.pasta, carregar_modelo=lambda: self.modelo)
+        self.indice.carregar()
+
+    def _nomes(self, resposta):
+        return [r['nome'] for r in resposta['resultados']]
+
+    def test_encontra_habilidade_pelos_termos_de_busca(self):
+        resposta = self.indice.buscar('torneira vazando')
+
+        self.assertEqual(resposta['modo'], 'semantica')
+        self.assertEqual(self._nomes(resposta)[0], 'Encanador')
+
+    def test_filtra_por_categoria_e_tipo(self):
+        resposta = self.indice.buscar('limpeza', categoria='Casa e Manutenção', tipo='habilidade')
+
+        self.assertTrue(resposta['resultados'])
+        for item in resposta['resultados']:
+            self.assertEqual(item['tipo'], 'habilidade')
+            self.assertIn('Casa e Manutenção', item['categorias'])
+
+    def test_tipo_categoria_devolve_so_categorias(self):
+        resposta = self.indice.buscar('cuidados pessoais', tipo='categoria')
+
+        self.assertEqual(self._nomes(resposta)[0], 'Cuidados Pessoais')
+        self.assertTrue(all(r['tipo'] == 'categoria' for r in resposta['resultados']))
+
+    def test_categoria_e_encontrada_pelas_habilidades_dela(self):
+        resposta = self.indice.buscar('encanador', tipo='categoria')
+
+        self.assertEqual(self._nomes(resposta)[0], 'Casa e Manutenção')
+
+    def test_habilidade_de_duas_categorias_aparece_uma_vez(self):
+        nomes = self._nomes(self.indice.buscar('garçom', tipo='habilidade', limite=20))
+
+        self.assertEqual(nomes.count('Garçom'), 1)
+        garcom = next(r for r in self.indice.buscar('garçom', tipo='habilidade')['resultados'] if r['nome'] == 'Garçom')
+        self.assertEqual(set(garcom['categorias']), {'Gastronomia', 'Eventos e Promoções'})
+
+    def test_vetores_do_catalogo_ficam_em_cache(self):
+        from . import busca_catalogo
+
+        outro = busca_catalogo.IndiceCatalogo(pasta_cache=self.pasta, carregar_modelo=lambda: self.modelo)
+        vetorizados_antes = self.modelo.textos_vetorizados
+        outro.carregar()
+
+        self.assertEqual(self.modelo.textos_vetorizados, vetorizados_antes)
+        self.assertEqual(self._nomes(outro.buscar('torneira'))[0], 'Encanador')
+
+    def test_sem_modelo_cai_na_busca_por_texto(self):
+        from . import busca_catalogo
+
+        def sem_fastembed():
+            raise ImportError('fastembed não instalado')
+
+        indice = busca_catalogo.IndiceCatalogo(pasta_cache=self.pasta, carregar_modelo=sem_fastembed)
+        indice.carregar()
+        resposta = indice.buscar('torneira')
+
+        self.assertEqual(resposta['modo'], 'texto')
+        self.assertEqual(self._nomes(resposta)[0], 'Encanador')
+
+    def test_termos_so_citam_habilidades_do_catalogo(self):
+        from .catalogo import habilidades_por_categoria
+
+        todas = set().union(*habilidades_por_categoria().values())
+        self.assertLessEqual(set(self.busca_catalogo.termos_das_habilidades()), todas)
+
+    def test_endpoint_publico_de_busca(self):
+        with patch.object(self.busca_catalogo, 'indice', self.indice):
+            resposta = APIClient().get('/api/catalogo/buscar/', {'q': 'torneira', 'tipo': 'habilidade'})
+            curta = APIClient().get('/api/catalogo/buscar/', {'q': 'a'})
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.data['resultados'][0]['nome'], 'Encanador')
+        self.assertEqual(curta.status_code, 200)
+        self.assertEqual(curta.data['resultados'], [])

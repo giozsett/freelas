@@ -4,6 +4,7 @@ import { Lock } from 'lucide-react';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
 import LimitePlano from '../components/LimitePlano';
 import CampoCategoriaHabilidades from '../components/CampoCategoriaHabilidades';
+import { primeiraMensagemDeErro } from '../utils/mensagemErro';
 
 export default function CreateAd() {
   const limiteDescricao = 1000;
@@ -87,7 +88,7 @@ export default function CreateAd() {
       } else {
         const errorData = await response.json();
         console.error(errorData);
-        setSubmitError(errorData.detail || errorData[0] || 'Erro ao criar o anúncio.');
+        setSubmitError(primeiraMensagemDeErro(errorData, 'Erro ao criar o anúncio.'));
       }
     } catch (err) {
       console.error(err);

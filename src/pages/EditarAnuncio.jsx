@@ -4,6 +4,7 @@ import { useAuth } from '../context/ContextoAutenticacao';
 import { CATEGORIAS_SERVICO } from '../constants/options';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
 import CampoCategoriaHabilidades from '../components/CampoCategoriaHabilidades';
+import { primeiraMensagemDeErro } from '../utils/mensagemErro';
 
 export default function EditAd() {
   const limiteDescricao = 1000;
@@ -124,7 +125,7 @@ export default function EditAd() {
       } else {
         const errorData = await response.json();
         console.error(errorData);
-        setSubmitError(errorData.detail || errorData[0] || 'Erro ao salvar as edições do anúncio.');
+        setSubmitError(primeiraMensagemDeErro(errorData, 'Erro ao salvar as edições do anúncio.'));
       }
     } catch (err) {
       console.error(err);

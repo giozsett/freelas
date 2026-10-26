@@ -35,6 +35,12 @@ O `DATABASE_URL` em `backend\.env` aponta para o **mesmo Postgres do Supabase us
 - Sem `--keepdb`, o pooler do Supabase (porta 6543) segura a conexão e o `DROP DATABASE` do final falha (`is being accessed by other users`). O banco de teste fica sobrando, e a execução seguinte para no prompt `Type 'yes'...`. O resumo `Ran N tests ... OK/FAILED` sai **antes** desse traceback: guarde a saída completa num arquivo em vez de cortá-la com `tail`.
 - Para simular uma condição de corrida num teste, faça um `patch` de uma função chamada entre a checagem e o `save()`, e grave a linha concorrente dentro dela. Veja `CandidaturaDuplicadaTests` em `backend/core/tests.py`.
 
+## Busca no catálogo
+
+- O modelo de embeddings e os vetores ficam em `backend\.cache\busca_catalogo` (fora do Git). `manage.py preparar_busca_catalogo` baixa e vetoriza: cerca de 40 s na primeira vez, 2 s depois.
+- O `runserver` não carrega o modelo na inicialização: a primeira busca dispara o carregamento em segundo plano e responde no modo `texto` (campo `modo` da resposta) até ele terminar.
+- Para medir a qualidade da busca, chame `indice.carregar()` e `indice.buscar(...)` de `core.busca_catalogo` num script com `manage.py shell`. A saída do console do Windows sai em cp1252: use `PYTHONIOENCODING=utf-8` para ver os acentos.
+
 ## Frontend
 
 - `npm test` roda `node --test` só em arquivos `.test.js`, sem renderizar JSX. Para validar componentes, use `npm run lint` e `npx vite build`.

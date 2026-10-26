@@ -30,6 +30,7 @@ export default function CampoCategoriaHabilidades({ categoria, habilidades, onCh
         placeholder="Buscar categoria..."
         valor={categoria}
         opcoes={CATEGORIAS_SERVICO}
+        sugestoes={{ tipo: 'categoria' }}
         onSelecionar={trocarCategoria}
         obrigatorio
         hint={categoriaAnterior && !categoria
@@ -49,6 +50,7 @@ export default function CampoCategoriaHabilidades({ categoria, habilidades, onCh
             singular="habilidade"
             plural="habilidades"
             feminino
+            sugestoes={{ tipo: 'habilidade', categoria }}
           />
         ) : (
           <p className="combo__hint">Escolha uma categoria para ver as habilidades.</p>

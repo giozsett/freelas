@@ -25,7 +25,7 @@
 - Login: usuários efetuam login com email e senha (possibilidade de fazer login com conta do google)
 - Cadastro: usuários podem criar uma conta com nome, email e senha (possibilidade de cadastro com conta do google)
 
-- Lista de anúncios: visitantes e usuários veem as vagas ativas de forma resumida, utilizando os filtros de valor, local, categoria de serviço e habilidades na barra lateral.
+- Lista de anúncios: visitantes e usuários veem as vagas ativas de forma resumida, utilizando os filtros de valor, local, categoria de serviço (ampla, ex.: "Cuidados Pessoais") e habilidades (específicas da categoria, ex.: "Babá") na barra lateral. A pesquisa por texto também entende o significado do que foi digitado (busca semântica local).
 - Criar Anuncio: através desta página os contratantes criam anúncios de vaga
 - Editar anúncio: o usuário pode editar o anúncio que ele postou
 - Visualização do anúncio: visualização das informações detalhadas da vaga. Visualização da reputação do contratante, descrição, prazo, etc
