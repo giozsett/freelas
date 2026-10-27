@@ -81,6 +81,7 @@ export default function Home() {
   const [localizando, setLocalizando] = useState(false);
   const [erroLocalizacao, setErroLocalizacao] = useState('');
   const [centroCidade, setCentroCidade] = useState(null);
+  const [mapaAberto, setMapaAberto] = useState(true);
   const habilidadesDoFiltro = categoryFilter
     ? HABILIDADES_POR_CATEGORIA[categoryFilter] || HABILIDADES_PROFISSIONAIS
     : HABILIDADES_PROFISSIONAIS;
@@ -391,6 +392,8 @@ export default function Home() {
         {locationTypeFilter !== 'remoto' && !adsLoading && (
           <CartaoMapaVagas
             habilitado={Boolean(minhaLocalizacao)}
+            aberto={mapaAberto}
+            onAlternar={() => setMapaAberto((atual) => !atual)}
             localizando={localizando}
             erro={erroLocalizacao}
             onPermitir={usarMinhaLocalizacao}

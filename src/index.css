@@ -1473,25 +1473,31 @@ ul { list-style-type: none; }
 }
 
 /* Pino de vaga: gota na cor do papel com contorno da superfície */
-.mapa-pino {
-  position: relative; width: 30px; height: 30px; padding: 0; cursor: pointer;
+.mapa-pino { z-index: 1; width: 30px; height: 36px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.mapa-pino:hover, .mapa-pino:focus-visible { z-index: 2; outline: none; }
+.mapa-pino__gota {
+  position: absolute; left: 0; top: 0; width: 30px; height: 30px;
   border: 3px solid var(--surface-color); border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
   background: var(--primary); box-shadow: 0 4px 10px var(--shadow-color), 0 1px 3px rgba(15, 23, 42, 0.25);
   transition: transform 0.15s ease, background-color 0.2s ease;
 }
-.mapa-pino::after {
+.mapa-pino__gota::after {
   content: ''; position: absolute; inset: 0; margin: auto; width: 9px; height: 9px; border-radius: 50%; background: var(--surface-color);
 }
-.mapa-pino:hover, .mapa-pino:focus-visible { background: var(--primary-hover); transform: rotate(-45deg) scale(1.12); outline: none; }
+.mapa-pino:hover .mapa-pino__gota, .mapa-pino:focus-visible .mapa-pino__gota { background: var(--primary-hover); transform: rotate(-45deg) scale(1.12); }
+.mapa-pino:focus-visible .mapa-pino__gota { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent); }
 .mapa-pino__contador {
-  position: absolute; top: -12px; right: -12px; min-width: 20px; height: 20px; padding: 0 5px; transform: rotate(45deg);
+  position: absolute; top: -10px; right: -12px; min-width: 20px; height: 20px; padding: 0 5px;
   display: inline-flex; align-items: center; justify-content: center; border-radius: 999px;
   background: var(--surface-color); color: var(--primary); border: 1px solid var(--primary);
   font: 700 0.7rem/1 'Outfit', sans-serif; z-index: 1;
 }
 
 /* Origem da busca ("minha localização" ou centro da cidade) */
+/* Fica por baixo dos pinos e não recebe cliques: com a vaga perto de você,
+   o ponto cobria o pino e o balão não abria */
 .mapa-origem {
+  z-index: 0; pointer-events: none;
   width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
   border: 3px solid var(--surface-color); animation: mapaOrigemPulso 2s ease-out infinite;
 }

@@ -68,7 +68,12 @@ function useCoresDoTema() {
 // Cria o mapa dentro de `containerRef`. `versaoEstilo` muda sempre que o
 // estilo termina de carregar (inclusive ao trocar o tema), para quem desenha
 // camadas próprias desenhá-las de novo.
-export default function useMapa(containerRef, { centro = CENTRO_BRASIL, zoom = 3.4, cooperativo = false } = {}) {
+// - cooperativo: rolagem só aproxima com Ctrl e, no celular, move com dois dedos
+// - zoomPelaRolagem: false deixa a rolagem do mouse sempre para a página
+//   (zoom pelos botões, duplo clique ou pinça)
+export default function useMapa(containerRef, {
+  centro = CENTRO_BRASIL, zoom = 3.4, cooperativo = false, zoomPelaRolagem = true,
+} = {}) {
   const { theme } = useTheme();
   const cores = useCoresDoTema();
   const mapaRef = useRef(null);
@@ -76,7 +81,7 @@ export default function useMapa(containerRef, { centro = CENTRO_BRASIL, zoom = 3
   const [versaoEstilo, setVersaoEstilo] = useState(0);
   const [erro, setErro] = useState(false);
   const temaInicial = useRef(theme);
-  const opcoesIniciais = useRef({ centro, zoom, cooperativo });
+  const opcoesIniciais = useRef({ centro, zoom, cooperativo, zoomPelaRolagem });
 
   useEffect(() => {
     let cancelado = false;
@@ -86,7 +91,7 @@ export default function useMapa(containerRef, { centro = CENTRO_BRASIL, zoom = 3
       .then(([modulo]) => {
         if (cancelado || !containerRef.current) return;
         const maplibregl = modulo.default;
-        const { centro: c, zoom: z, cooperativo: coop } = opcoesIniciais.current;
+        const { centro: c, zoom: z, cooperativo: coop, zoomPelaRolagem: rolagem } = opcoesIniciais.current;
         mapa = new maplibregl.Map({
           container: containerRef.current,
           style: ESTILOS[temaInicial.current] || ESTILOS.light,
@@ -94,6 +99,7 @@ export default function useMapa(containerRef, { centro = CENTRO_BRASIL, zoom = 3
           zoom: z,
           attributionControl: { compact: true },
           cooperativeGestures: coop,
+          scrollZoom: rolagem,
           dragRotate: false,
           pitchWithRotate: false,
           locale: TEXTOS_DO_MAPA,

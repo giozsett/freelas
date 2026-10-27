@@ -57,11 +57,16 @@ function criarBalao(itens, origem, navegar) {
   return raiz;
 }
 
+// O MapLibre posiciona o marcador com `transform` no próprio elemento: a gota
+// girada fica num elemento de dentro, senão o giro some
 function criarPino(quantidade) {
   const pino = document.createElement('button');
   pino.type = 'button';
   pino.className = 'mapa-pino';
   pino.setAttribute('aria-label', quantidade > 1 ? `${quantidade} vagas neste local` : 'Vaga neste local');
+  const gota = document.createElement('span');
+  gota.className = 'mapa-pino__gota';
+  pino.appendChild(gota);
   if (quantidade > 1) {
     const contador = document.createElement('span');
     contador.className = 'mapa-pino__contador';

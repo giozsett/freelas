@@ -13,9 +13,12 @@ const MESMO_PONTO = 0.00001;
 export default function MapaConfirmarLocal({ ponto, aproximado, onMover, onUsarMinhaLocalizacao, localizando }) {
   const containerRef = useRef(null);
   const [arrastando, setArrastando] = useState(false);
+  // O mapa fica no meio de um formulário longo: rolar a página por cima dele
+  // não pode dar zoom (o zoom mexia no centro e "ajustava" o pino sozinho)
   const { mapa, erro } = useMapa(containerRef, {
     centro: ponto || undefined,
     zoom: ponto ? (aproximado ? ZOOM_CIDADE : ZOOM_ENDERECO) : undefined,
+    zoomPelaRolagem: false,
   });
   const onMoverRef = useRef(onMover);
   onMoverRef.current = onMover;
@@ -24,6 +27,8 @@ export default function MapaConfirmarLocal({ ponto, aproximado, onMover, onUsarM
   // (flyTo abaixo) levam a marca `programatico`
   useEffect(() => {
     if (!mapa) return undefined;
+    // Pinça no celular aproxima em volta do pino, sem tirá-lo do lugar
+    mapa.touchZoomRotate.enable({ around: 'center' });
     const aoComecar = (evento) => { if (!evento.programatico) setArrastando(true); };
     const aoTerminar = (evento) => {
       setArrastando(false);
