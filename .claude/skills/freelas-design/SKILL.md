@@ -142,6 +142,27 @@ Sempre usar o par cor+`-soft` (ex.: `--danger-color` no texto/ícone,
 - **Motion**: transições de 0.15–0.4s `ease`/`cubic-bezier`; nada abrupto; respeitar
   `prefers-reduced-motion`.
 
+## Mapas (MapLibre GL)
+
+Os mapas seguem o tema e o papel como o resto da interface. Estilos e
+regras estão no fim de `src/index.css` (`.mapa-*`, `.confirmar-local*`).
+
+- **Estilo do mapa por tema:** OpenFreeMap `positron` no claro e `dark` no
+  escuro, trocado por `useMapa.js` quando o tema muda.
+- **Pinos e balões são HTML:** gota com `border-radius: 50% 50% 50% 0`
+  girada em -45°, fundo `--primary`, contorno de 3px em `--surface-color`.
+  Contador de vagas em pílula `--surface-color` com texto `--primary`. O balão
+  (popup) segue o padrão de dropdown: `--surface-color`, borda
+  `--border-color`, raio 12px e preço em `--success-color`.
+- **Camadas desenhadas pelo mapa** (ex.: círculo do raio) não leem variáveis
+  CSS: use as `cores` de `useMapa`, lidas dos tokens depois da transição de
+  papel. Assim a cor continua vindo do `index.css`.
+- **Origem da busca:** ponto em `--accent` com pulso.
+- **Mapa dentro de card:** `.card` com cabeçalho no padrão "ícone em círculo"
+  e o mapa com raio de 9 a 10px dentro dele. Os controles do MapLibre
+  (zoom, créditos) são reestilizados com os tokens. O crédito do
+  OpenStreetMap é obrigatório e precisa continuar legível nos dois temas.
+
 ## Checklist de completude do perfil (reputação)
 
 A completude do perfil (bônus de até 30 pontos na reputação, ver

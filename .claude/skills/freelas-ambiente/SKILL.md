@@ -41,6 +41,12 @@ O `DATABASE_URL` em `backend\.env` aponta para o **mesmo Postgres do Supabase us
 - O `runserver` não carrega o modelo na inicialização: a primeira busca dispara o carregamento em segundo plano e responde no modo `texto` (campo `modo` da resposta) até ele terminar.
 - Para medir a qualidade da busca, chame `indice.carregar()` e `indice.buscar(...)` de `core.busca_catalogo` num script com `manage.py shell`. A saída do console do Windows sai em cp1252: use `PYTHONIOENCODING=utf-8` para ver os acentos.
 
+## Mapa e localização no navegador
+
+- O pedido de permissão de localização do Chrome não aparece para a automação do navegador. Para testar, troque `navigator.geolocation.getCurrentPosition` na página por uma função que chame o sucesso com `{ coords: { latitude, longitude } }` ou o erro com `{ code: 1 }` (bloqueado).
+- `/create-ad` e `/edit-ad/:id` só abrem para contratante. Se a sessão do navegador for de outro papel, teste `LocalizacaoAnuncio` e `MapaVagas` numa página `.html` temporária na raiz, que o Vite serve, e apague-a depois. Assim nenhuma vaga de teste vai para o banco compartilhado.
+- O Nominatim tem limite de uso. Teste com poucos endereços e só pelo fluxo da tela, que já espera a digitação terminar.
+
 ## Frontend
 
 - `npm test` roda `node --test` só em arquivos `.test.js`, sem renderizar JSX. Para validar componentes, use `npm run lint` e `npx vite build`.

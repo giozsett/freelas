@@ -1,4 +1,5 @@
 // Regras dos filtros da página inicial, separadas da tela para serem testadas.
+import { distanciaKm, temCoordenadas } from './geo.js';
 
 // Sem acentos e em minúsculas: "Edição" e "edicao" combinam na busca
 export function normalizarTexto(texto) {
@@ -10,7 +11,7 @@ const STATUS_VISIVEIS = ['', 'Em aberto', 'Ativo'];
 export function anuncioPassaNosFiltros(ad, filtros) {
   const {
     categoria, habilidades, busca, modalidade, estado, cidade, precoMinimo, precoMaximo,
-    habilidadesRelacionadas = [],
+    habilidadesRelacionadas = [], origem = null, raioKm = 0,
   } = filtros;
   const habilidadesDoAnuncio = (Array.isArray(ad.skills) ? ad.skills : []).map(normalizarTexto);
 
@@ -23,8 +24,15 @@ export function anuncioPassaNosFiltros(ad, filtros) {
   if (habilidades.length && !habilidades.some((h) => habilidadesDoAnuncio.includes(normalizarTexto(h)))) return false;
 
   if (modalidade && ad.locationType !== modalidade) return false;
-  if (modalidade === 'presencial' && estado && ad.estado !== estado) return false;
-  if (modalidade === 'presencial' && cidade && ad.city !== cidade) return false;
+  // Com raio, vale a distância até a origem (cidade escolhida ou "minha
+  // localização"), mesmo que a vaga fique na cidade vizinha
+  if (modalidade === 'presencial' && raioKm > 0 && temCoordenadas(origem)) {
+    const local = { lat: ad.latitude, lng: ad.longitude };
+    if (!temCoordenadas(local) || distanciaKm(origem, local) > raioKm) return false;
+  } else {
+    if (modalidade === 'presencial' && estado && ad.estado !== estado) return false;
+    if (modalidade === 'presencial' && cidade && ad.city !== cidade) return false;
+  }
 
   // 1000 no máximo significa "sem limite"
   const preco = parseFloat(ad.price) || 0;
