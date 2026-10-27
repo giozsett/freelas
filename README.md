@@ -11,19 +11,21 @@ Plataforma web que conecta **freelancers** a **pessoas e empresas** que querem c
 5. O pagamento do acordo é feito pelo Stripe (valor do anúncio + 10% de taxa da plataforma).
 6. Quando o freela é concluído, **contratante e freelancer se avaliam mutuamente**.
 
-Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de empresa, planos Gold e Platinum (assinatura), notificações em tempo real, denúncias e painel de moderação.
+Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de empresa, planos Gold e Platinum (assinatura), notificações em tempo real, denúncias, painel de moderação e um **mapa das vagas presenciais**, com busca por distância.
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | React 18, Vite 5, React Router 7, Lucide React, react-easy-crop, CSS puro (`src/index.css` e `src/App.css`) |
+| Frontend | React 18, Vite 5, React Router 7, Lucide React, react-easy-crop, MapLibre GL, CSS puro (`src/index.css` e `src/App.css`) |
 | Backend | Python 3.14, Django 6, Django REST Framework, django-allauth e dj-rest-auth (login social), django-cors-headers |
 | Tempo real | Django Channels + Daphne (WebSocket) e **Redis Pub/Sub** (mensagens do chat) |
 | Banco de dados | PostgreSQL hospedado no **Supabase** (só o banco; sem SDK do Supabase no frontend) |
 | Pagamentos | **Stripe** (checkout, assinaturas e webhook) |
 | Túnel público | **Ngrok** (expõe o backend para o Stripe entregar o webhook) |
 | Mídia | Cloudinary (imagens) |
+| Busca no catálogo | **fastembed** (modelo de embeddings multilíngue, roda localmente via ONNX). Veja [Busca no catálogo](#busca-no-catálogo-categorias-e-habilidades) |
+| Mapas e localização | **MapLibre GL** com mapas do **OpenFreeMap**, **API do IBGE** e **Nominatim** (OpenStreetMap): gratuitos e sem chave. Veja [Mapa e localização das vagas](#mapa-e-localização-das-vagas) |
 | E-mail | SMTP do Gmail (validação de cadastro) |
 | Qualidade | ESLint e `node --test` (frontend), `manage.py test` (backend) |
 
@@ -32,9 +34,11 @@ Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de 
 ```
 freelas/
 ├── src/                 # Frontend (pages, components, context, hooks, utils, constants, data)
+│   └── data/            # Catálogo de categorias e habilidades (usado também pelo backend)
 ├── backend/
 │   ├── server/          # Configuração do Django (settings, urls, asgi)
-│   └── core/            # App principal (models, views, serializers, chat, consumers, routing, notificações)
+│   ├── core/            # App principal (models, views, serializers, chat, consumers, routing, notificações)
+│   └── .cache/          # Modelo e vetores da busca no catálogo (gerados localmente, fora do Git)
 ├── scripts/
 │   └── dev-checkout.ps1 # Sobe todo o ambiente de desenvolvimento
 ├── tools/redis/         # Redis portátil para Windows (baixado automaticamente pelo script)
@@ -120,6 +124,10 @@ CLOUDINARY_API_SECRET=
 # ex.: 0.05 = 3 minutos.
 PRAZO_PAGAMENTO_HORAS=
 PRAZO_CONFIRMACAO_HORAS=
+
+# Opcional: outro modelo do fastembed para a busca no catálogo
+# (padrão sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2)
+BUSCA_CATALOGO_MODELO=
 ```
 
 > Se `DATABASE_URL` ficar vazio, o Django usa um SQLite local (`db.sqlite3`). Para trabalhar no mesmo banco do grupo, use a URL do Supabase.
@@ -145,6 +153,17 @@ npm install
 > Se o PowerShell bloquear o `Activate.ps1`, execute uma vez:
 > `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
 
+Prepare a busca no catálogo (baixa uma vez um modelo de cerca de 220 MB para `backend\.cache`):
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py preparar_busca_catalogo
+cd ..
+```
+
+Sem esse passo o projeto funciona, mas a primeira busca dispara o download em segundo plano e, até ele terminar, as sugestões saem só pelo texto.
+
 ### 5. Aplicar as migrations do banco
 
 ```powershell
@@ -155,6 +174,37 @@ cd ..
 ```
 
 O banco do Supabase é **compartilhado pelo grupo**. Se outra pessoa já aplicou as migrations, o comando apenas informa que não há nada a aplicar.
+
+---
+
+## Antes de abrir o projeto
+
+Rode esta sequência **sempre depois de um `git pull` ou de trocar de branch**. Todos os comandos podem ser repetidos sem risco: se não houver nada novo, eles só confirmam que está tudo em dia.
+
+```powershell
+# Na raiz do projeto
+npm install
+
+cd backend
+.\venv\Scripts\Activate.ps1
+pip install -r ..\requirements.txt
+python manage.py makemigrations --check --dry-run   # 1. alguém alterou um model sem criar a migration?
+python manage.py showmigrations core                # 2. lista as migrations; [ ] = ainda não aplicada
+python manage.py migrate                            # 3. aplica as que faltam
+cd ..
+```
+
+| Comando | Por que rodar |
+|---|---|
+| `npm install` | `package.json` ou `package-lock.json` mudaram |
+| `pip install -r ..\requirements.txt` | `requirements.txt` mudou |
+| `makemigrations --check --dry-run` | Deve responder `No changes detected`. Se listar mudanças, um model foi alterado sem migration: avise quem fez a alteração. |
+| `showmigrations core` | Mostra o estado das migrations antes de aplicar |
+| `migrate` | Novos arquivos em `backend\core\migrations\` |
+| `python manage.py preparar_busca_catalogo` | Na primeira vez depois de instalar o `fastembed`, para baixar o modelo da busca no catálogo |
+| Variáveis novas de `.env` | Peça os valores ao grupo e acrescente aos seus `.env` |
+
+Se o `migrate` falhar com `Conflicting migrations detected`, veja [Conflitos de migration](#conflitos-de-migration).
 
 ---
 
@@ -228,6 +278,62 @@ python manage.py verificar_dados         # lista dados fora das regras atuais, s
 - `popular_demo` cria contratantes, freelancers, vagas e um acordo em cada etapa do ciclo. Só mexe nas contas `@demo.freelas.com`, então pode rodar no banco compartilhado; rode no dia da apresentação, porque os prazos contam a partir da criação.
 - O roteiro da apresentação está em [`docs/roteiro-apresentacao.md`](docs/roteiro-apresentacao.md) e os textos e diagramas do relatório técnico em [`docs/rt-v06-secoes.md`](docs/rt-v06-secoes.md) e [`docs/rt-v06-diagramas.md`](docs/rt-v06-diagramas.md).
 
+### Busca no catálogo (categorias e habilidades)
+
+As vagas usam um catálogo fixo, de dois níveis: **categorias amplas** (ex.: "Cuidados Pessoais") e **habilidades** que as especificam (ex.: "Babá", "Manicure"). Os filtros da página inicial, o formulário de vaga e a validação do backend usam os mesmos arquivos:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `src/data/professional-options.json` | Categorias e as habilidades de cada uma. Uma habilidade pode aparecer em mais de uma categoria (ex.: "Garçom" em Gastronomia e em Eventos e Promoções). |
+| `src/data/termos-habilidades.json` | Palavras que as pessoas digitam ao procurar uma habilidade (ex.: "Encanador" → "torneira vazando, cano, descarga"). Só a busca usa. |
+
+A **busca semântica** (`backend/core/busca_catalogo.py`, rota `GET /api/catalogo/buscar/?q=...&tipo=habilidade|categoria&categoria=...`) entende o significado do texto: "cuidar do meu filho à noite" sugere "Babá Noturna", e "babá" no campo de categoria sugere "Cuidados Pessoais". Ela roda toda no computador, sem serviço na nuvem:
+
+- O modelo `paraphrase-multilingual-MiniLM-L12-v2` (fastembed/ONNX, cerca de 220 MB) fica em `backend\.cache\busca_catalogo\modelos`.
+- Cada categoria e habilidade vira um vetor uma vez; os vetores ficam em `backend\.cache\busca_catalogo` e são refeitos sozinhos quando o catálogo, os termos ou o modelo mudam. O catálogo cabe na memória, então não há banco vetorial: a comparação leva milissegundos.
+- A nota final soma a semelhança do modelo com um bônus para cada palavra digitada que aparece no texto da habilidade. Sem esse bônus, o modelo pequeno erra pedidos como "trocar o chuveiro".
+- Enquanto o modelo carrega, ou se o `fastembed` não estiver instalado, a busca responde só pelo texto.
+- Para testar outro modelo do fastembed, defina `BUSCA_CATALOGO_MODELO` no `backend\.env` e rode `python manage.py preparar_busca_catalogo`.
+
+A pesquisa de anúncios da página inicial usa as mesmas sugestões: o anúncio aparece se tiver todas as palavras digitadas (título, descrição, categoria ou habilidades) ou se pedir uma das habilidades sugeridas.
+
+**Para alterar o catálogo:**
+
+- **Acrescentar** uma categoria ou habilidade: edite o JSON. Nada mais é necessário.
+- **Melhorar a busca** de uma habilidade: acrescente termos em `termos-habilidades.json`. As chaves precisam existir no catálogo (um teste confere).
+- **Renomear ou remover** uma categoria ou habilidade: anúncios e perfis guardam os nomes como texto, então crie também uma migration de dados que troque o nome antigo pelo novo, como a `0049_categorias_amplas`. Sem isso, as vagas antigas somem dos filtros e não podem ser editadas sem trocar a categoria.
+
+### Mapa e localização das vagas
+
+Vagas presenciais têm um ponto no mapa (`latitude` e `longitude` do anúncio). Todos os serviços usados são **gratuitos e não pedem cadastro nem chave**. Por isso o projeto não usa Google Maps: até o mapa incorporado do Google exige projeto no Google Cloud com faturamento.
+
+| Serviço | Para quê | Onde |
+|---|---|---|
+| [MapLibre GL](https://maplibre.org) (`maplibre-gl` no `package.json`) | Desenha o mapa interativo. Carregado só quando um mapa aparece, num arquivo separado do build. | `src/hooks/useMapa.js` |
+| [OpenFreeMap](https://openfreemap.org) | Estilos do mapa: `positron` no tema claro, `dark` no escuro. Os nomes aparecem em português (`name:pt`). | `src/hooks/useMapa.js` |
+| API do IBGE | Estados, cidades e o **centro de cada município** (`/api/v3/malhas/municipios/{id}/metadados`) | `src/utils/geocodificacao.js` |
+| [Nominatim](https://nominatim.org) (OpenStreetMap) | Endereço digitado → coordenadas, e pino → endereço mais próximo | `src/utils/geocodificacao.js` |
+| Geolocalização do navegador | Posição de quem usa "Permitir acesso à minha localização" ou "Estou no local" | `src/pages/Inicio.jsx`, `src/components/LocalizacaoAnuncio.jsx` |
+
+**Postar ou editar uma vaga presencial** (`LocalizacaoAnuncio.jsx` e `MapaConfirmarLocal.jsx`): ao escolher a cidade, o pino vai para o centro do município. Com bairro ou rua preenchidos, ele vai para o endereço; se o Nominatim não achar o endereço, ou achar um a mais de 60 km da cidade, fica no centro. O pino fica parado no meio do mapa, e a pessoa arrasta o mapa para ajustá-lo, como nos apps de entrega. Depois de um ajuste, aparece o endereço mais próximo do pino ("Usar este endereço"). A vaga só é publicada depois de **Confirmar local**. Se o mapa não carregar, ela é publicada sem coordenadas.
+
+**Página inicial** (`CartaoMapaVagas.jsx` e `MapaVagas.jsx`): o card "Vagas perto de você" fica fechado até a pessoa clicar em **Permitir acesso à minha localização** e aceitar o pedido do navegador. Isso vale também para visitantes, porque a permissão é do navegador, não da conta. Com o mapa aberto:
+
+- Cada local tem um pino na cor do papel. Vagas no mesmo ponto viram um pino com contador.
+- O filtro de distância (5 a 100 km) parte de você ou da cidade escolhida e aparece como um círculo no mapa.
+- As vagas mais próximas vêm primeiro, e o card mostra a distância.
+- A localização da pessoa fica só no navegador e nunca é enviada ao backend.
+
+**Regras dos serviços:**
+
+- **Nominatim:** no máximo 1 requisição por segundo, e nunca a cada tecla. `geocodificacao.js` põe as chamadas numa fila, guarda as respostas em cache e só busca 0,9 s depois que a pessoa para de digitar ou de arrastar. Mantenha esse caminho para qualquer chamada nova. Os mapas exibem o crédito "© OpenStreetMap", que é obrigatório.
+- **Localização do navegador:** só funciona em conexão segura. `localhost` funciona. Por outro endereço, o site precisa ser aberto por `https://`; por `http://` com IP (por exemplo, para testar no celular pela rede local), o navegador recusa sem perguntar.
+- **Backend:** `AdSerializer` (`backend/core/serializers.py`) arredonda as coordenadas para 6 casas, recusa valores fora da faixa e latitude sem longitude (ou o contrário), e apaga as coordenadas de vaga remota.
+
+Vagas presenciais publicadas antes do mapa não têm coordenadas: aparecem só na lista e são contadas na legenda do mapa. Ao editar uma delas, o pino é colocado no centro da cidade, para a pessoa confirmar.
+
+Os cálculos de distância, raio, agrupamento de pinos e leitura das respostas do Nominatim ficam em `src/utils/` e têm testes em `node --test` (`geo.test.js`, `geocodificacao.test.js`, `localizacaoAnuncio.test.js`, `filtrarAnuncios.test.js`). Os testes não chamam nenhum serviço externo.
+
 ### Testes e lint
 
 ```powershell
@@ -236,8 +342,13 @@ npm run lint                      # frontend
 
 cd backend
 .\venv\Scripts\Activate.ps1
-python manage.py test             # backend
+python manage.py test --keepdb    # backend (leva cerca de 7 minutos)
+python manage.py test core.tests.CandidaturaDuplicadaTests --keepdb   # só uma classe de testes
 ```
+
+Os testes do backend **precisam do PostgreSQL**: as migrations usam SQL específico do Postgres, então o SQLite não serve. O Django cria um banco `test_postgres` no Supabase.
+
+Use sempre `--keepdb`. Pela porta 6543 (pooler do Supabase), a conexão continua aberta por alguns instantes depois dos testes, e o Django não consegue apagar o banco de teste no final. Sem `--keepdb`, a próxima execução encontra o banco antigo e para com a pergunta `Type 'yes' if you would like to try deleting the test database`. Com `--keepdb`, o banco de teste é reaproveitado e só recebe as migrations novas.
 
 ---
 
@@ -266,14 +377,7 @@ git push origin giovana
 
 ### Depois do `git pull`: o que rodar
 
-Confira o que mudou e execute só o que for necessário:
-
-| O que mudou no pull | Comando |
-|---|---|
-| `package.json` ou `package-lock.json` | `npm install` |
-| `requirements.txt` | `cd backend`, ativar o venv e `pip install -r ..\requirements.txt` |
-| Arquivos em `backend\core\migrations\` | `cd backend`, ativar o venv e `python manage.py migrate` |
-| Variáveis novas de `.env` | Peça os valores ao grupo e acrescente aos seus `.env` |
+Rode a sequência de [Antes de abrir o projeto](#antes-de-abrir-o-projeto).
 
 Para ver o que veio no pull:
 
@@ -289,7 +393,30 @@ Se o `git pull` avisar de conflito:
 2. Abra cada arquivo e resolva os trechos entre `<<<<<<<`, `=======` e `>>>>>>>`, mantendo o código correto.
 3. Finalize com `git add <arquivo>` e `git commit`.
 
-Conflitos em migrations do Django (dois integrantes criando `0042_...`) precisam de atenção: avise o grupo antes de resolver.
+### Conflitos de migration
+
+Acontecem quando duas pessoas criam migrations com o mesmo número em branches diferentes (por exemplo, duas `0048_...` partindo da `0047`). O Git não acusa conflito, porque os nomes dos arquivos são diferentes, mas o Django recusa o `migrate`:
+
+```
+CommandError: Conflicting migrations detected; multiple leaf nodes in the migration graph
+```
+
+Para resolver, depois de juntar as branches:
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py makemigrations --merge   # cria uma migration que junta as duas
+python manage.py migrate
+```
+
+Faça o commit da migration de merge e avise o grupo.
+
+**Como o banco é compartilhado, aplique uma migration no Supabase só depois de enviá-la ao GitHub** (`git push`). Uma migration aplicada a partir de código que não está em nenhuma branch fica registrada no banco sem que o resto do grupo tenha o arquivo, e ninguém consegue reproduzir nem desfazer a mudança. Para conferir o que já foi aplicado no banco:
+
+```powershell
+python manage.py showmigrations core
+```
 
 ---
 
@@ -305,3 +432,12 @@ Conflitos em migrations do Django (dois integrantes criando `0042_...`) precisam
 | `Signature verification failed` (Stripe) | O `STRIPE_WEBHOOK_SECRET` está desatualizado. Veja `STRIPE_TESTING.md`. |
 | Pagamento fica pendente | O `stripe listen` não está rodando durante o pagamento. |
 | Erro de CORS no navegador | Acesse o frontend por `http://localhost:5173` ou `http://127.0.0.1:5173`. |
+| `ModuleNotFoundError: No module named 'django'` | O venv não está ativo. Rode `.\venv\Scripts\Activate.ps1` dentro de `backend`. |
+| `Type 'yes' if you would like to try deleting the test database` | Sobrou um banco de teste de uma execução anterior. Rode os testes com `--keepdb` (veja [Testes e lint](#testes-e-lint)). |
+| `database "test_..." is being accessed by other users` | O pooler do Supabase ainda segura a conexão no fim dos testes. Use `--keepdb`; os resultados dos testes aparecem antes desse erro. |
+| `Conflicting migrations detected` | Duas migrations com o mesmo número. Veja [Conflitos de migration](#conflitos-de-migration). |
+| Sugestões de categoria/habilidade só aparecem quando o texto bate | A busca semântica ainda está carregando ou falhou. Rode `python manage.py preparar_busca_catalogo` e leia a mensagem. |
+| `To support symlinks on Windows, you either need to activate Developer Mode` | Aviso do download do modelo; pode ser ignorado. O modelo funciona sem symlinks. |
+| "Não foi possível carregar o mapa" | Sem internet ou com o WebGL desligado. No Chrome, ative **Configurações → Sistema → Usar aceleração gráfica**. A lista de vagas continua funcionando. |
+| "O navegador bloqueou o acesso à sua localização" | A permissão foi negada uma vez e o navegador não pergunta de novo. Clique no ícone ao lado do endereço do site e permita **Localização**. Por `http://` com IP, use `localhost` ou `https://` (veja [Mapa e localização das vagas](#mapa-e-localização-das-vagas)). |
+| Pino no centro da cidade mesmo com endereço | O Nominatim não encontrou o endereço. Arraste o mapa até o local certo e confirme. |

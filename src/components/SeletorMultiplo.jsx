@@ -1,18 +1,28 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { X } from 'lucide-react';
+import useSugestoesCatalogo from '../hooks/useSugestoesCatalogo';
+import { normalizarTexto } from '../utils/filtrarAnuncios';
 
 // Campo de texto que só aceita opções de uma lista fixa: quem digita filtra as
 // opções e precisa escolher uma delas (até `maximo`). As escolhidas viram chips.
-export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singular, plural }) {
+// Com `sugestoes`, também mostra opções parecidas pelo significado.
+export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singular, plural, feminino = false, dica, sugestoes }) {
   const [query, setQuery] = useState('');
   const [aberto, setAberto] = useState(false);
+  const [um, nenhum, encontrado, escolhidos] = feminino
+    ? ['uma', 'Nenhuma', 'encontrada', 'escolhidas']
+    : ['um', 'Nenhum', 'encontrado', 'escolhidos'];
 
   const limiteAtingido = valor.length >= maximo;
-  const termo = query.trim().toLowerCase();
+  const termo = normalizarTexto(query);
   const disponiveis = opcoes.filter(
-    (opcao) => !valor.includes(opcao) && (!termo || opcao.toLowerCase().includes(termo)),
+    (opcao) => !valor.includes(opcao) && (!termo || normalizarTexto(opcao).includes(termo)),
   );
+  const semanticas = useSugestoesCatalogo(query, { ...sugestoes, ativo: Boolean(sugestoes) && aberto && !limiteAtingido });
+  const disponiveisSemanticas = semanticas
+    .map((r) => r.nome)
+    .filter((nome) => opcoes.includes(nome) && !valor.includes(nome) && !disponiveis.includes(nome));
 
   const adicionar = (opcao) => {
     if (limiteAtingido || valor.includes(opcao)) return;
@@ -31,7 +41,7 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
             type="text"
             className="input combo__input"
             style={{ width: '100%' }}
-            placeholder={limiteAtingido ? `Limite de ${maximo} ${plural} atingido` : `Digite para buscar um ${singular}...`}
+            placeholder={limiteAtingido ? `Limite de ${maximo} ${plural} atingido` : `Digite para buscar ${um} ${singular}...`}
             aria-label={singular}
             autoComplete="off"
             disabled={limiteAtingido}
@@ -42,7 +52,8 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                if (disponiveis.length) adicionar(disponiveis[0]);
+                const primeira = disponiveis[0] || disponiveisSemanticas[0];
+                if (primeira) adicionar(primeira);
               } else if (e.key === 'Escape') {
                 setAberto(false);
               }
@@ -51,7 +62,7 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
         </div>
         {aberto && !limiteAtingido && (
           <ul className="combo__list">
-            {disponiveis.length ? disponiveis.map((opcao) => (
+            {disponiveis.map((opcao) => (
               <li
                 key={opcao}
                 className="combo__option"
@@ -59,7 +70,20 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
               >
                 {opcao}
               </li>
-            )) : <li className="combo__empty">Nenhum {singular} encontrado — escolha um da lista</li>}
+            ))}
+            {disponiveisSemanticas.length > 0 && <li className="combo__secao">Pelo significado</li>}
+            {disponiveisSemanticas.map((opcao) => (
+              <li
+                key={`sugestao-${opcao}`}
+                className="combo__option"
+                onMouseDown={(e) => { e.preventDefault(); adicionar(opcao); }}
+              >
+                {opcao}
+              </li>
+            ))}
+            {!disponiveis.length && !disponiveisSemanticas.length && (
+              <li className="combo__empty">{nenhum} {singular} {encontrado} — escolha {um} da lista</li>
+            )}
           </ul>
         )}
       </div>
@@ -82,7 +106,7 @@ export default function SeletorMultiplo({ valor, onChange, opcoes, maximo, singu
         </div>
       )}
       <p className="combo__hint">
-        {valor.length} de {maximo} {plural} escolhidos. Só é possível escolher {plural} da lista.
+        {dica || `${valor.length} de ${maximo} ${plural} ${escolhidos}. Só é possível escolher ${plural} da lista.`}
       </p>
     </div>
   );
@@ -95,4 +119,11 @@ SeletorMultiplo.propTypes = {
   maximo: PropTypes.number.isRequired,
   singular: PropTypes.string.isRequired,
   plural: PropTypes.string.isRequired,
+  feminino: PropTypes.bool,
+  dica: PropTypes.string,
+  // Liga as sugestões pelo significado (busca semântica do catálogo)
+  sugestoes: PropTypes.shape({
+    tipo: PropTypes.oneOf(['categoria', 'habilidade']),
+    categoria: PropTypes.string,
+  }),
 };

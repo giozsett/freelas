@@ -709,6 +709,7 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        from django.db import IntegrityError, transaction
         from rest_framework.exceptions import PermissionDenied, ValidationError
 
         ad = serializer.validated_data.get('ad')
@@ -735,11 +736,17 @@ class CandidaturaListCreateAPIView(generics.ListCreateAPIView):
             usuario_id = self.request.user.profile.id
         except Exception:
             usuario_id = self.request.user.id
-        candidatura = serializer.save(
-            user=self.request.user,
-            usuario_id=usuario_id,
-            status='pendente',
-        )
+        # A checagem acima não basta contra requisições simultâneas (duplo
+        # clique): a restrição única do banco decide quem grava primeiro.
+        try:
+            with transaction.atomic():
+                candidatura = serializer.save(
+                    user=self.request.user,
+                    usuario_id=usuario_id,
+                    status='pendente',
+                )
+        except IntegrityError:
+            raise ValidationError('Você já se candidatou a este anúncio.')
 
         if ad.author and ad.author_id != self.request.user.id:
             profile = getattr(self.request.user, 'profile', None)
@@ -2851,3 +2858,41 @@ class ChatNaoLidasAPIView(APIView):
         )
         total = total_nao_lidas(acordos.values_list('id', flat=True), user.id)
         return Response({'total': total})
+
+
+from . import busca_catalogo
+
+
+class BuscaCatalogoAPIView(APIView):
+    """Sugere categorias e habilidades pelo significado do texto digitado
+    (ex.: "cuidar do meu filho à noite" → "Babá Noturna").
+
+    Parâmetros: q (obrigatório, 2+ letras), tipo ("categoria" ou
+    "habilidade"), categoria (restringe às habilidades dela) e limite."""
+
+    permission_classes = [permissions.AllowAny]
+    LIMITE_MAXIMO = 20
+
+    def get(self, request):
+        consulta = (request.query_params.get('q') or '').strip()[:100]
+        if len(consulta) < 2:
+            return Response({'modo': 'texto', 'resultados': []})
+
+        tipo = request.query_params.get('tipo')
+        if tipo not in ('categoria', 'habilidade'):
+            tipo = None
+        try:
+            limite = min(max(int(request.query_params.get('limite', 8)), 1), self.LIMITE_MAXIMO)
+        except ValueError:
+            limite = 8
+
+        indice = busca_catalogo.indice
+        # A primeira busca dispara o carregamento do modelo sem travar a resposta
+        if not indice.pronto:
+            indice.carregar_em_segundo_plano()
+        return Response(indice.buscar(
+            consulta,
+            categoria=request.query_params.get('categoria') or None,
+            tipo=tipo,
+            limite=limite,
+        ))

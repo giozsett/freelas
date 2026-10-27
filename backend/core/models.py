@@ -226,6 +226,15 @@ class Candidatura(models.Model):
 
     class Meta:
         db_table = 'candidaturas'
+        constraints = [
+            # Barra duplicatas criadas por requisições simultâneas (ex.: duplo
+            # clique), que passam juntas pela checagem de "já se candidatou".
+            models.UniqueConstraint(
+                fields=['user', 'ad'],
+                condition=models.Q(deletado=False),
+                name='candidatura_ativa_unica_por_usuario_e_anuncio',
+            ),
+        ]
 
     def partes(self, ad=None):
         """Retorna (contratante, freelancer) desta candidatura.

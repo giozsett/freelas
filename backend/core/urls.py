@@ -19,7 +19,7 @@ from .views import (
     NotificacaoListAPIView, NotificacaoNaoLidasAPIView, NotificacaoMarcarLidaAPIView,
     NotificacaoMarcarLidasAPIView, NotificacaoLimparAPIView,
     ChatListAPIView, ChatDetailAPIView, ChatEnviarMensagemAPIView,
-    ChatMarcarLidaAPIView, ChatNaoLidasAPIView,
+    ChatMarcarLidaAPIView, ChatNaoLidasAPIView, BuscaCatalogoAPIView,
 )
 
 urlpatterns = [
@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/experiencias/<int:pk>/', ExperienciaRetrieveUpdateDestroyAPIView.as_view(), name='experiencia-detail'),
     path('api/reports/', ReportListCreateAPIView.as_view(), name='report-list'),
     path('api/reports/<int:pk>/', ReportUpdateAPIView.as_view(), name='report-detail'),
+    path('api/catalogo/buscar/', BuscaCatalogoAPIView.as_view(), name='catalogo-buscar'),
     path('api/ads/', AdListCreateAPIView.as_view(), name='ad-list'),
     path('api/ads/limite/', AdLimiteMensalAPIView.as_view(), name='ad-limite'),
     path('api/ads/<int:pk>/', AdRetrieveAPIView.as_view(), name='ad-detail'),

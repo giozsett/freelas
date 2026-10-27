@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Avg, Count
 from django.utils import timezone
 from rest_framework import serializers
+from .catalogo import MAX_HABILIDADES_ANUNCIO, habilidades_por_categoria
 from .models import UserProfile
 from .notificacoes import criar_notificacao
 from .papeis import PAPEIS_ESCOLHIVEIS, PAPEL_ADMIN, PAPEL_CONTRATANTE, PAPEL_FREELANCER
@@ -750,12 +751,32 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
     }
 
 
+class CoordenadaField(serializers.DecimalField):
+    """Latitude/longitude vindas do mapa: o navegador manda mais casas
+    decimais do que o banco guarda, então arredonda em vez de recusar."""
+
+    def __init__(self, limite, **kwargs):
+        super().__init__(
+            max_digits=9, decimal_places=6, min_value=-limite, max_value=limite,
+            required=False, allow_null=True, **kwargs,
+        )
+
+    def to_internal_value(self, data):
+        try:
+            data = Decimal(str(data)).quantize(Decimal('0.000001'))
+        except (ArithmeticError, ValueError, TypeError):
+            pass  # o DecimalField devolve a mensagem de valor inválido
+        return super().to_internal_value(data)
+
+
 class AdSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_rating = serializers.SerializerMethodField()
     author_reputation = serializers.SerializerMethodField()
     author_plan = serializers.CharField(source='author.profile.subscription_plan', read_only=True, default=None)
-    
+    latitude = CoordenadaField(90)
+    longitude = CoordenadaField(180)
+
     class Meta:
         model = Ad
         fields = '__all__'
@@ -772,7 +793,45 @@ class AdSerializer(serializers.ModelSerializer):
             cidade = attrs.get('cidade', getattr(self.instance, 'cidade', None))
             if not cidade:
                 raise serializers.ValidationError({'cidade': 'A cidade é obrigatória para serviços presenciais.'})
+
+            latitude = attrs.get('latitude', getattr(self.instance, 'latitude', None))
+            longitude = attrs.get('longitude', getattr(self.instance, 'longitude', None))
+            if latitude is None and longitude is not None:
+                raise serializers.ValidationError({'latitude': 'Informe a latitude junto com a longitude.'})
+            if longitude is None and latitude is not None:
+                raise serializers.ValidationError({'longitude': 'Informe a longitude junto com a latitude.'})
+        else:
+            # Vaga remota não aparece no mapa
+            attrs['latitude'] = None
+            attrs['longitude'] = None
+
+        # Anúncio antigo fora do catálogo continua editável enquanto a edição
+        # não mexer em categoria nem habilidades
+        if self.instance is None or 'category' in attrs or 'skills' in attrs:
+            self._validar_catalogo(
+                attrs.get('category', getattr(self.instance, 'category', None)),
+                attrs.get('skills', getattr(self.instance, 'skills', None) or []),
+            )
         return attrs
+
+    def _validar_catalogo(self, categoria, habilidades):
+        catalogo = habilidades_por_categoria()
+        if categoria not in catalogo:
+            raise serializers.ValidationError({'category': 'Escolha uma categoria da lista.'})
+
+        if not isinstance(habilidades, list) or not all(isinstance(h, str) for h in habilidades):
+            raise serializers.ValidationError({'skills': 'Envie as habilidades como uma lista de textos.'})
+        if len(habilidades) > MAX_HABILIDADES_ANUNCIO:
+            raise serializers.ValidationError(
+                {'skills': f'Escolha no máximo {MAX_HABILIDADES_ANUNCIO} habilidades.'}
+            )
+        if len(set(habilidades)) != len(habilidades):
+            raise serializers.ValidationError({'skills': 'Há habilidades repetidas.'})
+        fora_da_categoria = [h for h in habilidades if h not in catalogo[categoria]]
+        if fora_da_categoria:
+            raise serializers.ValidationError({
+                'skills': f'Não fazem parte de "{categoria}": {", ".join(fora_da_categoria)}.',
+            })
 
     def get_author_name(self, obj):
         name = obj.author.first_name

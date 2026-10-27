@@ -1,29 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
-import { CATEGORIAS_SERVICO, HABILIDADES_POR_CATEGORIA } from '../constants/options';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
+import { LOCALIZACAO_VAZIA, camposDeLocalizacao, erroDeLocalizacao } from '../utils/localizacaoAnuncio';
 import LimitePlano from '../components/LimitePlano';
-import Opcional from '../components/Opcional';
+import CampoCategoriaHabilidades from '../components/CampoCategoriaHabilidades';
+import { primeiraMensagemDeErro } from '../utils/mensagemErro';
 
 export default function CreateAd() {
   const limiteDescricao = 1000;
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState(CATEGORIAS_SERVICO[0]);
+  const [category, setCategory] = useState('');
   const [skills, setSkills] = useState([]);
-  const [currentSkill, setCurrentSkill] = useState('');
-  const [skillError, setSkillError] = useState('');
-  const habilidadesDisponiveis = HABILIDADES_POR_CATEGORIA[category] || [];
-  
+
   const [price, setPrice] = useState('');
   const [priceUnit, setPriceUnit] = useState('/h');
   
   const [description, setDescription] = useState('');
   
   const [locationType, setLocationType] = useState('remoto');
-  const [localizacao, setLocalizacao] = useState({
-    estado: '', cidade: '', bairro: '', address: '', addressNumber: '',
-  });
+  const [localizacao, setLocalizacao] = useState(LOCALIZACAO_VAZIA);
   
   const [deadline, setDeadline] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -45,34 +41,19 @@ export default function CreateAd() {
       .catch((err) => console.error(err));
   }, []);
 
-  const handleAddSkill = (e) => {
-    e.preventDefault();
-    if (!currentSkill.trim()) return;
-    
-    if (skills.length >= 5) {
-      setSkillError('Só é possível adicionar 5 habilidades por anúncio.');
-      return;
-    }
-    
-    if (skills.includes(currentSkill)) {
-      setSkillError('Esta habilidade já foi adicionada.');
-      return;
-    }
-    
-    setSkills([...skills, currentSkill.trim()]);
-    setCurrentSkill('');
-    setSkillError('');
-  };
-
-  const handleRemoveSkill = (index) => {
-    setSkills(skills.filter((_, i) => i !== index));
-    if (skillError) setSkillError('');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
     if (limiteAtingido) return;
+    if (!category) {
+      setSubmitError('Escolha uma categoria da lista.');
+      return;
+    }
+    const erroLocal = erroDeLocalizacao(locationType, localizacao);
+    if (erroLocal) {
+      setSubmitError(erroLocal);
+      return;
+    }
     const token = localStorage.getItem('token');
 
     if (!token) {
@@ -86,12 +67,7 @@ export default function CreateAd() {
       price,
       price_unit: priceUnit,
       skills,
-      location_type: locationType,
-      address: locationType === 'presencial' ? localizacao.address : '',
-      address_number: locationType === 'presencial' ? localizacao.addressNumber : '',
-      estado: locationType === 'presencial' ? localizacao.estado : '',
-      cidade: locationType === 'presencial' ? localizacao.cidade : '',
-      bairro: locationType === 'presencial' ? localizacao.bairro : '',
+      ...camposDeLocalizacao(locationType, localizacao),
       description,
       deadline,
     };
@@ -111,7 +87,7 @@ export default function CreateAd() {
       } else {
         const errorData = await response.json();
         console.error(errorData);
-        setSubmitError(errorData.detail || errorData[0] || 'Erro ao criar o anúncio.');
+        setSubmitError(primeiraMensagemDeErro(errorData, 'Erro ao criar o anúncio.'));
       }
     } catch (err) {
       console.error(err);
@@ -174,18 +150,13 @@ export default function CreateAd() {
             />
           </div>
 
+          <CampoCategoriaHabilidades
+            categoria={category}
+            habilidades={skills}
+            onChange={({ categoria, habilidades }) => { setCategory(categoria); setSkills(habilidades); }}
+          />
+
           <div className="form-row">
-             <div style={{ flex: 1 }}>
-                <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Categoria</label>
-                <select className="input" value={category} onChange={(e) => {
-                  setCategory(e.target.value);
-                  setCurrentSkill('');
-                }}>
-                  {CATEGORIAS_SERVICO.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-             </div>
              <div style={{ flex: 1 }}>
                 <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Valor (R$) <span style={{ color: 'var(--danger-color)' }}>*</span></label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -213,46 +184,6 @@ export default function CreateAd() {
           </div>
 
           <div>
-            <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Habilidades (máximo 5) <Opcional /></label>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-              <select
-                className="input"
-                value={currentSkill}
-                onChange={(e) => setCurrentSkill(e.target.value)}
-                style={{ flex: 1, minWidth: 0 }}
-              >
-                <option value="">Selecione uma habilidade...</option>
-                {habilidadesDisponiveis.map(skill => (
-                  <option key={skill} value={skill}>{skill}</option>
-                ))}
-              </select>
-              <button 
-                type="button" 
-                className="btn dark-text" 
-                onClick={handleAddSkill}
-                disabled={skills.length >= 5}
-              >
-                Adicionar
-              </button>
-            </div>
-            {skillError && <p className="form-error" style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{skillError}</p>}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {skills.map((skill, index) => (
-                <span key={index} className="badge purple" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  {skill}
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveSkill(index)}
-                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem', padding: 0 }}
-                  >
-                    &times;
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div>
             <label style={{ fontWeight: '500', display: 'block', marginBottom: '0.5rem' }}>Tipo de Trabalho</label>
             <div className="work-mode-toggle">
               <div 
@@ -273,7 +204,7 @@ export default function CreateAd() {
           {locationType === 'presencial' && (
             <div className="tab-content-animation">
               <h3 style={{ marginBottom: '0.25rem' }}>{locationType === 'presencial' ? 'Local do trabalho' : 'Sua área de atendimento'}</h3>
-              <p className="form-help">Cidade obrigatória para o anúncio. Endereço, bairro e localização exata são opcionais.</p>
+              <p className="form-help">Cidade obrigatória. Com bairro e rua, o pino no mapa fica mais preciso; confira o local antes de publicar.</p>
               <LocalizacaoAnuncio value={localizacao} onChange={setLocalizacao} cidadeObrigatoria />
             </div>
           )}
