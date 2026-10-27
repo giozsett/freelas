@@ -79,6 +79,32 @@ test('faixa de preço com 1000 significando sem máximo', () => {
   assert.equal(passa({ precoMinimo: 1000 }, { price: '5000' }), true);
 });
 
+const PORTO_ALEGRE = { lat: -30.0346, lng: -51.2177 };
+const presencialEm = (lat, lng, extra = {}) => ({
+  locationType: 'presencial', estado: 'RS', city: 'Canoas', latitude: lat, longitude: lng, ...extra,
+});
+
+test('raio de distância mostra vagas presenciais perto da origem, mesmo em outra cidade', () => {
+  const filtros = { modalidade: 'presencial', cidade: 'Porto Alegre', origem: PORTO_ALEGRE, raioKm: 25 };
+  assert.equal(passa(filtros, presencialEm(-29.9178, -51.1839)), true);
+  assert.equal(passa({ ...filtros, raioKm: 10 }, presencialEm(-29.9178, -51.1839)), false);
+});
+
+test('raio de distância esconde vagas presenciais sem coordenadas', () => {
+  const filtros = { modalidade: 'presencial', origem: PORTO_ALEGRE, raioKm: 25 };
+  assert.equal(passa(filtros, presencialEm(null, null)), false);
+});
+
+test('coordenadas vindas da API como texto também contam no raio', () => {
+  const filtros = { modalidade: 'presencial', origem: PORTO_ALEGRE, raioKm: 25 };
+  assert.equal(passa(filtros, presencialEm('-29.917800', '-51.183900')), true);
+});
+
+test('sem raio, origem não filtra e a cidade volta a valer', () => {
+  const filtros = { modalidade: 'presencial', cidade: 'Porto Alegre', origem: PORTO_ALEGRE, raioKm: 0 };
+  assert.equal(passa(filtros, presencialEm(-29.9178, -51.1839)), false);
+});
+
 test('estado e cidade só contam no filtro presencial', () => {
   assert.equal(passa({ estado: 'SP' }), true);
   assert.equal(

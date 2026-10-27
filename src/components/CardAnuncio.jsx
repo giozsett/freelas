@@ -18,7 +18,7 @@ function tempoPublicacao(dias) {
   return `${Math.floor(dias / 7)} semanas`;
 }
 
-export default function AdCard({ ad }) {
+export default function AdCard({ ad, distancia }) {
   const skillsVisiveis = ad.skills.slice(0, 3);
   const skillsRestantes = ad.skills.length - skillsVisiveis.length;
   const tempo = tempoPublicacao(diasDesde(ad.createdAt));
@@ -52,6 +52,7 @@ export default function AdCard({ ad }) {
               ? 'Remoto'
               : [ad.address, ad.city].filter(Boolean).join(' - ') || 'Presencial'}
           </span>
+          {distancia && <span className="ad-chip ad-chip--distancia">{distancia}</span>}
         </div>
 
         <div className="ad-list-card__skills">
@@ -93,4 +94,6 @@ AdCard.propTypes = {
     city: PropTypes.string,
     createdAt: PropTypes.string,
   }).isRequired,
+  // Ex.: "a 3,5 km", quando a busca tem uma origem
+  distancia: PropTypes.string,
 };

@@ -11,13 +11,13 @@ Plataforma web que conecta **freelancers** a **pessoas e empresas** que querem c
 5. O pagamento do acordo é feito pelo Stripe (valor do anúncio + 10% de taxa da plataforma).
 6. Quando o freela é concluído, **contratante e freelancer se avaliam mutuamente**.
 
-Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de empresa, planos Gold e Platinum (assinatura), notificações em tempo real, denúncias e painel de moderação.
+Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de empresa, planos Gold e Platinum (assinatura), notificações em tempo real, denúncias, painel de moderação e um **mapa das vagas presenciais**, com busca por distância.
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | React 18, Vite 5, React Router 7, Lucide React, react-easy-crop, CSS puro (`src/index.css` e `src/App.css`) |
+| Frontend | React 18, Vite 5, React Router 7, Lucide React, react-easy-crop, MapLibre GL, CSS puro (`src/index.css` e `src/App.css`) |
 | Backend | Python 3.14, Django 6, Django REST Framework, django-allauth e dj-rest-auth (login social), django-cors-headers |
 | Tempo real | Django Channels + Daphne (WebSocket) e **Redis Pub/Sub** (mensagens do chat) |
 | Banco de dados | PostgreSQL hospedado no **Supabase** (só o banco; sem SDK do Supabase no frontend) |
@@ -25,6 +25,7 @@ Também existem: login com e-mail, Google e LinkedIn, perfis de freelancer e de 
 | Túnel público | **Ngrok** (expõe o backend para o Stripe entregar o webhook) |
 | Mídia | Cloudinary (imagens) |
 | Busca no catálogo | **fastembed** (modelo de embeddings multilíngue, roda localmente via ONNX). Veja [Busca no catálogo](#busca-no-catálogo-categorias-e-habilidades) |
+| Mapas e localização | **MapLibre GL** com mapas do **OpenFreeMap**, **API do IBGE** e **Nominatim** (OpenStreetMap): gratuitos e sem chave. Veja [Mapa e localização das vagas](#mapa-e-localização-das-vagas) |
 | E-mail | SMTP do Gmail (validação de cadastro) |
 | Qualidade | ESLint e `node --test` (frontend), `manage.py test` (backend) |
 
@@ -302,6 +303,37 @@ A pesquisa de anúncios da página inicial usa as mesmas sugestões: o anúncio 
 - **Melhorar a busca** de uma habilidade: acrescente termos em `termos-habilidades.json`. As chaves precisam existir no catálogo (um teste confere).
 - **Renomear ou remover** uma categoria ou habilidade: anúncios e perfis guardam os nomes como texto, então crie também uma migration de dados que troque o nome antigo pelo novo, como a `0049_categorias_amplas`. Sem isso, as vagas antigas somem dos filtros e não podem ser editadas sem trocar a categoria.
 
+### Mapa e localização das vagas
+
+Vagas presenciais têm um ponto no mapa (`latitude` e `longitude` do anúncio). Todos os serviços usados são **gratuitos e não pedem cadastro nem chave**. Por isso o projeto não usa Google Maps: até o mapa incorporado do Google exige projeto no Google Cloud com faturamento.
+
+| Serviço | Para quê | Onde |
+|---|---|---|
+| [MapLibre GL](https://maplibre.org) (`maplibre-gl` no `package.json`) | Desenha o mapa interativo. Carregado só quando um mapa aparece, num arquivo separado do build. | `src/hooks/useMapa.js` |
+| [OpenFreeMap](https://openfreemap.org) | Estilos do mapa: `positron` no tema claro, `dark` no escuro. Os nomes aparecem em português (`name:pt`). | `src/hooks/useMapa.js` |
+| API do IBGE | Estados, cidades e o **centro de cada município** (`/api/v3/malhas/municipios/{id}/metadados`) | `src/utils/geocodificacao.js` |
+| [Nominatim](https://nominatim.org) (OpenStreetMap) | Endereço digitado → coordenadas, e pino → endereço mais próximo | `src/utils/geocodificacao.js` |
+| Geolocalização do navegador | Posição de quem usa "Permitir acesso à minha localização" ou "Estou no local" | `src/pages/Inicio.jsx`, `src/components/LocalizacaoAnuncio.jsx` |
+
+**Postar ou editar uma vaga presencial** (`LocalizacaoAnuncio.jsx` e `MapaConfirmarLocal.jsx`): ao escolher a cidade, o pino vai para o centro do município. Com bairro ou rua preenchidos, ele vai para o endereço; se o Nominatim não achar o endereço, ou achar um a mais de 60 km da cidade, fica no centro. O pino fica parado no meio do mapa, e a pessoa arrasta o mapa para ajustá-lo, como nos apps de entrega. Depois de um ajuste, aparece o endereço mais próximo do pino ("Usar este endereço"). A vaga só é publicada depois de **Confirmar local**. Se o mapa não carregar, ela é publicada sem coordenadas.
+
+**Página inicial** (`CartaoMapaVagas.jsx` e `MapaVagas.jsx`): o card "Vagas perto de você" fica fechado até a pessoa clicar em **Permitir acesso à minha localização** e aceitar o pedido do navegador. Isso vale também para visitantes, porque a permissão é do navegador, não da conta. Com o mapa aberto:
+
+- Cada local tem um pino na cor do papel. Vagas no mesmo ponto viram um pino com contador.
+- O filtro de distância (5 a 100 km) parte de você ou da cidade escolhida e aparece como um círculo no mapa.
+- As vagas mais próximas vêm primeiro, e o card mostra a distância.
+- A localização da pessoa fica só no navegador e nunca é enviada ao backend.
+
+**Regras dos serviços:**
+
+- **Nominatim:** no máximo 1 requisição por segundo, e nunca a cada tecla. `geocodificacao.js` põe as chamadas numa fila, guarda as respostas em cache e só busca 0,9 s depois que a pessoa para de digitar ou de arrastar. Mantenha esse caminho para qualquer chamada nova. Os mapas exibem o crédito "© OpenStreetMap", que é obrigatório.
+- **Localização do navegador:** só funciona em conexão segura. `localhost` funciona. Por outro endereço, o site precisa ser aberto por `https://`; por `http://` com IP (por exemplo, para testar no celular pela rede local), o navegador recusa sem perguntar.
+- **Backend:** `AdSerializer` (`backend/core/serializers.py`) arredonda as coordenadas para 6 casas, recusa valores fora da faixa e latitude sem longitude (ou o contrário), e apaga as coordenadas de vaga remota.
+
+Vagas presenciais publicadas antes do mapa não têm coordenadas: aparecem só na lista e são contadas na legenda do mapa. Ao editar uma delas, o pino é colocado no centro da cidade, para a pessoa confirmar.
+
+Os cálculos de distância, raio, agrupamento de pinos e leitura das respostas do Nominatim ficam em `src/utils/` e têm testes em `node --test` (`geo.test.js`, `geocodificacao.test.js`, `localizacaoAnuncio.test.js`, `filtrarAnuncios.test.js`). Os testes não chamam nenhum serviço externo.
+
 ### Testes e lint
 
 ```powershell
@@ -406,3 +438,6 @@ python manage.py showmigrations core
 | `Conflicting migrations detected` | Duas migrations com o mesmo número. Veja [Conflitos de migration](#conflitos-de-migration). |
 | Sugestões de categoria/habilidade só aparecem quando o texto bate | A busca semântica ainda está carregando ou falhou. Rode `python manage.py preparar_busca_catalogo` e leia a mensagem. |
 | `To support symlinks on Windows, you either need to activate Developer Mode` | Aviso do download do modelo; pode ser ignorado. O modelo funciona sem symlinks. |
+| "Não foi possível carregar o mapa" | Sem internet ou com o WebGL desligado. No Chrome, ative **Configurações → Sistema → Usar aceleração gráfica**. A lista de vagas continua funcionando. |
+| "O navegador bloqueou o acesso à sua localização" | A permissão foi negada uma vez e o navegador não pergunta de novo. Clique no ícone ao lado do endereço do site e permita **Localização**. Por `http://` com IP, use `localhost` ou `https://` (veja [Mapa e localização das vagas](#mapa-e-localização-das-vagas)). |
+| Pino no centro da cidade mesmo com endereço | O Nominatim não encontrou o endereço. Arraste o mapa até o local certo e confirme. |

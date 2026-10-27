@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, LocateFixed, X } from 'lucide-react';
 import { useRole } from '../context/ContextoPapel';
 import AdCard from '../components/CardAnuncio';
 import ComboBusca from '../components/ComboBusca';
+import CartaoMapaVagas from '../components/CartaoMapaVagas';
 import SeletorMultiplo from '../components/SeletorMultiplo';
 import {
   CATEGORIAS_SERVICO,
@@ -12,9 +13,20 @@ import {
 } from '../constants/options';
 import { anuncioPassaNosFiltros } from '../utils/filtrarAnuncios';
 import useSugestoesCatalogo from '../hooks/useSugestoesCatalogo';
+import { distanciaKm, formatarDistancia, temCoordenadas } from '../utils/geo';
+import { centroDaCidade } from '../utils/geocodificacao';
 
 const PAGE_SIZE = 9;
 const MAX_HABILIDADES_FILTRO = 5;
+const RAIOS_KM = [5, 10, 25, 50, 100];
+const RAIO_PADRAO_KM = 25;
+
+// Códigos de erro da Geolocation API do navegador
+const ERROS_LOCALIZACAO = {
+  1: 'O navegador bloqueou o acesso à sua localização. Para liberar, clique no ícone ao lado do endereço do site, permita "Localização" e tente de novo.',
+  2: 'Não foi possível descobrir sua localização agora. Tente de novo em instantes.',
+  3: 'A localização demorou demais para responder. Tente de novo.',
+};
 
 // Só contratantes publicam anúncios: a página lista vagas para todo mundo,
 // muda apenas a chamada conforme quem está vendo.
@@ -61,6 +73,14 @@ export default function Home() {
   const [minPriceFilter, setMinPriceFilter] = useState(0);
   const [maxPriceFilter, setMaxPriceFilter] = useState(1000);
   const [pagina, setPagina] = useState(1);
+  const [raioKm, setRaioKm] = useState(0);
+  // Coordenadas liberadas pelo navegador: habilitam o mapa
+  const [minhaLocalizacao, setMinhaLocalizacao] = useState(null);
+  // A busca parte de você (e não da cidade escolhida)
+  const [pertoDeMim, setPertoDeMim] = useState(false);
+  const [localizando, setLocalizando] = useState(false);
+  const [erroLocalizacao, setErroLocalizacao] = useState('');
+  const [centroCidade, setCentroCidade] = useState(null);
   const habilidadesDoFiltro = categoryFilter
     ? HABILIDADES_POR_CATEGORIA[categoryFilter] || HABILIDADES_PROFISSIONAIS
     : HABILIDADES_PROFISSIONAIS;
@@ -82,11 +102,13 @@ export default function Home() {
             reviews: 10, // Mock reviews
             category: ad.category || '',
             skills: ad.skills || [],
-            distance: 5, // Mock distance
             locationType: ad.location_type,
             address: ad.address,
+            bairro: ad.bairro || '',
             estado: ad.estado || '',
             city: ad.cidade || '',
+            latitude: ad.latitude,
+            longitude: ad.longitude,
             price: ad.price || (ad.valor ? String(ad.valor) : '0'),
             priceUnit: ad.price_unit,
             createdAt: ad.created_at,
@@ -119,9 +141,73 @@ export default function Home() {
       .then(res => res.json()).then(setCidades).catch(() => setCidades([]));
   }, [estadoFilter]);
 
+  // Centro da cidade escolhida: enquadra o mapa e serve de origem do raio
+  useEffect(() => {
+    const cidade = cidades.find((c) => c.nome === cidadeFilter);
+    if (!cidade) {
+      setCentroCidade(null);
+      return undefined;
+    }
+    let cancelado = false;
+    centroDaCidade(cidade.id)
+      .then((centro) => { if (!cancelado) setCentroCidade(centro); })
+      .catch(() => { if (!cancelado) setCentroCidade(null); });
+    return () => { cancelado = true; };
+  }, [cidadeFilter, cidades]);
+
   useEffect(() => {
     setPagina(1);
-  }, [categoryFilter, skillsFilter, locationTypeFilter, estadoFilter, cidadeFilter, searchQuery, minPriceFilter, maxPriceFilter]);
+  }, [categoryFilter, skillsFilter, locationTypeFilter, estadoFilter, cidadeFilter, searchQuery, minPriceFilter, maxPriceFilter, raioKm, pertoDeMim]);
+
+  const origem = useMemo(() => {
+    if (pertoDeMim && minhaLocalizacao) return { ...minhaLocalizacao, rotulo: 'Sua localização' };
+    if (centroCidade) return { ...centroCidade, rotulo: cidadeFilter };
+    return null;
+  }, [pertoDeMim, minhaLocalizacao, centroCidade, cidadeFilter]);
+
+  // Filtrar por local só faz sentido para vagas presenciais
+  const filtrarPorLocal = () => setLocationTypeFilter('presencial');
+
+  const buscarPertoDeMim = () => {
+    setPertoDeMim(true);
+    setEstadoFilter('');
+    setCidadeFilter('');
+    setRaioKm((atual) => atual || RAIO_PADRAO_KM);
+    filtrarPorLocal();
+  };
+
+  // A primeira vez abre o pedido de permissão do navegador; depois de
+  // permitido, o mapa fica habilitado e só troca a origem da busca
+  const usarMinhaLocalizacao = () => {
+    if (minhaLocalizacao) {
+      buscarPertoDeMim();
+      return;
+    }
+    if (!navigator.geolocation) {
+      setErroLocalizacao('Este navegador não informa a localização.');
+      return;
+    }
+    setLocalizando(true);
+    setErroLocalizacao('');
+    filtrarPorLocal(); // o cartão do mapa (e a mensagem de erro) só aparece fora do filtro "Remoto"
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setMinhaLocalizacao({ lat: coords.latitude, lng: coords.longitude });
+        buscarPertoDeMim();
+        setLocalizando(false);
+      },
+      (falha) => {
+        setErroLocalizacao(ERROS_LOCALIZACAO[falha.code] || ERROS_LOCALIZACAO[2]);
+        setLocalizando(false);
+      },
+      { timeout: 10000, maximumAge: 5 * 60 * 1000 },
+    );
+  };
+
+  const deixarDeBuscarPertoDeMim = () => {
+    setPertoDeMim(false);
+    setRaioKm(0);
+  };
 
   // Habilidades parecidas com o texto pesquisado ("cuidar do meu filho" → Babá)
   const habilidadesRelacionadas = useSugestoesCatalogo(searchQuery, { tipo: 'habilidade' }).map((r) => r.nome);
@@ -136,7 +222,23 @@ export default function Home() {
     precoMinimo: minPriceFilter,
     precoMaximo: maxPriceFilter,
     habilidadesRelacionadas,
+    origem,
+    raioKm,
   }));
+
+  // Com uma origem, as vagas presenciais mais próximas vêm primeiro
+  const distancias = new Map();
+  if (origem && locationTypeFilter === 'presencial') {
+    for (const ad of filteredAds) {
+      const local = { lat: ad.latitude, lng: ad.longitude };
+      if (temCoordenadas(local)) distancias.set(ad.id, distanciaKm(origem, local));
+    }
+    filteredAds.sort((a, b) => (distancias.get(a.id) ?? Infinity) - (distancias.get(b.id) ?? Infinity));
+  }
+
+  const presenciaisFiltrados = filteredAds.filter((ad) => ad.locationType === 'presencial');
+  const presenciaisSemLocal = presenciaisFiltrados
+    .filter((ad) => !temCoordenadas({ lat: ad.latitude, lng: ad.longitude })).length;
 
   const trocarCategoria = (categoria) => {
     setCategoryFilter(categoria);
@@ -203,14 +305,60 @@ export default function Home() {
           </section>
           <section className="filter-group">
             <h3>Localização</h3>
-            <select className="input filter-select" value={estadoFilter} disabled={locationTypeFilter !== 'presencial'} onChange={(e) => { setEstadoFilter(e.target.value); setCidadeFilter(''); }}>
+            {pertoDeMim ? (
+              <div className="filtro-local__origem">
+                <LocateFixed size={15} aria-hidden="true" />
+                <span>Perto de você</span>
+                <button type="button" onClick={deixarDeBuscarPertoDeMim} aria-label="Parar de buscar perto de você">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-secondary filtro-local__botao" onClick={usarMinhaLocalizacao} disabled={localizando}>
+                <LocateFixed size={15} aria-hidden="true" />
+                {localizando ? 'Localizando...' : 'Usar minha localização'}
+              </button>
+            )}
+            <select
+              className="input filter-select"
+              aria-label="Estado"
+              value={estadoFilter}
+              onChange={(e) => {
+                setEstadoFilter(e.target.value);
+                setCidadeFilter('');
+                setPertoDeMim(false);
+                setRaioKm(0);
+                if (e.target.value) filtrarPorLocal();
+              }}
+            >
               <option value="">Todos os estados</option>
               {estados.map(estado => <option key={estado.id} value={estado.sigla}>{estado.nome}</option>)}
             </select>
-            <select className="input filter-select" value={cidadeFilter} disabled={locationTypeFilter !== 'presencial' || !estadoFilter} onChange={(e) => setCidadeFilter(e.target.value)}>
+            <select
+              className="input filter-select"
+              aria-label="Cidade"
+              value={cidadeFilter}
+              disabled={!estadoFilter}
+              onChange={(e) => {
+                setCidadeFilter(e.target.value);
+                setPertoDeMim(false);
+                if (!e.target.value) setRaioKm(0);
+              }}
+            >
               <option value="">Todas as cidades</option>
               {cidades.map(cidade => <option key={cidade.id} value={cidade.nome}>{cidade.nome}</option>)}
             </select>
+            <select
+              className="input filter-select"
+              aria-label="Distância máxima"
+              value={raioKm}
+              disabled={!origem}
+              onChange={(e) => { setRaioKm(Number(e.target.value)); filtrarPorLocal(); }}
+            >
+              <option value={0}>{origem ? (pertoDeMim ? 'Qualquer distância' : `Só em ${cidadeFilter}`) : 'Distância: escolha uma cidade'}</option>
+              {RAIOS_KM.map((km) => <option key={km} value={km}>Até {km} km{pertoDeMim ? ' de você' : ` de ${cidadeFilter}`}</option>)}
+            </select>
+            <p className="filtro-local__dica">Filtrar por local mostra só as vagas presenciais.</p>
           </section>
           <section className="filter-group">
             <h3>Faixa de valor</h3>
@@ -240,6 +388,20 @@ export default function Home() {
           )}
         </div>
 
+        {locationTypeFilter !== 'remoto' && !adsLoading && (
+          <CartaoMapaVagas
+            habilitado={Boolean(minhaLocalizacao)}
+            localizando={localizando}
+            erro={erroLocalizacao}
+            onPermitir={usarMinhaLocalizacao}
+            anuncios={presenciaisFiltrados}
+            origem={origem}
+            raioKm={locationTypeFilter === 'presencial' ? raioKm : 0}
+            foco={raioKm > 0 ? null : centroCidade}
+            semLocal={presenciaisSemLocal}
+          />
+        )}
+
         {adsLoading ? (
           <div className="ads-grid">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -253,8 +415,14 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <div className="ads-grid stagger" key={`${categoryFilter}-${skillsFilter.join(',')}-${locationTypeFilter}-${estadoFilter}-${cidadeFilter}-${searchQuery}-${minPriceFilter}-${maxPriceFilter}-${paginaAtual}`}>
-              {adsDaPagina.map(ad => <AdCard key={ad.id} ad={ad} />)}
+            <div className="ads-grid stagger" key={`${categoryFilter}-${skillsFilter.join(',')}-${locationTypeFilter}-${estadoFilter}-${cidadeFilter}-${raioKm}-${pertoDeMim ? 'perto' : ''}-${searchQuery}-${minPriceFilter}-${maxPriceFilter}-${paginaAtual}`}>
+              {adsDaPagina.map(ad => (
+                <AdCard
+                  key={ad.id}
+                  ad={ad}
+                  distancia={distancias.has(ad.id) ? formatarDistancia(distancias.get(ad.id)) : undefined}
+                />
+              ))}
               {filteredAds.length === 0 && (
                 <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
                   <h3>Ops! Nenhum anúncio encontrado.</h3>

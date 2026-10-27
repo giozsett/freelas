@@ -751,12 +751,32 @@ def calcular_reputacao_usuario(profile, papel='freelancer', modalidade='remoto')
     }
 
 
+class CoordenadaField(serializers.DecimalField):
+    """Latitude/longitude vindas do mapa: o navegador manda mais casas
+    decimais do que o banco guarda, então arredonda em vez de recusar."""
+
+    def __init__(self, limite, **kwargs):
+        super().__init__(
+            max_digits=9, decimal_places=6, min_value=-limite, max_value=limite,
+            required=False, allow_null=True, **kwargs,
+        )
+
+    def to_internal_value(self, data):
+        try:
+            data = Decimal(str(data)).quantize(Decimal('0.000001'))
+        except (ArithmeticError, ValueError, TypeError):
+            pass  # o DecimalField devolve a mensagem de valor inválido
+        return super().to_internal_value(data)
+
+
 class AdSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_rating = serializers.SerializerMethodField()
     author_reputation = serializers.SerializerMethodField()
     author_plan = serializers.CharField(source='author.profile.subscription_plan', read_only=True, default=None)
-    
+    latitude = CoordenadaField(90)
+    longitude = CoordenadaField(180)
+
     class Meta:
         model = Ad
         fields = '__all__'
@@ -773,6 +793,17 @@ class AdSerializer(serializers.ModelSerializer):
             cidade = attrs.get('cidade', getattr(self.instance, 'cidade', None))
             if not cidade:
                 raise serializers.ValidationError({'cidade': 'A cidade é obrigatória para serviços presenciais.'})
+
+            latitude = attrs.get('latitude', getattr(self.instance, 'latitude', None))
+            longitude = attrs.get('longitude', getattr(self.instance, 'longitude', None))
+            if latitude is None and longitude is not None:
+                raise serializers.ValidationError({'latitude': 'Informe a latitude junto com a longitude.'})
+            if longitude is None and latitude is not None:
+                raise serializers.ValidationError({'longitude': 'Informe a longitude junto com a latitude.'})
+        else:
+            # Vaga remota não aparece no mapa
+            attrs['latitude'] = None
+            attrs['longitude'] = None
 
         # Anúncio antigo fora do catálogo continua editável enquanto a edição
         # não mexer em categoria nem habilidades

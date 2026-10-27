@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import LocalizacaoAnuncio from '../components/LocalizacaoAnuncio';
+import { LOCALIZACAO_VAZIA, camposDeLocalizacao, erroDeLocalizacao } from '../utils/localizacaoAnuncio';
 import LimitePlano from '../components/LimitePlano';
 import CampoCategoriaHabilidades from '../components/CampoCategoriaHabilidades';
 import { primeiraMensagemDeErro } from '../utils/mensagemErro';
@@ -18,9 +19,7 @@ export default function CreateAd() {
   const [description, setDescription] = useState('');
   
   const [locationType, setLocationType] = useState('remoto');
-  const [localizacao, setLocalizacao] = useState({
-    estado: '', cidade: '', bairro: '', address: '', addressNumber: '',
-  });
+  const [localizacao, setLocalizacao] = useState(LOCALIZACAO_VAZIA);
   
   const [deadline, setDeadline] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -50,6 +49,11 @@ export default function CreateAd() {
       setSubmitError('Escolha uma categoria da lista.');
       return;
     }
+    const erroLocal = erroDeLocalizacao(locationType, localizacao);
+    if (erroLocal) {
+      setSubmitError(erroLocal);
+      return;
+    }
     const token = localStorage.getItem('token');
 
     if (!token) {
@@ -63,12 +67,7 @@ export default function CreateAd() {
       price,
       price_unit: priceUnit,
       skills,
-      location_type: locationType,
-      address: locationType === 'presencial' ? localizacao.address : '',
-      address_number: locationType === 'presencial' ? localizacao.addressNumber : '',
-      estado: locationType === 'presencial' ? localizacao.estado : '',
-      cidade: locationType === 'presencial' ? localizacao.cidade : '',
-      bairro: locationType === 'presencial' ? localizacao.bairro : '',
+      ...camposDeLocalizacao(locationType, localizacao),
       description,
       deadline,
     };
@@ -205,7 +204,7 @@ export default function CreateAd() {
           {locationType === 'presencial' && (
             <div className="tab-content-animation">
               <h3 style={{ marginBottom: '0.25rem' }}>{locationType === 'presencial' ? 'Local do trabalho' : 'Sua área de atendimento'}</h3>
-              <p className="form-help">Cidade obrigatória para o anúncio. Endereço, bairro e localização exata são opcionais.</p>
+              <p className="form-help">Cidade obrigatória. Com bairro e rua, o pino no mapa fica mais preciso; confira o local antes de publicar.</p>
               <LocalizacaoAnuncio value={localizacao} onChange={setLocalizacao} cidadeObrigatoria />
             </div>
           )}

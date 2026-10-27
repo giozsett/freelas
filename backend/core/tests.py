@@ -3043,6 +3043,119 @@ class CatalogoAnuncioAPITests(TestCase):
         self.assertEqual(anuncio.title, 'Site novo')
 
 
+class CoordenadasAnuncioAPITests(TestCase):
+    """Local confirmado no mapa ao postar uma vaga presencial
+    (src/components/MapaConfirmarLocal.jsx): alimenta o mapa e a busca por
+    distância da página inicial."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.contratante = _criar_usuario_com_papel('mapa@example.com', 'contratante', 'Mara')
+        self.client.force_authenticate(self.contratante)
+
+    def _payload_presencial(self, **extra):
+        payload = {
+            'title': 'Pintura de apartamento',
+            'description': 'Dois quartos e sala.',
+            'price': '900.00',
+            'category': 'Casa e Manutenção',
+            'skills': [],
+            'location_type': 'presencial',
+            'estado': 'RS',
+            'cidade': 'Porto Alegre',
+            'latitude': -30.0346,
+            'longitude': -51.2177,
+        }
+        payload.update(extra)
+        return payload
+
+    def test_vaga_presencial_grava_coordenadas_confirmadas(self):
+        response = self.client.post('/api/ads/', self._payload_presencial(), format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        anuncio = Ad.objects.get(pk=response.data['id'])
+        self.assertEqual(anuncio.latitude, Decimal('-30.034600'))
+        self.assertEqual(anuncio.longitude, Decimal('-51.217700'))
+
+    def test_coordenadas_com_muitas_casas_decimais_sao_arredondadas(self):
+        response = self.client.post(
+            '/api/ads/',
+            self._payload_presencial(latitude=-30.03461234567, longitude=-51.21774449),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        anuncio = Ad.objects.get(pk=response.data['id'])
+        self.assertEqual(anuncio.latitude, Decimal('-30.034612'))
+        self.assertEqual(anuncio.longitude, Decimal('-51.217744'))
+
+    def test_latitude_fora_do_globo_e_recusada(self):
+        response = self.client.post('/api/ads/', self._payload_presencial(latitude=-95), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('latitude', response.data)
+        self.assertFalse(Ad.objects.exists())
+
+    def test_longitude_fora_do_globo_e_recusada(self):
+        response = self.client.post('/api/ads/', self._payload_presencial(longitude=181), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('longitude', response.data)
+
+    def test_so_latitude_sem_longitude_e_recusada(self):
+        payload = self._payload_presencial()
+        del payload['longitude']
+        response = self.client.post('/api/ads/', payload, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('longitude', response.data)
+
+    def test_vaga_presencial_sem_coordenadas_continua_aceita(self):
+        payload = self._payload_presencial()
+        del payload['latitude']
+        del payload['longitude']
+        response = self.client.post('/api/ads/', payload, format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertIsNone(Ad.objects.get(pk=response.data['id']).latitude)
+
+    def test_vaga_remota_nao_guarda_coordenadas(self):
+        response = self.client.post(
+            '/api/ads/', self._payload_presencial(location_type='remoto', cidade=''), format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        anuncio = Ad.objects.get(pk=response.data['id'])
+        self.assertIsNone(anuncio.latitude)
+        self.assertIsNone(anuncio.longitude)
+
+    def test_editar_para_remoto_apaga_coordenadas(self):
+        anuncio = Ad.objects.create(
+            author=self.contratante, title='Pintura', price='900.00', role='contractor',
+            category='Casa e Manutenção', location_type='presencial', cidade='Porto Alegre',
+            latitude=Decimal('-30.034600'), longitude=Decimal('-51.217700'),
+        )
+        response = self.client.patch(f'/api/ads/{anuncio.id}/', {'location_type': 'remoto'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        anuncio.refresh_from_db()
+        self.assertIsNone(anuncio.latitude)
+        self.assertIsNone(anuncio.longitude)
+
+    def test_lista_de_vagas_expoe_coordenadas_para_o_mapa(self):
+        Ad.objects.create(
+            author=self.contratante, title='Pintura', price='900.00', role='contractor',
+            category='Casa e Manutenção', location_type='presencial', cidade='Porto Alegre',
+            latitude=Decimal('-30.034600'), longitude=Decimal('-51.217700'),
+        )
+        self.client.force_authenticate(None)
+        response = self.client.get('/api/ads/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(float(response.data[0]['latitude']), -30.0346)
+        self.assertEqual(float(response.data[0]['longitude']), -51.2177)
+
+
 class MigracaoCategoriasAmplasTests(TestCase):
     """A migração 0049 troca as categorias antigas (estreitas ou repetidas)
     pelas categorias amplas do catálogo atual, nos anúncios e nos perfis."""
