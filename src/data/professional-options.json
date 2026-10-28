@@ -18,7 +18,7 @@
     },
     {
       "name": "Vídeo, Áudio e Fotografia",
-      "skills": ["Edição de Vídeo", "Edição Premiere", "After Effects", "DaVinci Resolve", "Motion Design", "Animação 2D", "Fotografia", "Tratamento de Imagem", "Edição de Áudio", "Locução", "Produção de Podcast", "Criação de Reels"]
+      "skills": ["Edição de Vídeo", "Edição Premiere", "After Effects", "DaVinci Resolve", "Motion Design", "Animação 2D", "Fotografia", "Tratamento de Imagem", "Edição de Áudio", "Locução", "Produção de Podcast", "Criação de Reels", "Fotografia de Eventos", "Ensaio Fotográfico", "Fotografia de Produtos", "Fotografia Corporativa"]
     },
     {
       "name": "Vendas e Atendimento",
@@ -34,15 +34,15 @@
     },
     {
       "name": "Educação",
-      "skills": ["Aulas Particulares", "Reforço Escolar", "Ensino de Inglês", "Ensino de Espanhol", "Preparação para Vestibular", "Criação de Material Didático", "Educação Infantil", "Treinamento Corporativo"]
+      "skills": ["Aulas Particulares", "Reforço Escolar", "Ensino de Inglês", "Ensino de Espanhol", "Preparação para Vestibular", "Criação de Material Didático", "Educação Infantil", "Treinamento Corporativo", "Matemática"]
     },
     {
       "name": "Cuidados Pessoais",
-      "skills": ["Babá", "Babá Eventual", "Babá Noturna", "Cuidador Infantil", "Acompanhante Infantil", "Recreação Infantil", "Auxílio com Tarefas Escolares", "Cuidador de Idosos", "Acompanhante de Idosos", "Companhia para Consultas", "Cuidados Pessoais", "Preparo de Refeições", "Administração de Rotina", "Personal Trainer", "Yoga", "Pilates", "Nutrição", "Massoterapia", "Acompanhamento de Idosos", "Meditação", "Cabeleireiro", "Barbeiro", "Manicure", "Pedicure", "Maquiador", "Designer de Sobrancelhas", "Depilação", "Trancista", "Penteado para Eventos", "Massagem", "Atendimento em Domicílio"]
+      "skills": ["Babá", "Babá Eventual", "Babá Noturna", "Cuidador Infantil", "Acompanhante Infantil", "Recreação Infantil", "Auxílio com Tarefas Escolares", "Cuidador de Idosos", "Acompanhante de Idosos", "Companhia para Consultas", "Cuidados Pessoais", "Preparo de Refeições", "Administração de Rotina", "Personal Trainer", "Yoga", "Pilates", "Nutrição", "Massoterapia", "Acompanhamento de Idosos", "Meditação", "Cabeleireiro", "Barbeiro", "Manicure", "Pedicure", "Maquiador", "Designer de Sobrancelhas", "Depilação", "Trancista", "Penteado para Eventos", "Massagem", "Atendimento em Domicílio", "Cuidados com Bebês", "Enfermeiro", "Técnico de Enfermagem", "Enfermagem Domiciliar", "Cuidados Pós-operatórios", "Curativos", "Acompanhamento Hospitalar"]
     },
     {
       "name": "Casa e Manutenção",
-      "skills": ["Diarista", "Faxineiro", "Limpeza Residencial", "Limpeza Comercial", "Limpeza Pós-obra", "Limpeza de Mudança", "Organização de Ambientes", "Cozinha Doméstica", "Lavanderia", "Passadoria", "Jardinagem", "Cuidador de Casa", "Pequenos Reparos", "Montagem de Móveis", "Eletricista", "Encanador", "Pintor", "Pedreiro", "Marceneiro", "Serralheiro", "Montador de Móveis", "Instalação de Prateleiras", "Instalação de TV", "Manutenção Residencial", "Limpeza de Piscina", "Manutenção de Ar-condicionado"]
+      "skills": ["Diarista", "Faxineiro", "Limpeza Residencial", "Limpeza Comercial", "Limpeza Pós-obra", "Limpeza de Mudança", "Organização de Ambientes", "Cozinha Doméstica", "Lavanderia", "Passadoria", "Jardinagem", "Cuidador de Casa", "Pequenos Reparos", "Montagem de Móveis", "Eletricista", "Encanador", "Pintor", "Pedreiro", "Marceneiro", "Serralheiro", "Montador de Móveis", "Instalação de Prateleiras", "Instalação de TV", "Manutenção Residencial", "Limpeza de Piscina", "Manutenção de Ar-condicionado", "Instalação de Tomadas", "Instalação de Iluminação", "Manutenção Elétrica", "Troca de Chuveiro", "Reparo de Vazamentos", "Desentupimento", "Instalação de Torneiras", "Manutenção Hidráulica"]
     },
     {
       "name": "Gastronomia",
@@ -58,7 +58,7 @@
     },
     {
       "name": "Animais",
-      "skills": ["Adestramento Básico", "Cuidados com Pet", "Passeador de Cães", "Pet Sitter", "Hospedagem de Pet", "Visita Domiciliar para Pet", "Alimentação de Animais", "Administração de Medicamentos", "Banho e Tosa", "Transporte de Animais", "Acompanhamento em Consulta Veterinária"]
+      "skills": ["Adestramento Básico", "Cuidados com Pet", "Passeador de Cães", "Pet Sitter", "Hospedagem de Pet", "Visita Domiciliar para Pet", "Alimentação de Animais", "Administração de Medicamentos", "Banho e Tosa", "Transporte de Animais", "Acompanhamento em Consulta Veterinária", "Passeio Individual", "Passeio em Grupo", "Recreação para Cães"]
     },
     {
       "name": "Outros",

@@ -293,17 +293,18 @@ export default function Home() {
             <h3>Pesquisar anúncio</h3>
             <div className="filter-search">
               <Search size={17} aria-hidden="true" />
-              <input type="text" className="input" aria-label="Pesquisar no título e na descrição" placeholder="Título ou descrição" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <input type="text" className="input" aria-label="Pesquisar por título, descrição, categoria ou habilidade" placeholder="Ex.: babá, pet sitter, fotografia" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </section>
           <section className="filter-group">
             <h3>Modalidade</h3>
             <div className="work-mode-toggle">
               <button type="button" className={`work-mode-option${locationTypeFilter === '' ? ' selected' : ''}`} onClick={() => setLocationTypeFilter('')}>Todos</button>
-              <button type="button" className={`work-mode-option${locationTypeFilter === 'remoto' ? ' selected' : ''}`} onClick={() => setLocationTypeFilter('remoto')}>Remoto</button>
+              <button type="button" className={`work-mode-option${locationTypeFilter === 'remoto' ? ' selected' : ''}`} onClick={() => { setLocationTypeFilter('remoto'); setEstadoFilter(''); setCidadeFilter(''); setPertoDeMim(false); setRaioKm(0); }}>Remoto</button>
               <button type="button" className={`work-mode-option${locationTypeFilter === 'presencial' ? ' selected' : ''}`} onClick={() => setLocationTypeFilter('presencial')}>Presencial</button>
             </div>
           </section>
+          {locationTypeFilter !== 'remoto' && (
           <section className="filter-group">
             <h3>Localização</h3>
             {pertoDeMim ? (
@@ -361,6 +362,7 @@ export default function Home() {
             </select>
             <p className="filtro-local__dica">Filtrar por local mostra só as vagas presenciais.</p>
           </section>
+          )}
           <section className="filter-group">
             <h3>Faixa de valor</h3>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
